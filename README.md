@@ -23,17 +23,19 @@
 - [Мастер-ТЗ](docs/FIN-SPEC.md) — продуктовые требования, бизнес-правила, функциональные сценарии и ограничения.
 - [Архитектура](docs/ARCHITECTURE.md) — модель данных, модули, безопасность, расчёты и схемы обмена.
 - [План и приёмка](docs/DELIVERY-AND-ACCEPTANCE.md) — этапы разработки, тесты и Definition of Done.
+- [Аудит FIN-R1A](docs/FIN-R1A-REVIEW.md) — проверенные дефекты и оставшиеся ограничения.
+- [Desktop UAT](docs/DESKTOP-UAT.md) — автоматический macOS proof и ручной чек-лист.
 
 ## Статус
 
-**FIN-R0/R1A: IMPLEMENTED / VERIFICATION IN PROGRESS** в рабочей ветке `feat/fin-r0-r1a`. Реализован только первый Balance Sheet с двумя фиксированными периодами, Excel round-trip, контролем данных, Current Ratio и графиками. Остальные формы, стратегии, Quarto, PDF и PWA пока не реализованы. Для подробностей см. [R1A Status](docs/FIN-R1A-STATUS.md).
+**FIN-R0/R1A: AUTOMATED TESTS PASS / INDEPENDENT APPROVAL PENDING** в рабочей ветке `feat/fin-r0-r1a`. Реализован только первый Balance Sheet с двумя фиксированными периодами, Excel round-trip, контролем данных, Current Ratio и графиками. Остальные формы, стратегии, Quarto, PDF и PWA пока не реализованы. Для подробностей см. [R1A Status](docs/FIN-R1A-STATUS.md).
 
 ## Локальный запуск
 
 Требуется Node.js 22+.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -43,7 +45,7 @@ npm run dev
 npm run typecheck
 npm test
 npm run build
-npx playwright install chromium
+npx playwright install chromium webkit
 npm run test:e2e
 ```
 
