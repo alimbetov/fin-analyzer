@@ -49,6 +49,17 @@ test("FIN-R1A: XLSX round-trip, negative validation, approved analysis and proje
   await expect(page.getByText("Структура баланса")).toBeVisible();
   await expect(page.getByText("Текущая ликвидность")).toBeVisible();
 
+  // Tampered XLSX must be refused without affecting the already-approved analysis.
+  workbook.getWorksheet("_Metadata")!.getCell("B2").value = "unknown-version";
+  buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  await page.getByLabel("Выбрать заполненный XLSX").setInputFiles({
+    name: "FIN_BALANCE.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer
+  });
+  await expect(page.getByRole("alert")).toContainText("FORM_VERSION");
+  await expect(page.getByText("На основании утверждённой версии")).toBeVisible();
+
   // Local project file must restore the approved state after refresh.
   const [saved] = await Promise.all([
     page.waitForEvent("download"),
@@ -61,4 +72,27 @@ test("FIN-R1A: XLSX round-trip, negative validation, approved analysis and proje
   await page.getByLabel("Выбрать FIN-проект").setInputFiles(savedPath!);
   await expect(page.getByText("Есть утверждённая версия")).toBeVisible();
   await expect(page.getByText("Структура баланса")).toBeVisible();
+});
+
+test("FIN-R1A: React editor can approve the same financial values without XLSX", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Название компании").fill("ТОО Ручной ввод");
+  const data: Array<[string, string]> = [
+    ["Итого активы", "1000"],
+    ["Оборотные активы", "400"],
+    ["Итого обязательства", "600"],
+    ["Краткосрочные обязательства", "200"],
+    ["Собственный капитал", "400"]
+  ];
+  for (const year of ["2024", "2025"]) {
+    for (const [label, value] of data) {
+      await page.getByLabel(label + " " + year).fill(value);
+    }
+  }
+  await expect(page.getByText("Баланс проходит проверки")).toBeVisible();
+  await page.getByRole("button", { name: /Утвердить баланс/ }).click();
+  await expect(page.getByText("На основании утверждённой версии")).toBeVisible();
+  await expect(page.getByText("Структура баланса")).toBeVisible();
+  await expect(page.getByText("Текущая ликвидность")).toBeVisible();
+  await expect(page.getByText("2", { exact: true }).first()).toBeVisible();
 });
