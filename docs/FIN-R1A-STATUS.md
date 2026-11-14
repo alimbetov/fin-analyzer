@@ -1,7 +1,18 @@
 # FIN-R0/R1A — implementation evidence
 
 **Branch:** feat/fin-r0-r1a  
-**Status:** IMPLEMENTED / VERIFICATION PENDING. Not UAT PASS.
+**Status:** TESTED (CI) / MANUAL DESKTOP UAT PENDING. Not RELEASE READY.
+
+## CI Evidence
+
+- Commit `ab95f5836ea0681b20479d90d71ad83485dd62ab`
+- [GitHub Actions run #43638616781](https://github.com/alimbetov/fin-analyzer/actions/runs/43638616781) — **SUCCESS**.
+- Typecheck: PASS.
+- Vitest: **16/16 passed** (4 test files): accounting validity, missing/invalid values, negative equity, decimal indicators, revision restoration and negative XLSX cases.
+- Vite production build: PASS.
+- Playwright on real Chromium: **1/1 passed**, including XLSX download/edit/upload, invalid balance blocking, valid approval, charts and project save/reopen.
+- A subsequent README-only commit did not alter runtime code; its CI must also pass before merge.
+
 
 ## Delivered in this slice
 
@@ -27,10 +38,11 @@
 
 ## Required next verification
 
-1. CI typecheck, unit tests and build; record commit and run URLs.
-2. Real Desktop browser smoke of Excel round-trip and save/reopen.
-3. Negative security test for malformed XLSX and large decompression.
-4. Independent review of canonical financial math and Excel protocol.
-5. Add Playwright E2E tests before marking FIN-R1A accepted.
+1. [DONE] CI typecheck, 16 unit tests and production build passed.
+2. [DONE IN CI] Chromium Playwright E2E: real XLSX download/edit/upload and JSON save/reopen.
+3. [OPEN] Real **manual macOS/Desktop** UAT, visual and accessibility checks.
+4. [OPEN] Negative security stress on malformed XLSX and large decompression.
+5. [OPEN] Independent S2 review of canonical financial math and Excel protocol.
+6. [OPEN] Lockfile, dependency vulnerability review and expanded multi-browser/negative E2E checks.
 
 See [master specification](FIN-SPEC.md) for complete product requirements.
