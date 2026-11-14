@@ -52,4 +52,15 @@ describe("controlled XLSX contract", () => {
     const bytes = new Uint8Array(await book.xlsx.writeBuffer() as ArrayBuffer);
     await expect(parseBalanceTemplate(bytes.slice().buffer, "Другая компания")).rejects.toThrow(/COMPANY/);
   });
+  it("rejects visible company or units being tampered while hidden metadata remains intact", async () => {
+    const workbook = await workbookForTest();
+    workbook.getWorksheet("Balance")!.getCell("B3").value = "млн ₸";
+    await expect(readWorkbook(workbook)).rejects.toThrow(/Видимые реквизиты/);
+  });
+  it("rejects unrecognized columns in a supposedly controlled template", async () => {
+    const workbook = await workbookForTest();
+    workbook.getWorksheet("Balance")!.getCell("E6").value = "unapproved";
+    await expect(readWorkbook(workbook)).rejects.toThrow(/Неожиданные столбцы/);
+  });
+
 });

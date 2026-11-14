@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { enforceZipBudget } from "./zip-budget";
 import {
   BALANCE_METRICS, FORM_CODE, FORM_VERSION, MAX_IMPORT_BYTES, UNIT, YEARS,
   emptyBalance, type BalanceValues, type Finding
@@ -87,6 +88,7 @@ export interface ImportResult {
 
 export async function parseBalanceTemplate(input: ArrayBuffer, expectedCompany: string): Promise<ImportResult> {
   if (input.byteLength > MAX_IMPORT_BYTES) throw new Error("XLSX превышает лимит 2 МБ");
+  enforceZipBudget(input);
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(new Uint8Array(input) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
@@ -111,6 +113,14 @@ export async function parseBalanceTemplate(input: ArrayBuffer, expectedCompany: 
     }
   }
   const sheet = workbook.getWorksheet(SHEET)!;
+  if (readLiteral(sheet.getCell("A2").value) !== safeExcelText(expectedCompany)
+      || readLiteral(sheet.getCell("A3").value) !== "Единица измерения:"
+      || readLiteral(sheet.getCell("B3").value) !== "тыс. ₸") {
+    throw new Error("Видимые реквизиты компании или единицы измерения не соответствуют шаблону FIN");
+  }
+  if (sheet.actualColumnCount > 4) {
+    throw new Error("Неожиданные столбцы в Balance");
+  }
   const expectedHead = ["Код показателя", "Статья баланса", YEARS[0], YEARS[1]];
   for (let i = 0; i < expectedHead.length; i++) {
     if (readLiteral(sheet.getCell(5, i + 1).value) !== expectedHead[i]) {
