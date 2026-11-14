@@ -129,7 +129,7 @@ MetricValue: decimal-string (не JS number), показатель, период
 
 ### FR-008. Dynamic Strategy Builder
 
-Встроенные стратегии MVP: FINANCIAL_HEALTH, COUNTERPARTY_RISK, CREDIT_SCREENING, INVESTMENT_ANALYSIS, MANAGEMENT_ANALYSIS.
+Встроенные стратегии **MVP**: FINANCIAL_HEALTH, COUNTERPARTY_RISK, MANAGEMENT_ANALYSIS. Стратегии CREDIT_SCREENING и INVESTMENT_ANALYSIS предусмотрены как **P1**, после проверки качества базового движка.
 
 Пользователь может создавать свою стратегию:
 - цель, область применимости и отрасль;
@@ -205,7 +205,7 @@ MetricValue: decimal-string (не JS number), показатель, период
 
 **P0 / MVP:** шаблоны по формам, контролируемый импорт, React Editor, проверка, базовый Indicator Registry, 3 стратегии, 6–8 видов графиков, экспорт JSON/PDF, E2E.  
 **P1:** расширенный Strategy Builder, сравнение компаний, расширенный Report Builder, HTML/XLSX аналитики, отраслевые профили.  
-**P2:** Quarto CLI как опциональный внешний рендерер, XBRL, библиотеки эталонных наборов, расширенная отраслeвая аналитика.  
+**P2:** Quarto CLI как опциональный внешний рендерер, XBRL, библиотеки эталонных наборов, расширенная отраслевая аналитика.  
 **Не включать без отдельного решения:** AI-импорт неструктурированных финансовых значений, облачное хранение и торговые/кредитные рекомендации.
 
 ## 12. Условия начала реализации
