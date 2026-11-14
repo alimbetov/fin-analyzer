@@ -9,7 +9,7 @@ export function parseAmount(input: string): Decimal | null {
   const normalized = value.replace(",", ".");
   try {
     const decimal = new Decimal(normalized);
-    if (!decimal.isFinite() || decimal.precision() > 15) return null;
+    if (!decimal.isFinite() || decimal.precision() > 15 || decimal.abs().greaterThanOrEqualTo('1000000000000000')) return null;
     return decimal;
   } catch {
     return null;
