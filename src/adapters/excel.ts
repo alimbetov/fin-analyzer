@@ -72,7 +72,9 @@ export async function generateBalanceTemplate(company: string): Promise<Blob> {
     ["YEAR_CURRENT", YEARS[1]],
     ["SCHEMA_VERSION", "1"]
   ];
-  pairs.forEach(([key, value]) => meta.addRow([key, safeExcelText(value)]));
+  // Metadata is written as a literal string; ExcelJS does not interpret string values as formulas.
+  // Do not add a leading apostrophe: it would break company identity checks.
+  pairs.forEach(([key, value]) => meta.addRow([key, value]));
   meta.state = "veryHidden";
   const buffer = await workbook.xlsx.writeBuffer();
   return new Blob([buffer as BlobPart], { type: MIME });
