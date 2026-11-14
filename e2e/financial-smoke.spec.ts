@@ -2,8 +2,17 @@ import { test, expect } from "@playwright/test";
 import ExcelJS from "exceljs";
 
 test("FIN-R1A: XLSX round-trip, negative validation, approved analysis and project reopen", async ({ page }) => {
+  const unexpectedNetwork: string[] = [];
+  page.on("request", request => {
+    const url = request.url();
+    if (!url.startsWith("http://127.0.0.1:4173/") && !url.startsWith("data:") && !url.startsWith("blob:")) {
+      unexpectedNetwork.push(url);
+    }
+  });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Финансовая отчётность/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/fin-" + test.info().project.name + "-initial.png", fullPage: true });
   await page.getByLabel("Название компании").fill("ТОО Финанс Тест");
 
   const [download] = await Promise.all([
@@ -34,6 +43,7 @@ test("FIN-R1A: XLSX round-trip, negative validation, approved analysis and proje
   await expect(page.getByText(/Баланс 2025 не сходится/)).toBeVisible();
   await expect(page.getByRole("button", { name: /Утвердить баланс/ })).toBeDisabled();
   await expect(page.getByText(/Анализ появится после утверждения/)).toBeVisible();
+  await page.screenshot({ path: "test-results/fin-" + test.info().project.name + "-validation.png", fullPage: true });
 
   // Correct it and approve. The ratios and chart must render from approved values.
   balance!.getCell("D6").value = 1000;
@@ -48,6 +58,7 @@ test("FIN-R1A: XLSX round-trip, negative validation, approved analysis and proje
   await expect(page.getByText("На основании утверждённой версии")).toBeVisible();
   await expect(page.getByText("Структура баланса")).toBeVisible();
   await expect(page.getByText("Текущая ликвидность")).toBeVisible();
+  await page.screenshot({ path: "test-results/fin-" + test.info().project.name + "-approved.png", fullPage: true });
 
   // Tampered XLSX must be refused without affecting the already-approved analysis.
   workbook.getWorksheet("_Metadata")!.getCell("B2").value = "unknown-version";
@@ -72,6 +83,7 @@ test("FIN-R1A: XLSX round-trip, negative validation, approved analysis and proje
   await page.getByLabel("Выбрать FIN-проект").setInputFiles(savedPath!);
   await expect(page.getByText("Есть утверждённая версия")).toBeVisible();
   await expect(page.getByText("Структура баланса")).toBeVisible();
+  expect(unexpectedNetwork).toEqual([]);
 });
 
 test("FIN-R1A: React editor can approve the same financial values without XLSX", async ({ page }) => {

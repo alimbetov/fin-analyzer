@@ -24,5 +24,30 @@ jobs:
         run: npm run build
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
-      - name: Browser E2E
-        run: npm run test:e2e
+      - name: Browser E2E (Linux Chromium)
+        run: npm run test:e2e -- --project=chromium
+
+  desktop-macos:
+    # macOS runners provide desktop browser evidence, not a manual UAT approval.
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install desktop browsers
+        run: npx playwright install chromium webkit
+      - name: Desktop browser UAT (macOS Chromium + WebKit)
+        run: npm run test:e2e -- --project=chromium --project=webkit
+      - name: Preserve UI screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-macos-desktop-uat
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 14
