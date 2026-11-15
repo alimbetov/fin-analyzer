@@ -75,6 +75,27 @@ class IndicatorRelationshipRegistryTest {
         assertNotEquals(previous.definitionHash(),next.definitionHash());
     }
 
+    @Test void businessProblemsAreVersionedAndCannotInventGraphMetrics() throws Exception {
+        var registry=IndicatorRelationshipRegistry.bundled();
+        var problems=DiagnosticProblemCatalog.bundled();
+        assertEquals(4,problems.routes().size());
+        assertEquals(List.of(new MetricKey("REV_NET",TimeRole.CURRENT_FLOW),
+                new MetricKey("COGS",TimeRole.CURRENT_FLOW)),
+                problems.anchors("PROFITABILITY"));
+        assertTrue(problems.anchors("UNKNOWN_PROBLEM").isEmpty());
+        String routes=resource("diagnostic-problem-routes-v1.tsv");
+        assertThrows(IllegalArgumentException.class,
+                ()->DiagnosticProblemCatalog.parse(
+                        routes.replace("CFO:CURRENT_FLOW","UNSUPPORTED:CURRENT_FLOW"),registry));
+        assertThrows(IllegalArgumentException.class,
+                ()->DiagnosticProblemCatalog.parse(
+                        routes.replace("SYNTHETIC_PILOT_UNQUALIFIED","PRODUCTION_QUALIFIED"),registry));
+        assertThrows(IllegalArgumentException.class,
+                ()->DiagnosticProblemCatalog.parse(
+                        routes.replace("CASH_END:CURRENT_STOCK;CFO:CURRENT_FLOW",
+                                "CFO:CURRENT_FLOW;CFO:CURRENT_FLOW"),registry));
+    }
+
     @Test void graphTerminatesAndDoesNotFabricateRelationshipsForUnqualifiedCatalogForms(){
         var c=new MetricKey("REV_NET",TimeRole.CURRENT_FLOW);
         var cost=new MetricKey("COGS",TimeRole.CURRENT_FLOW);
