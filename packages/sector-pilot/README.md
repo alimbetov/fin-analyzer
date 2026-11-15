@@ -7,7 +7,7 @@ Requires Node 22+, no external runtime dependencies. From this directory run:
     npm test
     npm run demo
 
-The demo uses synthetic example data in examples/pilot.json and prints structured results. The first retail months yield 10%/50% gross margin and 46% for complete Q1: the rate is recalculated from the combined numerator and denominator.
+The full three-sector example is in examples/full-quarter.json. Run npm run demo:quarter to get monthly and complete 2026-Q1 results for **all nine forms**. The demo uses synthetic example data in examples/pilot.json and prints structured results. The first retail months yield 10%/50% gross margin and 46% for complete Q1: the rate is recalculated from the combined numerator and denominator.
 
 Input rows are MONTH snapshots. Amounts and quantities must be decimal **strings** with at most 6 fractional digits; null is missing, never zero. The source approval flag is a **test contract**, not real authorization. Duplicate source IDs or multiple monthly revisions for the same business/form/dimension are rejected for staging/reconciliation. Incomplete periods output status INCOMPLETE and null metrics, not invented zeros. Zero denominators give NOT_COMPUTABLE. Scoped results are separated by business, dimension, form and currency.
 

@@ -20,3 +20,5 @@ jobs:
         working-directory: packages/sector-pilot
       - run: npm run demo > /dev/null
         working-directory: packages/sector-pilot
+      - run: npm run demo:quarter > /dev/null
+        working-directory: packages/sector-pilot

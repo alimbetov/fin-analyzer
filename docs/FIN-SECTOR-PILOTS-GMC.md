@@ -87,3 +87,8 @@ Ratios вычисляются из суммы числителей и знаме
 **Методический статус:** METHOD_CANDIDATE_IMPLEMENTED. Для APPROVED_METHOD нужен independent reviewer, formula definition AST, validity scope, unit, precision, source/sector evidence, negative fixtures и RU/KK/EN перевод «что считает / как считает / что показывает». Пилот не должен отображать новый KPI как одобренный, отраслевую норму или финансово-аудиторское заключение до этого.
 
 **Следующий технический шаг:** совместить этот независимый exact-decimal domain code с FND-04 Canonical Facts, FND-05 FormRegistry и FND-08 Methodology Registry. Затем React пилот на согласованной интеграционной ветке после ревью F01, а не механический перенос кода в документационную ветку.
+
+## 6. Полный воспроизводимый квартальный пример
+
+Файл packages/sector-pilot/examples/full-quarter.json содержит **27 утверждённых только в тестовом смысле строк**: по три календарных месяца и девять отраслевых форм. Команда npm run demo:quarter выводит все расчёты с указанием компании, ресурса, версии источника, периода, CALCULATED или INCOMPLETE. Данные вымышленные и не должны использоваться для реального бизнеса.
+
