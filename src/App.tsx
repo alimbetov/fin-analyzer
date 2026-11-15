@@ -8,6 +8,8 @@ import { canApprove, normalizeBalance, validateBalance } from "./domain/validati
 import { assetsGrowthPercent, currentRatios, metricSeries } from "./domain/calculations";
 import { createProject, readProject } from "./domain/project";
 import { generateBalanceTemplate, parseBalanceTemplate } from "./adapters/excel";
+import { SectorStudio } from "./sector/SectorStudio";
+import { createSectorState, type SectorState } from "./sector/state";
 
 function downloadFile(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -47,6 +49,7 @@ function sampleValues(): BalanceValues {
 
 export default function App() {
   const [company, setCompany] = useState("");
+  const [sector, setSector] = useState<SectorState>(() => createSectorState());
   const [draft, setDraft] = useState<BalanceValues>(emptyBalance);
   const [revisions, setRevisions] = useState<ApprovedRevision[]>([]);
   const [busy, setBusy] = useState(false);
@@ -137,7 +140,7 @@ export default function App() {
   }
 
   function onSaveProject() {
-    const project = createProject(company.trim(), draft, revisions);
+    const project = createProject(company.trim(), draft, revisions, sector);
     downloadFile(new Blob([JSON.stringify(project, null, 2)], { type: "application/json" }),
       "FIN_" + safeName(company) + ".fin.json");
     setMessage("Проект сохранён в локальный JSON-файл.");
@@ -155,6 +158,7 @@ export default function App() {
       setCompany(project.company);
       setDraft(project.draft);
       setRevisions(project.revisions);
+      setSector(project.sector ?? createSectorState());
       setMessage("Проект восстановлен: " + project.revisions.length + " утверждённых ревизий.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Файл проекта не удалось открыть.");
@@ -162,13 +166,14 @@ export default function App() {
   }
 
   function onNewProject() {
-    if (revisions.length > 0 || company.trim()) {
+    if (revisions.length > 0 || company.trim() || sector.current.length > 0) {
       const ok = window.confirm("Несохранённые данные будут потеряны. Создать новый проект?");
       if (!ok) return;
     }
     setCompany("");
     setDraft(emptyBalance());
     setRevisions([]);
+    setSector(createSectorState());
     setMessage("");
     setError("");
   }
@@ -197,7 +202,8 @@ export default function App() {
           <a className="nav-active" href="#data">01 · Финансовые данные</a>
           <a href="#validation">02 · Проверка данных</a>
           <a href="#analysis">03 · Аналитика</a>
-          <a href="#project">04 · Проект</a>
+          <a href="#sector">04 · Отрасли</a>
+          <a href="#project">05 · Проект</a>
         </nav>
         <div className="side-note"><span className="status-dot"></span> Local-first · без Backend и БД</div>
         <p className="side-foot">FIN-R0 / R1A<br />Контролируемый Excel и первый аналитический отчёт</p>
@@ -316,8 +322,10 @@ export default function App() {
             </>}
         </section>
 
+        <SectorStudio company={company} project={sector} onChange={setSector} />
+
         <section className="panel project-panel" id="project">
-          <div><span className="eyebrow">04 / LOCAL STORAGE</span><h2>Локальный проект</h2>
+          <div><span className="eyebrow">05 / LOCAL STORAGE</span><h2>Локальный проект</h2>
             <p>Финансовые данные не передаются на сервер. Скачайте FIN-проект, чтобы восстановить работу позднее.</p>
             <small>Утверждённых версий: {revisions.length}. Автосохранение отсутствует.</small>
           </div>
