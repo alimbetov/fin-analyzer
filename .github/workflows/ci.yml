@@ -93,9 +93,30 @@ jobs:
             kz.fin.backend.persistence.FactPublicationIntegrationTest; do
             file="$reports/TEST-$klass.xml"
             test -s "$file" || { echo "::error::Missing mandatory JUnit report $file"; exit 1; }
-            if grep -Eq '<testsuite[^>]*(failures|errors)="[1-9]' "$file"; then
-              echo "::error::JUnit report contains failure or error: $file"; exit 1
-            fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          classes = [
+              "kz.fin.backend.diagnostics.ScenarioFiveQuestionEngineTest",
+              "kz.fin.backend.diagnostics.ExtensionSheetContractSmokeTest",
+              "kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest",
+              "kz.fin.backend.persistence.PostgresInvariantTest",
+              "kz.fin.backend.persistence.FactPublicationIntegrationTest",
+          ]
+          for classname in classes:
+              report = Path("backend/target/surefire-reports") / f"TEST-{classname}.xml"
+              suite = ET.parse(report).getroot()
+              tests = int(suite.get("tests", "0"))
+              failures = int(suite.get("failures", "0"))
+              errors = int(suite.get("errors", "0"))
+              skipped = int(suite.get("skipped", "0"))
+              if tests == 0 or failures or errors or skipped:
+                  raise SystemExit(
+                      f"REQUIRED_JUNIT_NOT_GREEN {classname}: "
+                      f"tests={tests} failures={failures} errors={errors} skipped={skipped}"
+                  )
+              print(f"REQUIRED_JUNIT_GREEN {classname} tests={tests}")
+          PY
           done
       - name: Upload backend evidence for this commit
         if: always()
