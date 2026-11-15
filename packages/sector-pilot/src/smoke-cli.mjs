@@ -41,13 +41,16 @@ const sectorForms=formRows.map(x=>x[0]).filter(code=>/^SF-[A-U]0[1-3]$/.test(cod
 if(sectorForms.length!==63 || sectorForms.filter(code=>!fixtures.has(code)).length!==54)
   throw new Error('SMOKE_SECTOR_COVERAGE_DRIFT');
 const results=formRows.map(row=>{
-  const [formCode,,,,,,,qualificationStatus]=row;
+  const [formCode,,formKind,,,,,qualificationStatus]=row;
   const fixture=fixtures.get(formCode);
+  const evidenceRole=formKind==='DOCUMENT' ? 'EVIDENCE_ONLY_NO_NUMERIC_KPI'
+    : formKind==='EXTERNAL_TAX' ? 'EXTERNAL_POLICY_EVIDENCE_NO_NUMERIC_KPI'
+    : 'POTENTIAL_STRUCTURED_NUMERIC_INPUT';
   const javaScenarioMethods=methodsByForm.get(formCode)??[];
   if(!fixture) return {
     javaScenarioMethods, javaScenarioStatus:javaScenarioMethods.length
       ? 'GOLDEN_TEST_DEFINED_CI_MUST_VERIFY' : 'NOT_DEFINED',
-    formCode, catalogMethodStatus:qualificationStatus,
+    formCode, formKind, evidenceRole, catalogMethodStatus:qualificationStatus,
     sectorSmokeStatus:'NOT_EXECUTABLE_IN_SECTOR_KERNEL',
     questions:Object.fromEntries(['what','why','seriousness','action','effect']
       .map(name=>[name,'NOT_TESTED']))
@@ -57,7 +60,7 @@ const results=formRows.map(row=>{
       report.questions.effect.scenario.impacts[fixture.metric].delta!==fixture.delta)
     throw new Error('SMOKE_GOLDEN_MISMATCH:'+formCode);
   return {
-    formCode, catalogMethodStatus:qualificationStatus,
+    formCode, formKind, evidenceRole, catalogMethodStatus:qualificationStatus,
     javaScenarioMethods, javaScenarioStatus:javaScenarioMethods.length
       ? 'GOLDEN_TEST_DEFINED_CI_MUST_VERIFY' : 'NOT_DEFINED',
     sectorSmokeStatus:'EXECUTED_SYNTHETIC_ONLY',metricCode:fixture.metric,
