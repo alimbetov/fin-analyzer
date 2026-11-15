@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import kz.fin.backend.analytics.AnalysisContext;
 import kz.fin.backend.diagnostics.CrossFormDiagnosticEngine;
 import kz.fin.backend.diagnostics.CrossFormEvidencePlanner;
+import kz.fin.backend.diagnostics.DynamicDiagnosticPlanner;
+import kz.fin.backend.diagnostics.IndicatorRelationshipRegistry;
 import kz.fin.backend.diagnostics.CrossFormDiagnosticEngine.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -35,7 +37,7 @@ import java.util.*;
 @Service
 public class TrustedCrossFormDiagnosticService {
     private static final String RULE_SET_CODE="CROSS_FORM_PILOT";
-    private static final String RULE_SET_VERSION="1.0.0";
+    private static final String RULE_SET_VERSION="2.0.0";
     private static final Set<String> STOCK_METRICS=Set.of(
             "ASSETS","LIABILITIES","EQUITY","CASH_END","AR_END");
     private static final Set<String> SUPPORTED_METRICS;
@@ -290,6 +292,7 @@ public class TrustedCrossFormDiagnosticService {
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
             feed(digest,RULE_SET_CODE);feed(digest,RULE_SET_VERSION);
             feed(digest,CrossFormDiagnosticEngine.METHOD_VERSION);
+            feed(digest,CrossFormDiagnosticEngine.RELATIONSHIPS.definitionHash());
             for(Rule rule:CrossFormDiagnosticEngine.RULES){
                 feed(digest,rule.code());feed(digest,rule.type().name());
                 for(MetricKey key:rule.required()){
@@ -322,6 +325,8 @@ public class TrustedCrossFormDiagnosticService {
         root.put("currency",report.scope().currency());
         root.put("reportingBasis",report.scope().reportingBasis());
         root.put("qualification",report.qualification());
+        root.put("relationshipRegistryVersion",IndicatorRelationshipRegistry.VERSION);
+        root.put("relationshipRegistryHash",CrossFormDiagnosticEngine.RELATIONSHIPS.definitionHash());
         ArrayNode evidence=root.putArray("evidence");
         report.evidence().entrySet().stream().sorted(Comparator.comparing(
                 (Map.Entry<MetricKey,Evidence> e)->e.getKey().code()).thenComparing(
@@ -351,6 +356,25 @@ public class TrustedCrossFormDiagnosticService {
             });
             ArrayNode rules=item.putArray("unlocksRuleCodes");
             n.relatedRules().forEach(rules::add);
+        });
+        DynamicDiagnosticPlanner.GraphPlan graphPlan =
+                DynamicDiagnosticPlanner.fromVerifiedFacts(report.evidence().keySet(),2);
+        ObjectNode graph=root.putObject("relatedEvidenceGraph");
+        graph.put("status",graphPlan.status().name());
+        graph.put("depth",graphPlan.depth());
+        graph.put("registryVersion",graphPlan.registryVersion());
+        graph.put("registryHash",graphPlan.registryHash());
+        ArrayNode relatedRules=graph.putArray("relatedRuleCodes");
+        graphPlan.relatedRuleCodes().forEach(relatedRules::add);
+        ArrayNode missingGraph=graph.putArray("missingEvidence");
+        graphPlan.missingEvidence().forEach(d->{
+            ObjectNode item=missingGraph.addObject();
+            item.put("formCode",d.originForm());
+            item.put("metricCode",d.metric().code());
+            item.put("timeRole",d.metric().role().name());
+            item.put("action",d.action().name());
+            ArrayNode unlocks=item.putArray("unlocksRules");
+            d.unlocksRules().forEach(unlocks::add);
         });
         ArrayNode findings=root.putArray("findings");
         for(Finding f:report.findings()){
