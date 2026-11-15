@@ -6,6 +6,7 @@ import {
 } from "./state";
 import { generateSectorTemplate, parseSectorTemplate, type SectorTemplateContext } from "./excel";
 import { PILOT_METHODS } from "./methods";
+import { diagnoseSectorOutput } from "../../packages/sector-pilot/src/diagnostics.mjs";
 
 const FIELD_LABEL: Record<string, string> = {
   netRevenue: "Чистая выручка", cogs: "Себестоимость продаж", soldQty: "Продано единиц",
@@ -240,6 +241,18 @@ export function SectorStudio({ company, project, onChange }: Props) {
         {result.missingFields.length>0 && <p>Не хватает полей: {result.missingFields.join(", ")}</p>}
         {result.missingPeriods.length>0 && <p>Не хватает месяцев: {result.missingPeriods.join(", ")}</p>}
         <small className="sector-source">Формулы — кандидаты pilot-1.0, не независимое методическое одобрение. Ревизии источников: {result.sourceRevisions.join(", ")||"нет"}</small>
+        <div className="sector-diagnostic-review" aria-label={"Диагностические выводы "+result.windowCode}>
+          {diagnoseSectorOutput(result).map((finding,index)=><p key={finding.ruleCode+"."+index}>
+            {finding.kind==="OBSERVATION"?"Наблюдение":
+              finding.kind==="MISSING_EVIDENCE"?"Недостаточно данных":"Расчёт недоступен"}:
+            {" "+finding.ruleCode}. {finding.kind==="OBSERVATION"
+              ?"Необходима проверка источников и решение ответственного."
+              :"Никакой рейтинг или риск не присваивается."}
+            {" "+finding.actionCode}
+          </p>)}
+          <small>Почему: причинность не доказана. Существенность: методика не утверждена.
+            Действия: только после проверки специалистом. Эффект: требуется отдельный сценарий с явными допущениями.</small>
+        </div>
       </article>)}</div>}
     <p className="sector-note">Локальных актуальных записей: {project.current.length}; прошлых ревизий: {project.prior.length}.
       При изменении утверждённой записи предыдущая ревизия сохраняется в FIN-проекте.</p>
