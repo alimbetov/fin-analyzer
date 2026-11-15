@@ -5,6 +5,8 @@
 
 **Основные источники:** [Общий классификатор ОКЭД РК — НК РК 03-2019, актуализация 01.07.2026](https://stat.gov.kz/ru/classifiers/statistical/21/); [переходные ключи ОКЭД](https://stat.gov.kz/ru/classifiers/sdapter/); [UN ISIC Rev.4 — структура 21 секции](https://unstats.un.org/unsd/demographic/sources/census/wphc/docs/ISIC_rev4.pdf). Эти источники задают классификационную основу, а **частоты/формулы ниже — предлагаемые продуктовые методики FIN, не установленные государством нормы отчётности**.
 
+**Частичный статус реализации:** [паспорта девяти отраслевых пилотов](FIN-SECTOR-PILOTS-GMC.md) показывают исполняемые формулы для SF-G01/G02/G03, SF-M01/M02, SF-S01, SF-C01/C02/C03. Методическая независимая квалификация ещё OPEN; остальные 54 формы без кода.
+
 ## 1. Как формируется анкета для конкретной компании
 
 `BusinessProfile(country, classificationVersion, activityCode, stage=S0..S4, entityType, selectedGoals)` → [базовые 59 форм DF-*](FIN-BUSINESS-DATA-FORMS.md) → `SectorPack` с подходящими `SF-*` формами → [27 KPI RU/KK/EN](FIN-INDICATOR-DICTIONARY-RU-KK-EN.md) и новые версии проверенных отраслевых KPI → [FIN Business Health](FIN-BUSINESS-HEALTH.md) → объяснимые наблюдения/гипотезы → сценарии/DecisionPacket.

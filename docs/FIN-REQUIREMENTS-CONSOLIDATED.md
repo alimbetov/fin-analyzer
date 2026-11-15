@@ -243,6 +243,10 @@ AccessGrant содержит: owner organization, recipient organization/named u
 
 Нормативные сценарии: [ROLE-SCENARIOS](ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md), [Consultant](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md), [Reports](FIN-FINANCIAL-REPORT-PUBLICATION.md).
 
+### Industry pilot — implementation evidence
+
+[FIN-SECTOR-PILOTS-GMC.md](FIN-SECTOR-PILOTS-GMC.md) фиксирует 9 form calculations для торговли, услуг и производства, точную арифметику, проверки календарных окон и CI. Это независимый domain-пакет; 54 другие SF-формы остаются SPECIFIED, а React/UI/DB/S2/UAT ещё не подтверждены.
+
 ## 10. Инфраструктура и источник истины
 
 **G1/G2 (local Core):** React/Vite/TypeScript, controlled XLSX, локальный .fin.json save/reopen и reproducible analytical core; без обязательного аккаунта и без скрытой облачной отправки данных. **G3/G4 (hosted Connect):** React → HTTPS/BFF Spring Boot (Spring MVC, JPA) → FIN PostgreSQL как источник истины для organizations, memberships, projects, grants, audit, outbox, reports. **Keycloak:** OIDC и отдельная PostgreSQL DB; экран входа через контролируемый reverse proxy, access/refresh tokens серверные. **Redis:** серверные сессии/временный cache. **RustFS:** private object storage, quarantine и backend streaming без прямых браузерных S3 URL. **KumoMTA:** email только через PostgreSQL transactional Outbox и idempotent worker, доставка email не равна SMTP-accepted.

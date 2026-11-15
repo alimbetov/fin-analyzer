@@ -214,6 +214,16 @@ Mapping legacy: MB-WIZ=WZ-02; PR-WIZ=WZ-03/04; PUB-WIZ=WZ-07; REP-WIZ=WZ-06; CON
 
 **Модель:** DF/sector SF → approved facts → qualified KPI → health/report/business plan → DecisionPacket. Числа 59/63 относятся к **дополнительным классам исходных форм**, не увеличивают существующий каталог 44 F/C/P/T/D отчётных форм. MethodCandidate не превращается в реализованную формулу из-за упоминания в ТЗ.
 
+### 7.3. Выполнимый отраслевой пилот
+
+| Область | Коды | Реализация | Evidence / status |
+|---|---|---|---|
+| Торговля | SF-G01/G02/G03 | packages/sector-pilot | [GMC](FIN-SECTOR-PILOTS-GMC.md) — initial CI PASS, S2 OPEN |
+| Услуги | SF-M01/M02/S01 | packages/sector-pilot | initial CI PASS, UI NOT DONE |
+| Производство | SF-C01/C02/C03 | packages/sector-pilot | initial CI PASS, UAT NOT DONE |
+
+Другие 54 SF-формы пока SPECIFIED. Новые годовые/полугодовые тесты считаются PASS только после успешного workflow на новом SHA.
+
 ## 8. Состояние и остаточная работа
 
 - [x] Уникальные идентификаторы всех 39 модулей.

@@ -69,6 +69,8 @@
 | GAP-24 | P1 | Отделить юридические сроки сдачи отчетности от cadence экономической диагностики | CountryRegulatoryCalendar with verified effective rules |
 | GAP-25 | P2 | Станет ли ML/Tribuo улучшением для отдельных отраслевых диагнозов | temporal holdout and tenant leakage checks versus deterministic/seasonal baselines |
 
+**GAP-21 уточнён:** 9/63 SF-форм имеют исполняемые domain-реализации ([GMC pilot](FIN-SECTOR-PILOTS-GMC.md)), но independent Methodology Review, RU/KK/EN, React UI, реальные входы и server-side approvals не завершены. Это не снимает GAP-21.
+
 ## 4. Управление версиями и готовностью
 
 **Статус каждого требования:** SPECIFIED → REVIEWED → READY_FOR_IMPLEMENTATION → IMPLEMENTED → TESTED → UAT_PASS → INDEPENDENT_APPROVE → RELEASED. Не считать записи в ТЗ выполненной функциональностью.
