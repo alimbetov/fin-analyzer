@@ -259,6 +259,8 @@ Company A с country-specific IFRS/GAAP context, country B/филиал с local
 | Organization member management | Authorized org admin | No by default | No | Own organization only | Own organization only | No |
 | Monitoring Investor Update | Publish scoped snapshot | Prepare | Prepare | Shared only | Shared only | No routine access |
 
+**Hosted identity implementation (ADR-008):** React uses a Spring Boot BFF server-side OIDC session; Keycloak handles login, and Redis/RustFS/KumoMTA/PostgreSQL are backend-only dependencies, not browser integrations. Keycloak login may be displayed through controlled reverse-proxy auth endpoints, never its admin API. [Full security and E2E contract](ADR-008-FIN-CONNECT-BACKEND-STACK.md).
+
 **Hosted identity**: organization-specific RBAC + resource ABAC (ownerOrg, projectId, documentId, sensitivity, recipientOrg, action, expiry, status), explicit ACL scopes, signed invitations, revocation, access audit and non-disclosure of sensitive fields. Avoid mixing requester and provider roles with one global role claim. Authentication/identity and KYC requirements must be validated for the particular legally allowed service.
 
 **Official product boundary:** [FIN Project Marketplace ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md) — information, project discovery, communication and controlled document access only; financial transactions are outside FIN.
@@ -312,7 +314,7 @@ F01 Balance Excel→React→Validate→Current Ratio→Graph→local save. Block
 
 - Monitored baseline, investor updates, deal pipeline, financing event confirmations, company/project portfolio reporting.
 - Multi-country standards and additional industry packs with coverage reporting.
-- Regulated services separated behind new legal/technical stage.
+- International publication and investor-introduction features require per-jurisdiction legal review; financial execution, payment flows and exchange trading are outside FIN permanently (ADR-007).
 
 **Gate:** verified cash/contract events and plan-fact reproducibility; no forged funding status; data room audit.
 

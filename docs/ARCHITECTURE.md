@@ -4,6 +4,8 @@
 
 ## 1. Architecture Decision Records
 
+**ADR-008 — FIN Connect internal backend stack (accepted design, not implemented).** React ↔ Spring Boot BFF via same-origin HTTPS session; standalone Keycloak, Redis, RustFS, KumoMTA and PostgreSQL live behind the backend and reverse proxy. Keycloak browser login UI uses only controlled proxied auth endpoints; backend holds tokens and credentials. See [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md).
+
 **ADR-007 — FIN Project Marketplace (accepted product boundary).** Площадка — информационный поиск проектов, контакты и документальный обмен с разрешения владельца. Никаких финансовых операций, приёма/хранения/перевода средств, биржевых торгов или исполнения сделок. Hosted FIN Connect требует отдельного backend и IAM; локальный Core не публикует финансовые данные автоматически. Полный текст: [ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md).
 
 **ADR-001 — Browser-first.** React + TypeScript + Vite, хостинг статических файлов. В MVP нет Backend, серверной БД, обязательного логина или обмена финансовыми данными по сети. Все рабочие данные в памяти с явной выгрузкой файла проекта.

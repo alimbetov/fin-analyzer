@@ -68,6 +68,8 @@ FIN Analyzer — адаптивная экономическая платфор�
 
 **FIN Core — локальный:** по умолчанию все данные только на устройстве. В MVP возможен пользовательский экспорт `PublicTeaserSnapshot`, HTML/PDF/JSON и самостоятельная пересылка. Не обещать живой поиск инвесторов или отзыв доступа без сервера.
 
+**Backend stack for hosted FIN Connect:** React + Spring Boot BFF; Keycloak (OIDC), Redis (sessions/cache), RustFS (private file storage), KumoMTA (email) and PostgreSQL (system of record) integrate only on the server side. No direct React → Redis/RustFS/KumoMTA/Keycloak Admin traffic. Auth UI is presented only via protected reverse proxy. See [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md).
+
 **FIN Connect — отдельный hosted-сервис (future):** аккаунты, право представлять компанию, каталог проектов, приглашения, доступ по документам, сообщения, запросы инвесторов, Data Room, журнал обращений, модерация и удаление согласно правовым требованиям. Должен быть полностью добровольным дополнением к FIN Core, без принудительной загрузки частных данных.
 
 **Постоянная граница FIN Project Marketplace (OUT OF SCOPE):** FIN не принимает, не хранит и не переводит деньги, не организует биржевые торги, краудфандинговые инвестиционные операции, подписку на финансовые инструменты или исполнение сделок и договоров. Стороны осуществляют финансирование и юридические действия вне FIN; FIN допускает только информационные контакты, обмен разрешёнными материалами и ссылку на внешний факт при подтверждении. См. [ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md).

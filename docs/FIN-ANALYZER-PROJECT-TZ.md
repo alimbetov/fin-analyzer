@@ -1,4 +1,4 @@
-# FIN Analyzer — проектное техническое задание v3.2
+# FIN Analyzer — проектное техническое задание v3.3
 
 **Продукт:** FIN Analyzer — Adaptive Business Financial Diagnosis Platform  
 **Дата:** 2026-11-15  
@@ -452,11 +452,14 @@ React App / Smart Wizard / Input Hub / Analytics Studio
 
 **REQ-ROLE-08:** реализация оценивается по результату ролевого E2E, безопасности доступа, корректности финансовых расчётов и независимому S2, а не по числу экранов.
 
+**REQ-ROLE-09 — Backend boundary:** для будущего FIN Connect утверждён стек React + Spring Boot (BFF) + PostgreSQL, а Keycloak, Redis, RustFS и KumoMTA работают как отдельные внутренние сервисы исключительно через backend / контролируемый reverse proxy. OAuth-токены и credentials не передаются React; вход Keycloak отображается браузеру только через разрешённые auth endpoints reverse proxy. Реализация и обязательные тесты: [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md).
+
 ## 20. Связанные документы и приоритет интерпретации
 
 - **Этот документ** — главный product vision, user experience, scoping и этапы FIN Analyzer.
 - [ECONOMIC-DIRECTIONS.md](ECONOMIC-DIRECTIONS.md) — детальное ТЗ для 12 новых направлений, бизнес-планов, поиска финансирования и безопасной публикации проектов.
 - [ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md) — окончательное наименование FIN Project Marketplace, разрешённые информационные сценарии и запрет финансовых операций.
+- [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md) — Spring Boot BFF, Keycloak, Redis, RustFS, KumoMTA, PostgreSQL, приватные соединения и E2E security gates.
 - [ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md](ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md) — стратегические гипотезы, 20 ролей, разграничение доступа, ролевые сценарии и test/acceptance gates.
 - [FIN-SPEC.md](FIN-SPEC.md) — подробные требования к профессиональной финансовой отчётности; интерпретировать как специализированный модуль FIN Professional.
 - [FORM-CATALOG.md](FORM-CATALOG.md) — каталог 44 позиций для FIN Professional / Credit; не означает обязательность всех форм для каждого пользователя.
