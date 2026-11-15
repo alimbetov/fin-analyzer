@@ -80,6 +80,27 @@ class ScenarioEconomicsEngineTest {
         assertEquals(Verdict.MISSING_EVIDENCE,f(a,Method.CASH_FLOW_RECONCILIATION).verdict());
     }
 
+
+    @Test void cashMovementCarriesCompleteLineageAndReportsUnpairedMonth(){
+        var a=assess("SC-IP-HEALTH",
+                row("DF-CSH-01","","bank","in-jan",YearMonth.of(2026,1),n("amount","900")),
+                row("DF-CSH-01","","bank","in-feb",YearMonth.of(2026,2),n("amount","100")),
+                row("DF-CSH-02","","bank","out-jan",YearMonth.of(2026,1),n("amount","600")));
+        var january=a.findings().stream().filter(x->x.method()==Method.OWNER_CASH_MOVEMENT
+                && x.subject().equals("2026-01")).findFirst().orElseThrow();
+        assertEquals(Verdict.REVIEW,january.verdict());
+        assertEquals("300",january.computedValues().get("cashMovement"));
+        assertEquals(Set.of("in-jan","out-jan"),january.sources().stream()
+                .map(SourceRef::rowId).collect(java.util.stream.Collectors.toSet()));
+        assertTrue(january.sources().stream().allMatch(x->x.sourceRevision()!=null
+                && !x.sourceRevision().isBlank()));
+        var february=a.findings().stream().filter(x->x.method()==Method.OWNER_CASH_MOVEMENT
+                && x.subject().equals("2026-02")).findFirst().orElseThrow();
+        assertEquals(Verdict.MISSING_EVIDENCE,february.verdict());
+        assertEquals(List.of("DF-CSH-02:2026-02"),february.neededSources());
+        assertTrue(february.computedValues().isEmpty());
+    }
+
     @Test void soleTraderCashEvidenceNeverRepresentsProfit(){
         var a=assess("SC-IP-HEALTH",
                 r("DF-CSH-01","","cash-in",n("amount","900")),
