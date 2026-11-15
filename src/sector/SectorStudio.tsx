@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
-import { SECTOR_PACKS, modelPack, pilotCode, sectionTitle, selectForms } from "./registry";
+import { SECTOR_PACKS, pilotCode, sectionTitle, selectForms } from "./registry";
 import {
   approveSectorRow, calculateSectorState, fieldsForForm, prepareSectorRow,
   type SectorState
