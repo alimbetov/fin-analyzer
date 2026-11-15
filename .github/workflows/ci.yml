@@ -65,3 +65,72 @@ jobs:
           path: test-results/
           if-no-files-found: warn
           retention-days: 14
+
+  backend-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: JUnit 5 and PostgreSQL Testcontainers (real Docker)
+        run: mvn -B -ntp -f backend/pom.xml verify
+      - name: Fail closed if diagnostic or PostgreSQL integration test evidence is missing
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          reports=backend/target/surefire-reports
+          for klass in \
+            kz.fin.backend.diagnostics.ScenarioFiveQuestionEngineTest \
+            kz.fin.backend.diagnostics.ExtensionSheetContractSmokeTest \
+            kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest \
+            kz.fin.backend.persistence.PostgresInvariantTest \
+            kz.fin.backend.persistence.FactPublicationIntegrationTest; do
+            file="$reports/TEST-$klass.xml"
+            test -s "$file" || { echo "::error::Missing mandatory JUnit report $file"; exit 1; }
+            if grep -Eq '<testsuite[^>]*(failures|errors)="[1-9]' "$file"; then
+              echo "::error::JUnit report contains failure or error: $file"; exit 1
+            fi
+          done
+      - name: Upload backend evidence for this commit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-backend-golden-and-postgres-evidence
+          path: |
+            backend/target/surefire-reports/
+            backend/src/test/resources/simulation/scenario-five-question-coverage.tsv
+          if-no-files-found: error
+          retention-days: 14
+
+  acceptance-gate:
+    if: always()
+    needs: [verify, backend-verification, desktop-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all mandatory jobs on exactly this workflow SHA
+        shell: bash
+        env:
+          NODE_STATUS: ${{ needs.verify.result }}
+          BACKEND_STATUS: ${{ needs.backend-verification.result }}
+          DESKTOP_STATUS: ${{ needs.desktop-macos.result }}
+          TRIGGER: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          echo "Acceptance SHA: $GITHUB_SHA"
+          echo "Node / Playwright: $NODE_STATUS"
+          echo "Java / PostgreSQL: $BACKEND_STATUS"
+          echo "macOS desktop browsers: $DESKTOP_STATUS"
+          test "$NODE_STATUS" = "success"
+          test "$BACKEND_STATUS" = "success"
+          if [ "$TRIGGER" = "push" ]; then
+            test "$DESKTOP_STATUS" = "success"
+          else
+            test "$DESKTOP_STATUS" = "skipped"
+          fi
+          echo "CI_ACCEPTANCE_GREEN_SHA=$GITHUB_SHA"
