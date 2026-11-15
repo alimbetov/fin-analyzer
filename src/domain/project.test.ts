@@ -32,6 +32,18 @@ describe("local FIN project", () => {
     project.revisions[0]!.values["2025"].TOTAL_EQUITY = "100";
     expect(() => readProject(JSON.stringify(project))).toThrow(/недействительная/);
   });
+  it("preserves locally approved sector revisions when reopening the same FIN file", async () => {
+    const { createSectorState, prepareSectorRow, approveSectorRow } = await import("../sector/state");
+    const original = createSectorState("company-one");
+    const approval = prepareSectorRow(original,"G_RETAIL","SF-G01","sku-1","KZT","2026-11",
+      {netRevenue:"1000",cogs:"540",soldQty:"90"});
+    const state = approveSectorRow(original,approval);
+    const restored = readProject(JSON.stringify(createProject("Test",validValues(),[],state)));
+    expect(restored.sector?.current[0]?.row.revisionId).toEqual(approval.row.revisionId);
+    const corrupted=JSON.parse(JSON.stringify(restored));
+    corrupted.sector.current[0].row.values.cogs="-1";
+    expect(()=>readProject(JSON.stringify(corrupted))).toThrow();
+  });
   it("rejects incompatible project schema", () => {
     expect(() => readProject('{"schemaVersion":"fin.project/999"}')).toThrow(/структура/);
   });
