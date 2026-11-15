@@ -69,6 +69,9 @@ export function SectorStudio({ company, project, onChange }: Props) {
   const templateContext:SectorTemplateContext|null=executable?{
     company:company.trim(),formCode:executable,modelCode:model,dimension,period,currency
   }:null;
+  const fingerprint=JSON.stringify(templateContext);
+  const contextFingerprint=useRef(fingerprint);
+  contextFingerprint.current=fingerprint;
 
   function clearDraft() {
     setValues({});
@@ -131,7 +134,9 @@ export function SectorStudio({ company, project, onChange }: Props) {
     }
     setBusy(true);setError("");setMessage("");
     try {
+      const expectedFingerprint=JSON.stringify(templateContext);
       const draft=await parseSectorTemplate(await file.arrayBuffer(),templateContext);
+      if(contextFingerprint.current!==expectedFingerprint) throw new Error("SECTOR_XLSX_CONTEXT_CHANGED: загрузите файл повторно для нового выбора.");
       setValues(draft);
       setMessage("Excel импортирован в черновик. Проверьте поля и подтвердите отдельно.");
     } catch(cause) {
@@ -148,19 +153,19 @@ export function SectorStudio({ company, project, onChange }: Props) {
       Сейчас используется уровень секции ОКЭД A–U; сопоставление отдельных пятизначных кодов ещё не реализовано.</p>
     <div className="sector-inputs">
       <label className="field">Сектор ОКЭД (раздел)
-        <select aria-label="Сектор ОКЭД" value={section} onChange={e=>chooseSection(e.target.value)}>
+        <select aria-label="Сектор ОКЭД" disabled={busy} value={section} onChange={e=>chooseSection(e.target.value)}>
           {SECTOR_PACKS.map(item=><option key={item.section} value={item.section}>
             {item.section} · {sectionTitle(item.section)}
           </option>)}
         </select>
       </label>
       <label className="field">Вариант деятельности
-        <select aria-label="Вариант деятельности" value={model} onChange={e=>chooseModel(e.target.value)}>
+        <select aria-label="Вариант деятельности" disabled={busy} value={model} onChange={e=>chooseModel(e.target.value)}>
           {pack.models.map(code=><option key={code} value={code}>{code}</option>)}
         </select>
       </label>
       <label className="field">Отраслевая форма
-        <select aria-label="Отраслевая форма" value={form} onChange={e=>chooseForm(e.target.value)}>
+        <select aria-label="Отраслевая форма" disabled={busy} value={form} onChange={e=>chooseForm(e.target.value)}>
           {availableForms.map(item=><option key={item.code} value={item.code}>
             {item.code} · {FORM_LABEL[item.code]??"Методика не реализована"} {item.executable?"(пилот)":"(только каталог)"}
           </option>)}
@@ -175,15 +180,15 @@ export function SectorStudio({ company, project, onChange }: Props) {
     </div> : <>
       <div className="sector-inputs">
         <label className="field">Объект / SKU / договор
-          <input aria-label="Код объекта" value={dimension} maxLength={45}
+          <input aria-label="Код объекта" disabled={busy} value={dimension} maxLength={45}
             onChange={e=>{setDimension(e.target.value);clearDraft();}} placeholder="sku-1" />
         </label>
         <label className="field">Месяц данных
-          <input aria-label="Месяц отраслевых данных" type="month" value={period}
+          <input aria-label="Месяц отраслевых данных" type="month" disabled={busy} value={period}
             onChange={e=>{setPeriod(e.target.value);clearDraft();}} />
         </label>
         <label className="field">Валюта
-          <select aria-label="Валюта отраслевых данных" value={currency}
+          <select aria-label="Валюта отраслевых данных" disabled={busy} value={currency}
             onChange={e=>{setCurrency(e.target.value);clearDraft();}}>
             <option>KZT</option><option>USD</option><option>EUR</option>
           </select>
