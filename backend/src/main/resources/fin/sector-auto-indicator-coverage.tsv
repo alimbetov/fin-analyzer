@@ -1,0 +1,22 @@
+section	sourceForm	sourceField	sourceGrain	metricCode	measureKind	unitCode	operatorRecommendation	groupDimension	qualificationStatus	methodologyGap
+A	SF-A03	cashOut	crop×month	AGRI_CASH_OUT	FLOW	MONEY	FLOW_SUM	crop	DESIGN_ONLY	Period cash out; not crop cost recognition
+B	SF-B01	extractedT	site×month	MINE_EXTRACTED_T	FLOW	T	FLOW_SUM	site	DESIGN_ONLY	Volume only; grades and recovery not yet reconciled
+C	SF-C01	goodUnits	plant×product×shift	GOOD_UNITS	FLOW	PCS	FLOW_SUM	product	DESIGN_ONLY	Shift timestamps required before monthly rollup
+D	SF-D01	generatedMWh	plant×day	POWER_GENERATED_MWH	FLOW	MWH	FLOW_SUM	plant	DESIGN_ONLY	No tariff or dispatch logic
+E	SF-E01	waterInputM3	network×month	WATER_INPUT_M3	FLOW	M3	FLOW_SUM	network	DESIGN_ONLY	Meter and leakage reconciliation pending
+F	SF-F02	actualCost	project×WBS×month	CONSTRUCTION_ACTUAL_COST	FLOW	MONEY	REVIEW_REQUIRED	wbsCode	DESIGN_ONLY	Actual cost may be periodic or cumulative; MUST NOT sum before policy approval
+G	SF-G01	netRevenue	store×sku×month	RETAIL_NET_REVENUE	FLOW	MONEY	FLOW_SUM	store	DESIGN_ONLY	Revenue recognized not cash; reconcile returns
+H	SF-H01	tripCost	trip	TRANSPORT_TRIP_COST	FLOW	MONEY	FLOW_SUM	trip	DESIGN_ONLY	Requires event date and unique trip ID before period sum
+I	SF-I01	netSales	menuItem×day	FOOD_NET_SALES	FLOW	MONEY	FLOW_SUM	menuItem	DESIGN_ONLY	POS refunds and discounts reconciled
+J	SF-J01	newMrr	product×month	SAAS_NEW_MRR	FLOW	MONEY	FLOW_SUM	plan	DESIGN_ONLY	MRR movement not recognized revenue
+K	SF-K02	earnedPremium	product×quarter	INSURANCE_EARNED_PREMIUM	FLOW	MONEY	FLOW_SUM	product	DESIGN_ONLY	Regulated insurer method NOT qualified; quarter not month
+L	SF-L02	rentRevenue	property×month	PROPERTY_RENT_REVENUE	FLOW	MONEY	FLOW_SUM	property	DESIGN_ONLY	Revenue recognition by lease method unresolved
+M	SF-M02	recognizedFee	engagement×month	SERVICES_RECOGNIZED_FEE	FLOW	MONEY	FLOW_SUM	engagement	DESIGN_ONLY	Timesheets must not duplicate contract recognition
+N	SF-N01	wageCost	contract×week	STAFFING_WAGE_COST	FLOW	MONEY	FLOW_SUM	contract	DESIGN_ONLY	Wage accrual versus payment to be qualified
+O	SF-O01	actualSpend	program×quarter	PUBLIC_ACTUAL_SPEND	FLOW	MONEY	REVIEW_REQUIRED	program	DESIGN_ONLY	ActualSpend may be cumulative; fiscal basis required
+P	SF-P01	attendedLearnerSessions	program×month	LEARNER_ATTENDED_SESSIONS	FLOW	SESSION	FLOW_SUM	program	DESIGN_ONLY	Academic calendar and enrollment cohorts not supported
+Q	SF-Q01	attended	clinic×week	CLINIC_VISITS	FLOW	VISIT	FLOW_SUM	clinic	DESIGN_ONLY	Administrative count only; no clinical inference
+R	SF-R01	netTicketRevenue	event	EVENT_TICKET_REVENUE	FLOW	MONEY	FLOW_SUM	event	DESIGN_ONLY	Event date and refunds required for period allocation
+S	SF-S01	netRevenue	service×month	PERSONAL_SERVICE_REVENUE	FLOW	MONEY	FLOW_SUM	service	DESIGN_ONLY	Warranty and cancellation reconciliation pending
+T	SF-T02	wagePaid	household×month	HOUSEHOLD_WAGES	FLOW	MONEY	FLOW_SUM	household	DESIGN_ONLY	Not equivalent to company payroll or household savings
+U	SF-U01	spendToDate	program×quarter	PROGRAM_SPEND_TO_DATE	STOCK	MONEY	REVIEW_REQUIRED	program	DESIGN_ONLY	CUMULATIVE to-date measure; never sum quarter snapshots

@@ -30,3 +30,14 @@ No automatic approval of PDF/Excel contents.
 3. Add Financial Statement + Debt Facility + Sales/Cash transaction typed aggregates.
 4. Ensure company/period/currency/basis selection before invoking CalculationDag.
 5. Add cross-runtime decimal golden fixtures (existing React and sector pilot are separate baselines).
+
+## Automated analytical columns (prototype)
+
+See [AUTO-INDICATORS-R1.md](AUTO-INDICATORS-R1.md).
+Pure Java operators: FLOW_SUM, MONTHLY_FLOW_MEAN, DAY_WEIGHTED_LEVEL_MEAN,
+STOCK_CLOSING, ABS_CHANGE/PCT_CHANGE, PERCENT_OF, SHARE_PCT and MOVING_MEAN.
+Inputs are scoped by company, business unit, fact-set revision, metric version,
+currency/unit, accounting basis, data space and dimensions. Calendar coverage
+and baseline/denominator readiness are checked. Sector coverage across A-U
+and example report columns are documented as DESIGN_ONLY: they are not
+qualified methods, auto-rendered React fields or an authorization-aware API.

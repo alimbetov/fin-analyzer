@@ -1,0 +1,16 @@
+operatorCode	measureKind	category	rule	implementationStatus
+FLOW_SUM	FLOW	TIME	Complete nonoverlapping intervals	IMPLEMENTED_PURE_JAVA
+MONTHLY_FLOW_MEAN	FLOW	TIME	Monthly intervals and complete coverage	IMPLEMENTED_PURE_JAVA
+DAY_WEIGHTED_LEVEL_MEAN	LEVEL	TIME	Time weighted over full interval	IMPLEMENTED_PURE_JAVA
+STOCK_CLOSING	STOCK	TIME	As-of closing date only	IMPLEMENTED_PURE_JAVA
+ABS_CHANGE	ANY	COMPARE	Comparable series and ordered nonoverlapping periods	IMPLEMENTED_PURE_JAVA
+PCT_CHANGE	ANY	COMPARE	Positive preceding value required	IMPLEMENTED_PURE_JAVA
+PERCENT_OF	ANY	RATIO	Matching scope unit currency and period	IMPLEMENTED_PURE_JAVA
+SHARE_PCT	ANY	GROUP	Explicit full population and one grouping dimension	IMPLEMENTED_PURE_JAVA
+MOVING_MEAN	FLOW_OR_STOCK	ROLLING	Complete monthly rolling window	IMPLEMENTED_PURE_JAVA
+ROLLING_RATIO_OF_SUMS	FLOW	ROLLING	Sum numerator and denominator before percentage	DESIGN_ONLY
+YTD	FLOW	TIME	Period from fiscal-year start to selected cutoff	DESIGN_ONLY
+TTM	FLOW	ROLLING	Trailing twelve complete comparable months	DESIGN_ONLY
+CAGR	FLOW	COMPARE	Positive begin/end with eligible periods	DESIGN_ONLY
+PLAN_VS_ACTUAL	FLOW	COMPARE	Explicitly paired approved actual and budget baseline	DESIGN_ONLY
+PERCENTILE	LEVEL	SAMPLE	Sample count and missingness disclosed	DESIGN_ONLY
