@@ -1,4 +1,4 @@
-# FIN Project Marketplace — единое проектное техническое задание v3.6
+# FIN Project Marketplace — единое проектное техническое задание v4.0 (consolidated baseline)
 
 **Продукт:** **FIN Project Marketplace** — международная B2B-платформа для экономики бизнеса, проектов и сотрудничества; **FIN Analyzer** — экономико-аналитический модуль.  
 **Дата:** 2026-11-15  
@@ -7,6 +7,8 @@
 **Расширение продукта:** FIN — не только финансовая диагностика. В состав целевой платформы входят финансовый, инвестиционный, маркетинговый, производственно-операционный анализ, создание бизнес-планов, а также двенадцать дополнительных направлений. Детальные требования: [ECONOMIC-DIRECTIONS.md](ECONOMIC-DIRECTIONS.md).  
 **Репозиторий:** https://github.com/alimbetov/fin-analyzer  
 **Приоритет:** этот документ определяет новое продуктовое направление. Уточняющие финансовые спецификации, каталог форм и исходная архитектура сохраняются, если не противоречат новым продуктовым принципам.
+
+**Консолидированный baseline требований:** [SRS v1.0](FIN-REQUIREMENTS-CONSOLIDATED.md) · [RTM — матрица трассировки](FIN-REQUIREMENTS-TRACEABILITY.md) · [Решения и пробелы](FIN-REQUIREMENTS-DECISIONS-GAPS.md). Эта редакция — продуктовый обзор, исходные специализированные спецификации сохраняют свои edge cases. Сфера действия ADR-007…010 имеет приоритет. Все новые функции остаются PLANNED.
 
 ## 0. Executive summary
 
@@ -495,6 +497,10 @@ React App / Smart Wizard / Input Hub / Analytics Studio
 **REQ-MOD-01:** stable moduleId для каждого bounded context; модуль не равен отдельному микросервису. **REQ-MOD-02:** G1 должен приносить пользу без hosted авторизации и других участников. **REQ-MOD-03:** все модули используют общие EconomicFacts, версии и методики. **REQ-MOD-04:** публикация отчёта, проекта и выдача файла имеют разные grants, состояния и snapshots. **REQ-MOD-05:** проверка готовности модулей по E2E/golden tests и независимому review, не по количеству экранов.
 
 ## 23. Связанные документы и приоритет интерпретации
+
+- [FIN-REQUIREMENTS-CONSOLIDATED.md](FIN-REQUIREMENTS-CONSOLIDATED.md) — единый SRS со всеми разделами продукта и нормативными ссылками.
+- [FIN-REQUIREMENTS-TRACEABILITY.md](FIN-REQUIREMENTS-TRACEABILITY.md) — трассировка 39 модулей, 44 форм, 11 мастеров, 20 ролей и acceptance.
+- [FIN-REQUIREMENTS-DECISIONS-GAPS.md](FIN-REQUIREMENTS-DECISIONS-GAPS.md) — согласованные решения и открытые вопросы.
 
 - **Этот документ** — главный product vision, user experience, scoping и этапы FIN Analyzer.
 - [ECONOMIC-DIRECTIONS.md](ECONOMIC-DIRECTIONS.md) — детальное ТЗ для 12 новых направлений, бизнес-планов, поиска финансирования и безопасной публикации проектов.

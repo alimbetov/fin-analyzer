@@ -2,6 +2,8 @@
 
 **Статус:** proposed, not implemented. Техническая база: [FIN-SPEC](FIN-SPEC.md).
 
+**Иерархия документации:** этот документ описывает раннее локальное React ядро и исторические ADR-001…006; для hosted Spring Boot/Keycloak действует ADR-008, для доступа — ADR-009, для всего продукта — [SRS v1.0](FIN-REQUIREMENTS-CONSOLIDATED.md). Подробный список открытых решений — [GAPS](FIN-REQUIREMENTS-DECISIONS-GAPS.md).
+
 ## 1. Architecture Decision Records
 
 **ADR-008 — FIN Connect internal backend stack (accepted design, not implemented).** React ↔ Spring Boot BFF via same-origin HTTPS session; standalone Keycloak, Redis, RustFS, KumoMTA and PostgreSQL live behind the backend and reverse proxy. Keycloak browser login UI uses only controlled proxied auth endpoints; backend holds tokens and credentials. See [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md).
