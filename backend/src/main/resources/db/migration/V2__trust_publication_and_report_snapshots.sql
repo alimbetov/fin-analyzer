@@ -44,6 +44,7 @@ CREATE TABLE fin_fact.fact_set_publication (
     CONSTRAINT fk_publication_fact_set_tenant FOREIGN KEY
         (fact_set_revision_id,organization_id)
         REFERENCES fin_fact.fact_set_revision(id,organization_id),
+    CONSTRAINT uq_published_tenant UNIQUE (fact_set_revision_id,organization_id),
     CONSTRAINT uq_published_scope UNIQUE
         (fact_set_revision_id,organization_id,economic_entity_id,
          business_scope_id,reporting_basis,data_space)
