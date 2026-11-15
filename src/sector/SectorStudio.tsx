@@ -73,6 +73,10 @@ export function SectorStudio({ company, project, onChange }: Props) {
   const contextFingerprint=useRef(fingerprint);
   contextFingerprint.current=fingerprint;
 
+  function canDiscardDraft(): boolean {
+    return !Object.values(values).some(value => value.trim() !== "") ||
+      window.confirm("Неподтверждённые отраслевые значения будут потеряны при смене формы или контекста. Продолжить?");
+  }
   function clearDraft() {
     setValues({});
     setError("");
@@ -80,20 +84,20 @@ export function SectorStudio({ company, project, onChange }: Props) {
   }
   function chooseSection(code:string) {
     const next=SECTOR_PACKS.find(item=>item.section===code);
-    if(!next)return;
+    if(!next || (next.section!==section && !canDiscardDraft()))return;
     setSection(next.section);
     setModel(next.models[0]!);
     setForm(next.forms[0]!);
     clearDraft();
   }
   function chooseModel(code:string) {
-    if(!pack.models.includes(code))return;
+    if(!pack.models.includes(code) || (code!==model && !canDiscardDraft()))return;
     setModel(code);
     setForm(pack.forms[0]!);
     clearDraft();
   }
   function chooseForm(code:string) {
-    if(!pack.forms.includes(code))return;
+    if(!pack.forms.includes(code) || (code!==form && !canDiscardDraft()))return;
     setForm(code);
     clearDraft();
   }
@@ -181,15 +185,15 @@ export function SectorStudio({ company, project, onChange }: Props) {
       <div className="sector-inputs">
         <label className="field">Объект / SKU / договор
           <input aria-label="Код объекта" disabled={busy} value={dimension} maxLength={45}
-            onChange={e=>{setDimension(e.target.value);clearDraft();}} placeholder="sku-1" />
+            onChange={e=>{if(canDiscardDraft()){setDimension(e.target.value);clearDraft();}}} placeholder="sku-1" />
         </label>
         <label className="field">Месяц данных
           <input aria-label="Месяц отраслевых данных" type="month" disabled={busy} value={period}
-            onChange={e=>{setPeriod(e.target.value);clearDraft();}} />
+            onChange={e=>{if(canDiscardDraft()){setPeriod(e.target.value);clearDraft();}}} />
         </label>
         <label className="field">Валюта
           <select aria-label="Валюта отраслевых данных" disabled={busy} value={currency}
-            onChange={e=>{setCurrency(e.target.value);clearDraft();}}>
+            onChange={e=>{if(canDiscardDraft()){setCurrency(e.target.value);clearDraft();}}}>
             <option>KZT</option><option>USD</option><option>EUR</option>
           </select>
         </label>
@@ -216,7 +220,7 @@ export function SectorStudio({ company, project, onChange }: Props) {
       </div>
       <div className="editor-footer">
         <span>Значения в десятичных строках. Ноль указывается явно; пустое поле не будет подтверждено.
-          Excel попадает только в черновик. Действующая расчётная версия фиксируется отдельно.</span>
+          Excel попадает только в черновик. Неподтверждённые поля не входят в сохранённый FIN-проект. Действующая расчётная версия фиксируется отдельно.</span>
         <button type="button" className="button primary" disabled={busy || !company.trim()} onClick={confirm}>
           Подтвердить отраслевые данные
         </button>
