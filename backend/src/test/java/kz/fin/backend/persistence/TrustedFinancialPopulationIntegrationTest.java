@@ -66,7 +66,7 @@ class TrustedFinancialPopulationIntegrationTest {
                     encode(sha256(convert_to(?::jsonb::text,'UTF8')),'hex'),
                     ?::jsonb,'PRESENT',?,NULL,?,now())
                 """,fact,org,entity,scope,FROM,TO,
-                "{\\"sale\\":\\""+i+"\\"}", "{\\"sale\\":\\""+i+"\\"}",amount,source);
+                "{\"sale\":\""+i+"\"}", "{\"sale\":\""+i+"\"}",amount,source);
             jdbc.update("""
                 INSERT INTO fin_fact.fact_origin(
                     fact_assertion_id,organization_id,source_revision_id,source_row_id,source_field)
