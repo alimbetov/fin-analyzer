@@ -345,6 +345,7 @@ F01 Balance Excel→React→Validate→Current Ratio→Graph→local save. Block
 | SEC-05 | Cross-tenant | no query/API/cache/attachment disclosures across entities |
 | ECON-01 | Shared economics | investor teaser, bank package, business plan numbers equal same snapshot |
 | ECON-02 | Changing assumptions | new scenario version; old approved snapshot immutable |
+| METH-01 | Methodology & TheoryLens | changing the methodology/lens does not rewrite canonical facts; the comparison reports changed assumptions and evidence status |
 | INTL-01 | Multi-country accounting | mismatched standards/currencies cannot be silently combined |
 | LEGAL-01 | Regulated offer | all regulated marketplace features fail closed until authorized |
 
