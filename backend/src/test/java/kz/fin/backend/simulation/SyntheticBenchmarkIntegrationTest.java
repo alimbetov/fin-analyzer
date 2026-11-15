@@ -31,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Testcontainers
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SyntheticBenchmarkIntegrationTest {
     @Container
@@ -66,9 +65,9 @@ class SyntheticBenchmarkIntegrationTest {
     private record FactSeed(UUID id,DataPoint point,UUID sourceId) {}
     private record Expected(String scenario,String rule,String kind,int count) {}
 
-    private List<Profile> profiles;
-    private List<DataPoint> points;
-    private List<Expected> oracle;
+    private static List<Profile> profiles;
+    private static List<DataPoint> points;
+    private static List<Expected> oracle;
 
     private static List<String[]> readTsv(String filename,int columns) throws Exception {
         try(var stream=Objects.requireNonNull(SyntheticBenchmarkIntegrationTest.class
@@ -87,8 +86,9 @@ class SyntheticBenchmarkIntegrationTest {
         }
     }
 
-    @BeforeAll
-    void loadSeparateSimulationTables() throws Exception {
+    @BeforeEach
+    synchronized void loadSeparateSimulationTables() throws Exception {
+        if(profiles!=null) return;
         var manifest=readTsv("profiles.tsv",9);
         var facts=readTsv("monthly-financial-facts.tsv",14);
         var expectations=readTsv("golden-findings.tsv",5);
