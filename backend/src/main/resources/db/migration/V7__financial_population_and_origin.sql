@@ -28,7 +28,7 @@ CREATE TRIGGER trg_pilot_field_mapping_immutable BEFORE UPDATE OR DELETE
 ON fin_fact.pilot_field_mapping FOR EACH ROW EXECUTE FUNCTION fin_fact.reject_immutable_mutation();
 
 CREATE TABLE fin_fact.fact_origin (
-    fact_assertion_id UUID PRIMARY KEY,
+    fact_assertion_id UUID NOT NULL,
     organization_id UUID NOT NULL,
     source_revision_id UUID NOT NULL,
     source_row_id VARCHAR(200) NOT NULL CHECK(length(btrim(source_row_id))>0),
