@@ -18,7 +18,7 @@ public final class ScenarioFiveQuestionEngine {
 
     public enum GateState {
         CALCULATED_SYNTHETIC, HYPOTHESIS_ONLY, NOT_ASSESSED,
-        REVIEW_REQUIRED, SIMULATED_ONLY, NOT_COMPUTABLE
+        REVIEW_REQUIRED, REVIEW_SUGGESTED, SIMULATED_ONLY, NOT_COMPUTABLE
     }
     public record Gate(GateState state, String reason) {
         public Gate {
@@ -93,7 +93,9 @@ public final class ScenarioFiveQuestionEngine {
                         : "WHY_BLOCKED_BY_MISSING_EVIDENCE");
         Gate seriousness=new Gate(GateState.NOT_ASSESSED,
                 "NO_APPROVED_SECTOR_MATERIALITY_OR_RISK_CALIBRATION");
-        Gate action=new Gate(numeric?GateState.REVIEW_REQUIRED:GateState.NOT_COMPUTABLE,
+        Gate action=new Gate(!numeric ? GateState.NOT_COMPUTABLE :
+                        current.verdict()==Verdict.OBSERVATION ? GateState.REVIEW_REQUIRED
+                                : GateState.REVIEW_SUGGESTED,
                 "CANDIDATE_REVIEW_ACTION_HUMAN_APPROVAL_REQUIRED");
 
         Map<String,String> alternative=Map.of();
