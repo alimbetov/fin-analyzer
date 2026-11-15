@@ -57,7 +57,7 @@ public final class IndicatorRelationshipRegistry {
             if(lookup.putIfAbsent(relation.code(),relation)!=null)
                 throw new IllegalStateException("DUPLICATE_RELATION_CODE");
         this.byCode=Map.copyOf(lookup);
-        this.definitionHash=hash(relationships);
+        this.definitionHash=hash(this.forms,relationships);
     }
     public Map<String,Form> forms(){return forms;}
     public List<Relationship> relationships(){return relationships;}
@@ -81,6 +81,8 @@ public final class IndicatorRelationshipRegistry {
         Map<String,Form> base=new TreeMap<>();
         for(String[] r:formRows){
             if(!r[0].matches("[A-Z][A-Z0-9-]{0,127}") ||
+               !Set.of("STRUCTURED","STRUCTURED_INPUT","COMPOSITE","SECTOR_INPUT",
+                       "DOCUMENT","EXTERNAL_TAX").contains(r[2]) ||
                !r[7].equals("DESIGN_ONLY") && !r[7].equals("PILOT_UNQUALIFIED"))
                 throw new IllegalArgumentException("INVALID_CATALOG_FORM_OR_QUALIFICATION");
             FormDisposition disposition=Set.of("DOCUMENT","EXTERNAL_TAX").contains(r[2])
@@ -169,10 +171,20 @@ public final class IndicatorRelationshipRegistry {
         }
         return parsed;
     }
-    private static String hash(List<Relationship> relations){
+    private static String hash(Map<String,Form> forms,List<Relationship> relations){
         try{
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
             digest.update(VERSION.getBytes(StandardCharsets.UTF_8));
+            // Re-qualifying a form changes the meaning of a relationship even
+            // if its metric bindings have not changed. Include every form disposition.
+            for(Form f:forms.values()){
+                byte[] canonical=(f.code()+"|"+f.kind()+"|"+f.disposition()+"|"+
+                        f.qualification()).getBytes(StandardCharsets.UTF_8);
+                digest.update(new byte[]{(byte)(canonical.length>>>24),
+                        (byte)(canonical.length>>>16),(byte)(canonical.length>>>8),
+                        (byte)canonical.length});
+                digest.update(canonical);
+            }
             for(Relationship r:relations){
                 String serialized=r.code()+"|"+r.version()+"|"+r.type()+"|"+
                     r.qualification()+"|"+r.accountingPolicy()+"|"+r.periodPolicy()+"|"+
