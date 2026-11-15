@@ -28,9 +28,9 @@ public final class ScenarioFiveQuestionEngine {
         }
     }
     public record Evidence(String formCode, String sheetCode, String sourceRevision,
-                           String itemKey, String rowId, String period) {}
+                           String itemKey, String rowId, String period, String eventDate) {}
     public record Result(String contractVersion, String methodVersion, String scenarioCode,
-                         Method method, String metricCode, Gate what, Gate why,
+                         Scope scope, Method method, String metricCode, Gate what, Gate why,
                          Gate seriousness, Gate action, Gate effect,
                          Map<String,String> values, Map<String,String> alternatives,
                          Map<String,String> assumptions, List<Evidence> evidence, String reviewAction,
@@ -82,7 +82,8 @@ public final class ScenarioFiveQuestionEngine {
         Finding current=single(original,method);
         List<Evidence> sources=current.sources().stream().map(source -> new Evidence(
                 source.formCode(),source.sheetCode(),source.sourceRevision(),
-                source.itemKey(),source.rowId(),source.period().toString())).toList();
+                source.itemKey(),source.rowId(),source.period().toString(),
+                source.eventDate()==null?"":source.eventDate().toString())).toList();
 
         boolean numeric=current.computedValues().containsKey(metricCode);
         BigDecimal before=numeric?new BigDecimal(current.computedValues().get(metricCode)):null;
@@ -115,7 +116,8 @@ public final class ScenarioFiveQuestionEngine {
                         "SYNTHETIC_INPUT_SUBSTITUTION_NO_COST_OR_FORECAST");
             }
         }
-        return new Result(VERSION,original.methodVersion(),baseline.scenarioCode(),method,
+        return new Result(VERSION,original.methodVersion(),baseline.scenarioCode(),
+                baseline.scope(),method,
                 metricCode,what,why,seriousness,action,effect,
                 values,alternative,assumptions,sources,REVIEW_ACTIONS.get(method),true);
     }
