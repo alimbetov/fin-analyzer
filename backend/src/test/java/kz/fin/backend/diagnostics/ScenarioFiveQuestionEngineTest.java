@@ -158,6 +158,44 @@ class ScenarioFiveQuestionEngineTest {
             assertTrue(result.effect().reason().contains("NO_COST_OR_FORECAST"));
         }));
     }
+
+    @Test void everyPublishedSmokeCoverageRowMatchesExecutedGoldenInputs() throws Exception {
+        var resource=ScenarioFiveQuestionEngineTest.class.getResourceAsStream(
+                "/simulation/scenario-five-question-coverage.tsv");
+        assertNotNull(resource);
+        Map<Method,Smoke> implemented=new EnumMap<>(Method.class);
+        cases().forEach(x->assertNull(implemented.put(x.method(),x)));
+        Set<Method> advertised=EnumSet.noneOf(Method.class);
+        try(var reader=new java.io.BufferedReader(new java.io.InputStreamReader(resource,
+                java.nio.charset.StandardCharsets.UTF_8))) {
+            assertEquals("method\tscenarioCode\tmetricCode\tsourceForms\textensionSheets\tstatus",
+                    reader.readLine());
+            String line;
+            while((line=reader.readLine())!=null) {
+                if(line.isBlank())continue;
+                String[] cells=line.split("\\t",-1);
+                assertEquals(6,cells.length,line);
+                Method method=Method.valueOf(cells[0]);
+                assertTrue(advertised.add(method),"duplicated "+method);
+                Smoke smoke=implemented.get(method);
+                assertNotNull(smoke,"coverage without golden case: "+method);
+                assertEquals(smoke.scenario(),cells[1]);
+                assertEquals(smoke.metric(),cells[2]);
+                assertEquals("SYNTHETIC_TEST_DEFINED",cells[5]);
+                List<InputRow> rows=smoke.fixture().apply(false);
+                Set<String> forms=new TreeSet<>(), extensions=new TreeSet<>();
+                rows.forEach(x->{
+                    forms.add(x.formCode());
+                    if(!x.sheetCode().isBlank())extensions.add(x.sheetCode());
+                });
+                assertEquals(forms,new TreeSet<>(Arrays.asList(cells[3].split(";"))),method.toString());
+                assertEquals(extensions,cells[4].equals("-")?Set.of():
+                    new TreeSet<>(Arrays.asList(cells[4].split(";"))),method.toString());
+            }
+        }
+        assertEquals(implemented.keySet(),advertised);
+    }
+
     @Test void allImplementedJavaMethodsHaveARealGoldenAndCounterfactualSmoke(){
         EnumSet<Method> expected=EnumSet.allOf(Method.class);
         expected.remove(Method.SECTOR_METHOD_QUALIFICATION);
