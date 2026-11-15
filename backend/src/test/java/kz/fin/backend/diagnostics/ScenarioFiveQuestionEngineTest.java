@@ -157,6 +157,14 @@ class ScenarioFiveQuestionEngineTest {
                     test.method(),test.metric());
             assertEquals(ScenarioFiveQuestionEngine.VERSION,result.contractVersion());
             assertEquals(ScenarioEconomicsEngine.METHOD_VERSION,result.methodVersion());
+            assertEquals(SCOPE,result.scope());
+            if(test.method()==Method.WEEKLY_CASH_FORECAST_ROLLFORWARD){
+                assertEquals(13,result.evidence().size());
+                assertEquals(13,result.evidence().stream()
+                        .map(ScenarioFiveQuestionEngine.Evidence::eventDate).distinct().count());
+                assertTrue(result.evidence().stream().allMatch(x->
+                        x.eventDate().matches("2026-(10|11|12)-[0-3][0-9]")));
+            }
             assertEquals(GateState.CALCULATED_SYNTHETIC,result.what().state());
             assertEquals(GateState.HYPOTHESIS_ONLY,result.why().state());
             assertEquals(GateState.NOT_ASSESSED,result.seriousness().state());
