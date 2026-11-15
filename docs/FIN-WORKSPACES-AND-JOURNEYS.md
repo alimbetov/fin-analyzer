@@ -1,6 +1,8 @@
 # FIN Project Marketplace — пользовательские пространства, мастера и публикация
 
 **Версия:** WORKSPACE-FLOWS v1.0 · **Дата:** 2026-11-15 · **Статус:** PROPOSED / NOT IMPLEMENTED  
+**Каталог модулей:** [MODULE-CATALOG.md](MODULE-CATALOG.md) — 39 bounded contexts и 11 адаптивных мастеров.
+
 **Связанные документы:** [Master TZ](FIN-ANALYZER-PROJECT-TZ.md), [«Мой бизнес»](FIN-MY-BUSINESS-INTERPRETER.md), [«Мой проект»](FIN-MY-PROJECT-STRATEGY.md), [Публикация финансовых отчётов](FIN-FINANCIAL-REPORT-PUBLICATION.md), [Консалтинг](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md).
 
 ## 1. Два главных пространства и Marketplace

@@ -312,6 +312,8 @@ ChartSpec — декларативный слой; ECharts adapter рендер�
 - DoS на больших данных → Web Worker для тяжёлого импорта/анализа и контролируемые лимиты памяти.
 - Информация в локальном .fin.json не шифруется; пользователь получает предупреждение при сохранении конфиденциального проекта.
 
+**Реестр функциональных модулей:** [MODULE-CATALOG.md](MODULE-CATALOG.md) — 39 bounded contexts для modular-monolith Spring Boot и отдельного browser-first FIN Analyzer Core; сквозные модели и требования независимости.
+
 ## 11. Критерии независимости модулей
 
 - Один и тот же набор MetricValues из XLSX и React Editor имеет идентичный domain fingerprint.

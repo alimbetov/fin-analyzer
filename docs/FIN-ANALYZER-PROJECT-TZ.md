@@ -1,4 +1,4 @@
-# FIN Project Marketplace — единое проектное техническое задание v3.5
+# FIN Project Marketplace — единое проектное техническое задание v3.6
 
 **Продукт:** **FIN Project Marketplace** — международная B2B-платформа для экономики бизнеса, проектов и сотрудничества; **FIN Analyzer** — экономико-аналитический модуль.  
 **Дата:** 2026-11-15  
@@ -488,7 +488,13 @@ React App / Smart Wizard / Input Hub / Analytics Studio
 
 **Основные решения:** [ADR-009 — доступ по зонам и срокам](ADR-009-REPORT-ACCESS-ZONES.md); [ADR-010 — основное название FIN Project Marketplace](ADR-010-PRIMARY-PRODUCT-NAME.md).
 
-## 22. Связанные документы и приоритет интерпретации
+## 22. Модульная архитектура и функциональные границы
+
+**[MODULE-CATALOG.md](MODULE-CATALOG.md)** — нормативный реестр 39 логических модулей в пяти группах: 12 FND, 9 BUS, 8 PRJ, 7 CON, 3 ADM. В нём для каждого модуля описаны акторы, входы/выходы, панель, этап реализации, PASS-критерий, 11 мастеров, межролевые сценарии и границы общей предметной модели.
+
+**REQ-MOD-01:** stable moduleId для каждого bounded context; модуль не равен отдельному микросервису. **REQ-MOD-02:** G1 должен приносить пользу без hosted авторизации и других участников. **REQ-MOD-03:** все модули используют общие EconomicFacts, версии и методики. **REQ-MOD-04:** публикация отчёта, проекта и выдача файла имеют разные grants, состояния и snapshots. **REQ-MOD-05:** проверка готовности модулей по E2E/golden tests и независимому review, не по количеству экранов.
+
+## 23. Связанные документы и приоритет интерпретации
 
 - **Этот документ** — главный product vision, user experience, scoping и этапы FIN Analyzer.
 - [ECONOMIC-DIRECTIONS.md](ECONOMIC-DIRECTIONS.md) — детальное ТЗ для 12 новых направлений, бизнес-планов, поиска финансирования и безопасной публикации проектов.
@@ -496,6 +502,7 @@ React App / Smart Wizard / Input Hub / Analytics Studio
 - [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md) — Spring Boot BFF, Keycloak, Redis, RustFS, KumoMTA, PostgreSQL, приватные соединения и E2E security gates.
 - [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md) — зоны Z00–Z99, срочный, контрактный и одноразовый доступ, 36 тестов.
 - [ADR-010](ADR-010-PRIMARY-PRODUCT-NAME.md) — FIN Project Marketplace как основное название платформы, FIN Analyzer как модуль.
+- [MODULE-CATALOG.md](MODULE-CATALOG.md) — 39 модулей, данные, интерфейсы, мастера, E2E и release gates.
 - [ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md](ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md) — стратегические гипотезы, 20 ролей, разграничение доступа, ролевые сценарии и test/acceptance gates.
 - [FIN-WORKSPACES-AND-JOURNEYS.md](FIN-WORKSPACES-AND-JOURNEYS.md) — панели пользователей и пять мастеров.
 - [FIN-MY-BUSINESS-INTERPRETER.md](FIN-MY-BUSINESS-INTERPRETER.md) — продажи и внутренние проблемы.
