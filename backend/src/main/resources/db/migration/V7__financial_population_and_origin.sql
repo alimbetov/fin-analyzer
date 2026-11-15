@@ -51,7 +51,8 @@ BEGIN
         RAISE EXCEPTION 'ORIGIN_SOURCE_OR_TENANT_MISMATCH';
     END IF;
     SELECT * INTO s FROM fin_fact.approved_source_revision
-     WHERE organization_id=NEW.organization_id AND source_revision_id=NEW.source_revision_id;
+     WHERE organization_id=NEW.organization_id AND source_revision_id=NEW.source_revision_id
+     FOR UPDATE;
     IF NOT FOUND OR NOT EXISTS (
         SELECT 1 FROM fin_fact.pilot_field_mapping m
         WHERE m.form_code=s.form_code AND m.form_version=s.form_version
@@ -92,6 +93,11 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE actual_rows BIGINT;
 DECLARE actual_total NUMERIC;
 BEGIN
+    -- Serialize source-row registration and population sealing on the same source.
+    PERFORM 1 FROM fin_fact.approved_source_revision
+      WHERE organization_id=NEW.organization_id AND source_revision_id=NEW.source_revision_id
+      FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'SOURCE_REVISION_NOT_APPROVED'; END IF;
     SELECT count(*),coalesce(sum(a.numeric_value),0)
       INTO actual_rows,actual_total
       FROM fin_fact.fact_origin o
