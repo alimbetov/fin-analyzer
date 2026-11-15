@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import { generateSectorTemplate, parseSectorTemplate, type SectorTemplateContext } from "./excel";
+import { FORM_FIELDS, PILOT_FORMS } from "../../packages/sector-pilot/src/index.mjs";
 
 const context: SectorTemplateContext = {
   company:"ООО Демонстрация",formCode:"SF-G01",modelCode:"G_RETAIL",
@@ -26,6 +27,20 @@ describe("IND-R1 controlled sector XLSX", () => {
     expect(await parseSectorTemplate(await asBuffer(book),context)).toEqual({
       netRevenue:"1000",cogs:"540",soldQty:"90"
     });
+  });
+  it("all nine pilot forms use the same field contract for generated XLSX and parsed draft", async()=>{
+    for(const formCode of PILOT_FORMS){
+      const ctx={...context,formCode};
+      const file=await generateSectorTemplate(ctx);
+      const book=new ExcelJS.Workbook();
+      await book.xlsx.load(new Uint8Array(await file.arrayBuffer()) as unknown as Parameters<typeof book.xlsx.load>[0]);
+      const expected:Record<string,string>={};
+      for(const [index,field] of FORM_FIELDS[formCode].entries()){
+        book.getWorksheet("Sector")!.getCell(index+5,2).value=index+1;
+        expected[field]=String(index+1);
+      }
+      expect(await parseSectorTemplate(await asBuffer(book),ctx),formCode).toEqual(expected);
+    }
   });
   it("rejects cross-company, cross-period, tampered codes and formulas",async()=>{
     const book=await workbook();
