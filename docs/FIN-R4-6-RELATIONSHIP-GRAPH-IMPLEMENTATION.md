@@ -17,6 +17,12 @@ User may begin with a business question or a report. FIN discovers all **reviewe
 - `CrossFormDiagnosticEngine.RULES`, `CrossFormEvidencePlanner`, the backend loader's metric whitelist, its stock-vs-flow semantics and immutable diagnostic definition hash now derive from the same bundled registry. The prior R4.5 hardcoded six-rule list and manual source-map are removed.
 - `TrustedCrossFormDiagnosticService` uses prepared SQL bind parameters for the server-owned registry metric set, retains source completeness, tenant, source version, currency, exact dates and provenance guards. Immutable `CROSS_FORM_PILOT` snapshots now contain the registry version/hash and `relatedEvidenceGraph` with bounded missing-metric discovery. Rule-set version bumped to `2.0.0` to keep previous runs immutable and reproducible.
 
+### Versioned problem routing
+
+- `diagnostic-problem-routes-v1.tsv` now supplies all four synthetic business-question anchors (`CASH_SHORTFALL`, `PROFITABILITY`, `BALANCE_RECONCILIATION`, `RECEIVABLES`) to **both** `DiagnosticProblemCatalog` and React `parseProblemRoutes`. An anchor must be a metric/time role already present in the relationship registry.
+- Unknown anchors, duplicates, document/unsupported inputs and claims of production methodological qualification fail closed. New Java and Vitest negatives lock both sides. Selecting a problem remains a planning operation, not evidence of user-approved financial figures.
+- The relationship hash pins the full 166-form metadata (including grain/field contract), reviewed bindings and methods. Updating a form's semantics changes the hash even when the six relationship codes remain unchanged. Changing problem routes requires a new routes version and review.
+
 ### Dynamic graph planner
 
 - `DynamicDiagnosticPlanner` performs cycle-safe, bounded **1–3 hop** discovery from a business question, named source form or verified metric keys. Only *explicit* registered metric edges are traversed. Disconnected method components are not silently bridged.
