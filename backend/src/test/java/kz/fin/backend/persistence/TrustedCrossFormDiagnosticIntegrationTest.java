@@ -66,7 +66,9 @@ class TrustedCrossFormDiagnosticIntegrationTest {
                 "a".repeat(64),cells.size());
         return mapper.mapReviewedSource(s.org(),revision,s.entity(),s.scope(),"MANAGEMENT",cells);
     }
-    private Case fixture(boolean full){
+    private Case fixture(boolean full){return fixture(full,false);}
+
+    private Case fixture(boolean full,boolean omitOneApprovedCashReceipt){
         Setup s=new Setup(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),new ArrayList<>());
         List<TrustedFinancialFormMapper.Mapped> all=new ArrayList<>();
         if(full) {
@@ -101,6 +103,7 @@ class TrustedCrossFormDiagnosticIntegrationTest {
             VALUES (?,?,'APPROVED',now())
             """,revision,s.org());
         for(var row:all){
+            if(omitOneApprovedCashReceipt && row.sourceRowId().equals("receipt2"))continue;
             String key=jdbc.queryForObject("SELECT fin_fact.fact_identity_hash(?)",String.class,row.factId());
             jdbc.update("""
                 INSERT INTO fin_fact.fact_selection
@@ -165,6 +168,12 @@ class TrustedCrossFormDiagnosticIntegrationTest {
         assertEquals("F03",next.get(0).path("formCode").asText());
         assertEquals("F01",next.get(1).path("formCode").asText());
 
+    }
+    @Test void partialApprovedCashSourceCannotProduceEvenAnApparentlyValidCrossFormSignal(){
+        var s=fixture(true,true);
+        var error=assertThrows(IllegalArgumentException.class,
+                ()->diagnostic.evaluate(s.org(),s.revision(),MONTH));
+        assertEquals("SOURCE_POPULATION_INCOMPLETE_OR_UNMAPPED",error.getMessage());
     }
     @Test void foreignTenantOrUnpublishedRevisionMustNotRevealAnyFinancialEvidence(){
         var s=fixture(true);
