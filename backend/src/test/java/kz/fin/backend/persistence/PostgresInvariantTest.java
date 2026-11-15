@@ -78,4 +78,44 @@ class PostgresInvariantTest {
                 "INSERT INTO fin_fact.fact_selection(organization_id,fact_set_revision_id,fact_key_hash,fact_assertion_id) VALUES (?,?,?,?)",
                 orgB,setId,"hash",factId));
     }
+
+    @Test void nullCurrencyDoesNotBypassUniqueSourceKey() {
+        UUID id = UUID.randomUUID();
+        repository.saveAndFlush(FactAssertionJpaEntity.from(fact(UUID.randomUUID(), UUID.randomUUID(), id)));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "INSERT INTO fin_fact.fact_assertion " +
+                "SELECT ?, organization_id, economic_entity_id, business_scope_id, metric_code, metric_version, " +
+                "time_kind, start_inclusive, end_exclusive, reporting_basis, unit_code, currency_code, " +
+                "dimension_hash, dimensions, value_state, numeric_value, estimate_method_ref, source_revision_id, recorded_at " +
+                "FROM fin_fact.fact_assertion WHERE id = ?", UUID.randomUUID(), id));
+    }
+
+    @Test void estimateCannotLackMethodAtDatabaseLevel() {
+        UUID id = UUID.randomUUID();
+        repository.saveAndFlush(FactAssertionJpaEntity.from(fact(UUID.randomUUID(), UUID.randomUUID(), id)));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "INSERT INTO fin_fact.fact_assertion " +
+                "SELECT ?, organization_id, economic_entity_id, business_scope_id, metric_code, metric_version, " +
+                "time_kind, start_inclusive, end_exclusive, reporting_basis, unit_code, currency_code, " +
+                "dimension_hash, dimensions, 'ESTIMATED', numeric_value, NULL, source_revision_id, recorded_at " +
+                "FROM fin_fact.fact_assertion WHERE id = ?", UUID.randomUUID(), id));
+    }
+
+    @Test void parentFactSetCannotBelongToAnotherOrganization() {
+        UUID orgA = UUID.randomUUID(), orgB = UUID.randomUUID(), parentId = UUID.randomUUID();
+        jdbc.update("INSERT INTO fin_fact.fact_set_revision(id,organization_id,status,approved_at) VALUES (?,?,?,now())",
+                parentId, orgA, "APPROVED");
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "INSERT INTO fin_fact.fact_set_revision(id,organization_id,parent_revision_id,status,approved_at) " +
+                "VALUES (?,?,?,?,now())", UUID.randomUUID(), orgB, parentId, "APPROVED"));
+    }
+
+    @Test void approvedFactSetCannotBeDeleted() {
+        UUID org = UUID.randomUUID(), setId = UUID.randomUUID();
+        jdbc.update("INSERT INTO fin_fact.fact_set_revision(id,organization_id,status,approved_at) VALUES (?,?,?,now())",
+                setId, org, "APPROVED");
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "DELETE FROM fin_fact.fact_set_revision WHERE id = ?", setId));
+    }
+
 }
