@@ -25,7 +25,7 @@ import java.util.*;
  */
 public final class ScenarioEconomicsEngine {
     private ScenarioEconomicsEngine() {}
-    public static final String METHOD_VERSION="SCENARIO_ECONOMICS_V1";
+    public static final String METHOD_VERSION="SCENARIO_ECONOMICS_V2";
     private static final MathContext MC=new MathContext(34,RoundingMode.HALF_EVEN);
     private static final int SCALE=12;
 
