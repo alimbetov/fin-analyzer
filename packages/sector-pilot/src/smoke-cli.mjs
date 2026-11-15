@@ -19,7 +19,7 @@ if(fixtures.size!==9 || new Set(formRows.map(x=>x[0])).size!==166 ||
     new Set(extensionRows.map(x=>x[0])).size!==30)
   throw new Error('SMOKE_CATALOG_DUPLICATES');
 if(javaHeader.join('\\t')!=='method\\tscenarioCode\\tmetricCode\\tsourceForms\\textensionSheets\\tstatus' ||
-  javaRows.length!==14 || new Set(javaRows.map(x=>x[0])).size!==14 ||
+  javaRows.length!==16 || new Set(javaRows.map(x=>x[0])).size!==14 ||
   javaRows.some(x=>x.length!==6 || x[5]!=='SYNTHETIC_TEST_DEFINED'))
   throw new Error('SMOKE_JAVA_MANIFEST_INVALID');
 const knownForms=new Set(formRows.map(x=>x[0]));
