@@ -61,3 +61,13 @@ preflight, business-model questions, and catalog maturity. See
 [FIN Diagnostic Compass R1](../docs/FIN-DIAGNOSTIC-COMPASS-R1.md).
 This pure JVM engine is **not a source-approval service, HTTP controller,
 qualified business verdict or working React experience**.
+
+## Scenario economics and EX-sheet Compass (synthetic R2)
+
+[Methods and limits](DIAGNOSTICS-R2-SCENARIOS.md). Pure `ScenarioEconomicsEngine`
+checks old-form reconciliations, yearly history, budget variance, retail,
+production WIP, resource estimates, EVM, dated FCFF NPV and pilot DSCR.
+`DiagnosticSheetCompass` prioritizes relevant detail sheets from all 30 EX
+contracts and never asks to fill DERIVED formulas manually. These classes
+have **no trusted form approval, Keycloak/ABAC, real ACTUAL capability or
+React client integration**.
