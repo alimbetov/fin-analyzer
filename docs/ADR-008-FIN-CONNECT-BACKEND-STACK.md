@@ -110,6 +110,10 @@ Authorization-sensitive cache keys include identity, tenant and relevant revisio
 - **T-13** Roles from Keycloak mapped incorrectly so same user gains permissions in every tenant.
 - **T-14** Foreign-origin cross-site request with session cookie modifies disclosure or sends messages.
 
+### 8.1. Дополнительный контур Consulting Organization
+
+`ConsultingOrganization` хранится в FIN PostgreSQL как субъект с собственной командой и `Engagement` с другой организацией. Консалтинговая фирма не получает права на private F/B/C формы, финансовые отчёты или дополнительные документы клиента без принятого engagement и конкретных grants. Все `RequestItem`, `DocumentGrant`, consent, approvals, revisions и audit — в PostgreSQL; RustFS только private object bytes; Redis никогда не является источником истины об access. Документы проходят backend auth на каждом скачивании. Уведомления Request/Reminder/Grant/Revocation через PostgreSQL Outbox и KumoMTA. [Security E2E CONS-01…CONS-20](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md).
+
 ## 9. Nonfunctional and security gates (future implementation)
 
 | Test | Mandatory PASS |

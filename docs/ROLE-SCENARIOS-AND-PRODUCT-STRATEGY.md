@@ -145,6 +145,14 @@ FIN Analyzer должен превращать бизнес-вопрос в пр
 - **Результат:** review package, комментарии, согласованный список пробелов.
 - **Негативный путь:** консультант не публикует проект, не меняет shareholder assumptions или банковское досье без отдельного согласия.
 
+### U-R08A — Консалтинговая организация с несколькими сотрудниками
+
+- **Цель:** провести анализ компании или проекта, запросить материалы помимо стандартных финансовых форм (договоры, операционные данные, коммерческие исследования, документы и планы).
+- **Шаги:** инициировать контакт или получить приглашение от компании → accepted engagement → собрать перечень недостающих сведений → отправить item-level requests → клиент может предоставить часть, отказать по остальному → issue grants → consultant review → source-based report.
+- **Результат:** `ConsultingReportSnapshot`, evidence register, список пробелов, status/history по каждому RequestItem.
+- **Негативный путь:** без consent/engagement нет запросов private документов или чтения F/B/C; консультант другого клиента не может видеть материалы; отзыв права блокирует последующие downloads.
+- **Спецификация:** [FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md). R08 остаётся ролью физического лица, новая сущность — Consulting Organization.
+
 ### U-R09 — Частный инвестор
 - **Цель:** найти проекты для рассмотрения, не получая лишние личные данные.
 - **Шаги:** указать отрасль/регион/инструмент/диапазон → изучить PublicTeaser → сравнить methodology, source coverage, risks → отправить InterestRequest → запросить доступ.
@@ -216,6 +224,10 @@ FIN Analyzer должен превращать бизнес-вопрос в пр
 - **Шаги:** ознакомиться с требованиями/fixtures → проверить numerical methods и security → провести независимый E2E → выдать approve или blocker.
 - **Результат:** signed/referenced review evidence на конкретном commit/model version.
 - **Негативный путь:** автор расчётного движка не может считать свой self-review независимым S2 APPROVE.
+
+## 4.1. Новые самостоятельные роли организаций и кабинетные сценарии
+
+Состав реестра R01–R20 не заменяется. Дополнительно **ConsultingOrganization** — собственная `Organization` (не обязательно новая глобальная роль пользователя) со своими `CONSULT_ORG_ADMIN/ENGAGEMENT_LEAD/CONSULT_ANALYST/CONSULT_REVIEWER`, permissions по `Engagement` и документам. «Мой бизнес», «Мой проект», Report Publication и Request Wizard связаны [общим Workspaces TZ](FIN-WORKSPACES-AND-JOURNEYS.md).
 
 ## 5. Cross-role workflows — жизненный цикл проекта
 

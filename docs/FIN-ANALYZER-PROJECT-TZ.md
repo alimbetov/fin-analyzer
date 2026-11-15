@@ -1,4 +1,4 @@
-# FIN Analyzer — проектное техническое задание v3.3
+# FIN Analyzer — проектное техническое задание v3.4
 
 **Продукт:** FIN Analyzer — Adaptive Business Financial Diagnosis Platform  
 **Дата:** 2026-11-15  
@@ -454,13 +454,36 @@ React App / Smart Wizard / Input Hub / Analytics Studio
 
 **REQ-ROLE-09 — Backend boundary:** для будущего FIN Connect утверждён стек React + Spring Boot (BFF) + PostgreSQL, а Keycloak, Redis, RustFS и KumoMTA работают как отдельные внутренние сервисы исключительно через backend / контролируемый reverse proxy. OAuth-токены и credentials не передаются React; вход Keycloak отображается браузеру только через разрешённые auth endpoints reverse proxy. Реализация и обязательные тесты: [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md).
 
-## 20. Связанные документы и приоритет интерпретации
+## 20. Рабочие пространства, мастера и консалтинговая компания
+
+**REQ-WS-01:** «Мой бизнес» — анализ текущих продаж, себестоимости, денег, клиентов, производства, персонала и внутренних проблем. Статистические наблюдения и гипотезы объяснения в интерпретаторе разделены. [ТЗ](FIN-MY-BUSINESS-INTERPRETER.md).
+
+**REQ-WS-02:** «Мой проект» — стратегические планы, варианты развития, инвестиционная модель, Business Plan и адресные пакеты для инвестора, банка или партнёра. Прогнозы проекта не меняют ревизии фактических данных бизнеса. [ТЗ](FIN-MY-PROJECT-STRATEGY.md).
+
+**REQ-WS-03:** интерфейс объединяет ролевые панели без отдельного приложения на каждую роль: Founder/Business/Contributor/Investor/Institution/Partner/Consultant/Monitoring/Trust, а также public Explore. [Workspaces & Journeys](FIN-WORKSPACES-AND-JOURNEYS.md).
+
+**REQ-WS-04:** отдельная функция публикации финансовых отчётов с PRIVATE/INTERNAL/INVITE_ONLY/PUBLIC_SUMMARY/PUBLIC_REPORT, snapshot и контрольной версией. Нельзя автоматически публиковать финансовую отчётность вследствие публикации проекта и наоборот. [ТЗ](FIN-FINANCIAL-REPORT-PUBLICATION.md).
+
+**REQ-CONS-01:** **консалтинговая компания — самостоятельный OrganizationType / FIN Connect participant**, с собственными членами, кабинетом и реестром клиентов. Не равна одному индивидуальному консультанту R08 и не получает прав на чужой бизнес по умолчанию.
+
+**REQ-CONS-02:** консалтинговая компания может запрашивать **материалы сверх стандартных форм финансовой отчётности**: юридические, договорные, коммерческие, производственные, кадровые, рыночные, технические и проектные. [Полный Request Wizard и каталог](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md).
+
+**REQ-CONS-03:** первоначальный запрос контакта возможен без доступа к данным; запросы материалов допускаются только в рамках **принятого Engagement**, с ясной целью, объёмом, сроком и consent компании. Каждому файлу — отдельная версия, разрешение, срок и аудит. Компания может отказать или предоставить часть.
+
+**REQ-CONS-04:** проверка каждого `requestItemId, engagementId, targetOrgId, documentId` и recipient scope выполняется серверным Spring Boot BFF. Keycloak не даёт полномочий на чужие документы; PostgreSQL системный источник истины, Redis не подменяет ACL, RustFS приватен, уведомления KumoMTA через durable Outbox. Сценарии CONS-01…CONS-20 — будущие обязательные E2E, не PASS.
+
+## 21. Связанные документы и приоритет интерпретации
 
 - **Этот документ** — главный product vision, user experience, scoping и этапы FIN Analyzer.
 - [ECONOMIC-DIRECTIONS.md](ECONOMIC-DIRECTIONS.md) — детальное ТЗ для 12 новых направлений, бизнес-планов, поиска финансирования и безопасной публикации проектов.
 - [ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md) — окончательное наименование FIN Project Marketplace, разрешённые информационные сценарии и запрет финансовых операций.
 - [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md) — Spring Boot BFF, Keycloak, Redis, RustFS, KumoMTA, PostgreSQL, приватные соединения и E2E security gates.
 - [ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md](ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md) — стратегические гипотезы, 20 ролей, разграничение доступа, ролевые сценарии и test/acceptance gates.
+- [FIN-WORKSPACES-AND-JOURNEYS.md](FIN-WORKSPACES-AND-JOURNEYS.md) — панели пользователей и пять мастеров.
+- [FIN-MY-BUSINESS-INTERPRETER.md](FIN-MY-BUSINESS-INTERPRETER.md) — продажи и внутренние проблемы.
+- [FIN-MY-PROJECT-STRATEGY.md](FIN-MY-PROJECT-STRATEGY.md) — стратегии и инвестиционные проекты.
+- [FIN-FINANCIAL-REPORT-PUBLICATION.md](FIN-FINANCIAL-REPORT-PUBLICATION.md) — публикация финансовых отчётов.
+- [FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md) — кабинеты консалтинговой компании, документы и запросы.
 - [FIN-SPEC.md](FIN-SPEC.md) — подробные требования к профессиональной финансовой отчётности; интерпретировать как специализированный модуль FIN Professional.
 - [FORM-CATALOG.md](FORM-CATALOG.md) — каталог 44 позиций для FIN Professional / Credit; не означает обязательность всех форм для каждого пользователя.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — текущие базовые ADR и компоненты. Дополнять новыми ADR Business/Wizard/Fact model.
