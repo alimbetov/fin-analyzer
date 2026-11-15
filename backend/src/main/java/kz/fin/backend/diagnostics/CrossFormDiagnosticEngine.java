@@ -15,7 +15,7 @@ import java.util.*;
  */
 public final class CrossFormDiagnosticEngine {
     private CrossFormDiagnosticEngine() {}
-    public static final String METHOD_VERSION = "CROSS_FORM_R4_5_SYNTHETIC_V1";
+    public static final String METHOD_VERSION = "CROSS_FORM_R4_6_SYNTHETIC_V1";
 
     public enum TimeRole { CURRENT_FLOW, CURRENT_STOCK, PRIOR_STOCK }
     public enum RelationType { ACCOUNTING_IDENTITY, CROSS_REPORT_RECONCILIATION,
@@ -83,22 +83,12 @@ public final class CrossFormDiagnosticEngine {
     private static MetricKey stock(String code) {return new MetricKey(code, TimeRole.CURRENT_STOCK);}
     private static MetricKey prior(String code) {return new MetricKey(code, TimeRole.PRIOR_STOCK);}
 
-    // Explicitly versioned semantic relations: not inferred from similar names.
-    public static final List<Rule> RULES = List.of(
-        new Rule("BALANCE_IDENTITY",RelationType.ACCOUNTING_IDENTITY,
-                List.of(stock("ASSETS"),stock("LIABILITIES"),stock("EQUITY"))),
-        new Rule("CASH_ROLLFORWARD",RelationType.CROSS_REPORT_RECONCILIATION,
-                List.of(prior("CASH_END"),stock("CASH_END"),
-                        flow("CFO"),flow("CFI"),flow("CFF"))),
-        new Rule("CASH_LEDGER_CASHFLOW_BRIDGE",RelationType.ECONOMIC_BRIDGE,
-                List.of(flow("CASH_IN"),flow("CASH_OUT"),flow("CFO"),flow("CFI"),flow("CFF"))),
-        new Rule("OPERATING_RESULT_TO_CFO",RelationType.ECONOMIC_BRIDGE,
-                List.of(flow("REV_NET"),flow("COGS"),flow("OPEX"),flow("CFO"))),
-        new Rule("RECEIVABLES_CASH_STRESS",RelationType.QUALITATIVE_PATTERN,
-                List.of(prior("AR_END"),stock("AR_END"),flow("REV_NET"),flow("CFO"))),
-        new Rule("GROSS_MARGIN",RelationType.ECONOMIC_BRIDGE,
-                List.of(flow("REV_NET"),flow("COGS")))
-    );
+    // Runtime and planner consume one fail-closed, versioned semantic registry.
+    // Its full 166-form catalog distinguishes numeric pilots from unqualified
+    // candidates and evidence-only documents.
+    public static final IndicatorRelationshipRegistry RELATIONSHIPS =
+            IndicatorRelationshipRegistry.bundled();
+    public static final List<Rule> RULES = RELATIONSHIPS.executableSyntheticRules();
     public static final Set<MetricKey> REQUIRED_KEYS;
     static {
         Set<MetricKey> keys=new TreeSet<>(Comparator.comparing(MetricKey::code)
