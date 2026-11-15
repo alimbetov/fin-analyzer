@@ -31,7 +31,9 @@ public final class IndicatorRelationshipRegistry {
         EVIDENCE_ONLY, PILOT_NUMERIC_SOURCE, NUMERIC_CANDIDATE_UNQUALIFIED
     }
     public enum Qualification { SYNTHETIC_PILOT_UNQUALIFIED }
-    public record Form(String code,String kind,FormDisposition disposition,String qualification) {}
+    public record Form(String code,String kind,FormDisposition disposition,String qualification,
+                       String catalog,String aggregateRoot,String grain,String fieldContract,
+                       String fieldEvidence) {}
     public record Binding(MetricKey key,String formCode) {}
     public record Relationship(String code,String version,RelationType type,String methodCode,
                                Qualification qualification,String accountingPolicy,String periodPolicy,
@@ -87,7 +89,7 @@ public final class IndicatorRelationshipRegistry {
                 throw new IllegalArgumentException("INVALID_CATALOG_FORM_OR_QUALIFICATION");
             FormDisposition disposition=Set.of("DOCUMENT","EXTERNAL_TAX").contains(r[2])
                 ?FormDisposition.EVIDENCE_ONLY:FormDisposition.NUMERIC_CANDIDATE_UNQUALIFIED;
-            if(base.putIfAbsent(r[0],new Form(r[0],r[2],disposition,r[7]))!=null)
+            if(base.putIfAbsent(r[0],new Form(r[0],r[2],disposition,r[7],r[1],r[3],r[4],r[5],r[6]))!=null)
                 throw new IllegalArgumentException("DUPLICATE_FORM");
         }
         if(base.size()!=166)throw new IllegalArgumentException("CATALOG_NOT_166_FORMS");
@@ -142,7 +144,9 @@ public final class IndicatorRelationshipRegistry {
         for(String formCode:new HashSet<>(origins.values())){
             Form form=base.get(formCode);
             base.put(formCode,new Form(form.code(),form.kind(),
-                    FormDisposition.PILOT_NUMERIC_SOURCE,form.qualification()));
+                    FormDisposition.PILOT_NUMERIC_SOURCE,form.qualification(),
+                    form.catalog(),form.aggregateRoot(),form.grain(),
+                    form.fieldContract(),form.fieldEvidence()));
         }
         return new IndicatorRelationshipRegistry(base,relationships,origins);
     }
@@ -179,7 +183,9 @@ public final class IndicatorRelationshipRegistry {
             // if its metric bindings have not changed. Include every form disposition.
             for(Form f:forms.values()){
                 byte[] canonical=(f.code()+"|"+f.kind()+"|"+f.disposition()+"|"+
-                        f.qualification()).getBytes(StandardCharsets.UTF_8);
+                        f.qualification()+"|"+f.catalog()+"|"+f.aggregateRoot()+"|"+
+                        f.grain()+"|"+f.fieldContract()+"|"+f.fieldEvidence())
+                        .getBytes(StandardCharsets.UTF_8);
                 digest.update(new byte[]{(byte)(canonical.length>>>24),
                         (byte)(canonical.length>>>16),(byte)(canonical.length>>>8),
                         (byte)canonical.length});
