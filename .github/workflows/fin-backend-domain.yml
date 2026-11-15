@@ -1,0 +1,22 @@
+name: FIN Backend Domain
+on:
+  push:
+    branches: [feat/fin-r0-r1a]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/fin-backend-domain.yml'
+  workflow_dispatch:
+jobs:
+  backend-domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Build and run JUnit + PostgreSQL Testcontainers
+        run: mvn -B -ntp -f backend/pom.xml verify
