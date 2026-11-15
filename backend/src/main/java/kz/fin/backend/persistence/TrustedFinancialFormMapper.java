@@ -106,9 +106,10 @@ public class TrustedFinancialFormMapper {
             SELECT source_field,metric_code,metric_version,required_time_kind
             FROM fin_fact.pilot_field_mapping
             WHERE form_code=? AND form_version=?
-            """,rs->mappings.put(rs.getString(1),
+            """,(rs,n)->Map.entry(rs.getString(1),
                     new Mapping(rs.getString(2),rs.getString(3),rs.getString(4))),
-                approved.form(),approved.version());
+                approved.form(),approved.version())
+                .forEach(entry->mappings.put(entry.getKey(),entry.getValue()));
         if(mappings.isEmpty())throw new IllegalArgumentException("UNKNOWN_PILOT_FORM");
         // Verify every field before writing. JDBC insert/lineage/control are one transaction.
         for(Cell cell:cells)
