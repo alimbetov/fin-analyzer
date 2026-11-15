@@ -47,6 +47,22 @@ class ScenarioFiveQuestionEngineTest {
         return new InputRow(form,sheet,key,rowId,YearMonth.from(date),date,"KZT",
                 "synthetic-source-"+rowId,EvidenceState.APPROVED,values(pairs));
     }
+    private static List<InputRow> weeklyCashRows(boolean alterLastWeek) {
+        List<InputRow> rows=new ArrayList<>();
+        LocalDate first=LocalDate.of(2026,10,5);
+        for(int week=0;week<13;week++) {
+            LocalDate date=first.plusWeeks(week);
+            int opening=100+week*10, outflow=(alterLastWeek && week==12)?20:10;
+            int closing=opening+20-outflow;
+            rows.add(dated("P03","EX-BUD-06","CASH_SCENARIO",
+                    String.format("week-%02d",week+1),date,
+                    "openingCash",String.valueOf(opening),
+                    "inflow","20","outflow",String.valueOf(outflow),
+                    "restrictedCash","5","closingCash",String.valueOf(closing)));
+        }
+        return rows;
+    }
+
     private static List<Smoke> cases(){
         return List.of(
             new Smoke("IP cash movement","SC-IP-HEALTH",Method.OWNER_CASH_MOVEMENT,
@@ -117,7 +133,17 @@ class ScenarioFiveQuestionEngineTest {
             new Smoke("borrower DSCR pilot","SC-CREDIT-DOSSIER",Method.DSCR_PILOT,
                     "dscr","1.5","1.7",changed->List.of(
                     row("P09","","BORROWER","debt",OCT,
-                        "cfads",changed?"170":"150","debtService","100")))
+                        "cfads",changed?"170":"150","debtService","100"))),
+            new Smoke("thirteen-week cash forecast","SC-BUDGET-FPA",
+                    Method.WEEKLY_CASH_FORECAST_ROLLFORWARD,
+                    "closingCashForecast","230","220",
+                    ScenarioFiveQuestionEngineTest::weeklyCashRows),
+            new Smoke("manufacturing overhead allocation","SC-MFG-ECONOMY",
+                    Method.OVERHEAD_ABSORPTION_VARIANCE,
+                    "overheadAbsorptionDifference","20","10",changed->List.of(
+                    row("DF-CST-03","EX-MFG-06","POOL-A","overhead",OCT,
+                        "actualOverhead","120","absorbedOverhead",changed?"110":"100",
+                        "capacityBase","10")))
         );
     }
     private static Input input(Smoke smoke,boolean altered){
@@ -136,7 +162,8 @@ class ScenarioFiveQuestionEngineTest {
             assertEquals(GateState.NOT_ASSESSED,result.seriousness().state());
             Set<Method> observed=Set.of(Method.BALANCE_RECONCILIATION,
                     Method.CASH_FLOW_RECONCILIATION,Method.WIP_ROLLFORWARD,
-                    Method.CONSTRUCTION_EVM,Method.TRADE_GROSS_MARGIN);
+                    Method.CONSTRUCTION_EVM,Method.TRADE_GROSS_MARGIN,
+                    Method.OVERHEAD_ABSORPTION_VARIANCE);
             assertEquals(observed.contains(test.method())?GateState.REVIEW_REQUIRED:
                     GateState.REVIEW_SUGGESTED,result.action().state());
             assertEquals(GateState.SIMULATED_ONLY,result.effect().state());
@@ -206,8 +233,8 @@ class ScenarioFiveQuestionEngineTest {
         EnumSet<Method> expected=EnumSet.allOf(Method.class);
         expected.remove(Method.SECTOR_METHOD_QUALIFICATION);
         assertEquals(expected,new HashSet<>(cases().stream().map(Smoke::method).toList()));
-        assertEquals(14,cases().size());
-        assertEquals(14,new HashSet<>(cases().stream().map(Smoke::name).toList()).size());
+        assertEquals(16,cases().size());
+        assertEquals(16,new HashSet<>(cases().stream().map(Smoke::name).toList()).size());
     }
     @Test void missingEvidenceCannotBeReplacedWithAZeroOrAPositiveRiskClaim(){
         var unavailable=new Input(SCOPE,"SC-LLC-FINANCE",List.of());
@@ -219,6 +246,45 @@ class ScenarioFiveQuestionEngineTest {
         assertTrue(result.values().isEmpty());
         assertTrue(result.evidence().isEmpty());
     }
+    @Test void thirteenWeekCashForecastMustRejectMissingWeekAndBrokenContinuity() {
+        var complete=weeklyCashRows(false);
+        var partial=new Input(SCOPE,"SC-BUDGET-FPA",complete.subList(0,12));
+        var uncomputed=ScenarioFiveQuestionEngine.evaluate(partial,null,
+                Method.WEEKLY_CASH_FORECAST_ROLLFORWARD,"closingCashForecast");
+        assertEquals(GateState.NOT_COMPUTABLE,uncomputed.what().state());
+        assertEquals(GateState.NOT_ASSESSED,uncomputed.seriousness().state());
+        assertEquals(GateState.NOT_COMPUTABLE,uncomputed.action().state());
+        List<InputRow> broken=new ArrayList<>(complete);
+        InputRow original=broken.get(4);
+        var changes=new TreeMap<>(original.values());
+        changes.put("openingCash",changes.get("openingCash").add(BigDecimal.ONE));
+        broken.set(4,new InputRow(original.formCode(),original.sheetCode(),
+                original.itemKey(),original.rowId(),original.period(),original.eventDate(),
+                original.currency(),original.sourceRevision(),original.state(),changes));
+        var inconsistent=ScenarioFiveQuestionEngine.evaluate(
+                new Input(SCOPE,"SC-BUDGET-FPA",broken),null,
+                Method.WEEKLY_CASH_FORECAST_ROLLFORWARD,"closingCashForecast");
+        assertEquals(GateState.NOT_COMPUTABLE,inconsistent.what().state());
+        assertEquals(GateState.NOT_COMPUTABLE,inconsistent.why().state());
+        assertEquals(GateState.NOT_ASSESSED,inconsistent.seriousness().state());
+    }
+
+    @Test void overheadAbsorptionRejectsNegativeCostAndMissingCapacity() {
+        var negative=row("DF-CST-03","EX-MFG-06","POOL","neg",OCT,
+                "actualOverhead","-1","absorbedOverhead","4","capacityBase","10");
+        assertEquals("NEGATIVE_OVERHEAD_OR_CAPACITY",
+                assertThrows(IllegalArgumentException.class,()->
+                    ScenarioEconomicsEngine.evaluate(new Input(SCOPE,"SC-MFG-ECONOMY",
+                            List.of(negative)))).getMessage());
+        var incomplete=row("DF-CST-03","EX-MFG-06","POOL","missing",OCT,
+                "actualOverhead","120","absorbedOverhead","100");
+        var result=ScenarioFiveQuestionEngine.evaluate(new Input(SCOPE,
+                "SC-MFG-ECONOMY",List.of(incomplete)),null,
+                Method.OVERHEAD_ABSORPTION_VARIANCE,"overheadAbsorptionDifference");
+        assertEquals(GateState.NOT_COMPUTABLE,result.what().state());
+        assertEquals(GateState.NOT_ASSESSED,result.seriousness().state());
+    }
+
     @Test void alternativeMustStayOnExactlyTheSameScopeSourcesAndSchema(){
         Smoke s=cases().get(0);
         Input input=input(s,false), alternate=input(s,true);
