@@ -5,6 +5,7 @@ import {
   type SectorState
 } from "./state";
 import { generateSectorTemplate, parseSectorTemplate, type SectorTemplateContext } from "./excel";
+import { PILOT_METHODS } from "./methods";
 
 const FIELD_LABEL: Record<string, string> = {
   netRevenue: "Чистая выручка", cogs: "Себестоимость продаж", soldQty: "Продано единиц",
@@ -27,18 +28,6 @@ const FORM_LABEL: Record<string, string> = {
   "SF-M02": "Результат по контракту", "SF-S01": "Рентабельность услуги",
   "SF-C01": "Выход годной продукции", "SF-C02": "Себестоимость единицы",
   "SF-C03": "Загрузка оборудования"
-};
-const METRIC_LABEL: Record<string, string> = {
-  SKU_GROSS_PROFIT: "Валовая прибыль SKU",
-  SKU_GROSS_MARGIN_PCT: "Валовая маржа SKU, %",
-  SKU_STOCK_TURN_PERIOD: "Оборачиваемость запасов, за период",
-  LANDED_UNIT_COST: "Закупочная стоимость с доставкой на единицу",
-  BILLABLE_UTILIZATION_PCT: "Доля оплачиваемых часов, %",
-  ENGAGEMENT_CONTRIBUTION: "Вклад договора",
-  SERVICE_UNIT_MARGIN: "Вклад на выполненный заказ",
-  GOOD_YIELD_PCT: "Выход годных изделий, %",
-  UNIT_MFG_COST: "Себестоимость единицы продукции",
-  EQUIPMENT_UTILIZATION_PCT: "Загрузка оборудования, %"
 };
 const WINDOW_LABEL: Record<string, string> = {
   MONTH: "Месяц", QUARTER: "Квартал", HALF_YEAR: "Полугодие", YEAR: "Год"
@@ -236,12 +225,12 @@ export function SectorStudio({ company, project, onChange }: Props) {
         <div className="sector-result-title"><strong>{WINDOW_LABEL[result.windowType]}: {result.windowCode}</strong>
           <span className="pill subtle">{result.status==="CALCULATED"?"Данные полные":"Неполный период"}</span></div>
         {Object.entries(result.metrics).map(([code,metric])=><div className="sector-metric" key={code}>
-          <span>{METRIC_LABEL[code]??code}</span><strong>{metric.value??"Не вычисляется"}</strong>
-          <small>{metric.value===null?(metric.reason??"Нет данных"):(metric.unit??"")}</small>
+          <span>{PILOT_METHODS[code]?.translations.ru.name??code}</span><strong>{metric.value??"Не вычисляется"}</strong>
+          <small>{metric.value===null?(metric.reason??"Нет данных"):(metric.unit??"")} · {PILOT_METHODS[code]?.formula??"Метод не зарегистрирован"} · {PILOT_METHODS[code]?.qualification??"UNQUALIFIED"}</small>
         </div>)}
         {result.missingFields.length>0 && <p>Не хватает полей: {result.missingFields.join(", ")}</p>}
         {result.missingPeriods.length>0 && <p>Не хватает месяцев: {result.missingPeriods.join(", ")}</p>}
-        <small className="sector-source">Ревизии источников: {result.sourceRevisions.join(", ")||"нет"}</small>
+        <small className="sector-source">Формулы — кандидаты pilot-1.0, не независимое методическое одобрение. Ревизии источников: {result.sourceRevisions.join(", ")||"нет"}</small>
       </article>)}</div>}
     <p className="sector-note">Локальных актуальных записей: {project.current.length}; прошлых ревизий: {project.prior.length}.
       При изменении утверждённой записи предыдущая ревизия сохраняется в FIN-проекте.</p>
