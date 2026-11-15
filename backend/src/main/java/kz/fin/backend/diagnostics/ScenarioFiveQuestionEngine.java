@@ -33,11 +33,12 @@ public final class ScenarioFiveQuestionEngine {
                          Method method, String metricCode, Gate what, Gate why,
                          Gate seriousness, Gate action, Gate effect,
                          Map<String,String> values, Map<String,String> alternatives,
-                         List<Evidence> evidence, String reviewAction,
+                         Map<String,String> assumptions, List<Evidence> evidence, String reviewAction,
                          boolean humanApprovalRequired) {
         public Result {
             values=Map.copyOf(values);
             alternatives=Map.copyOf(alternatives);
+            assumptions=Map.copyOf(assumptions);
             evidence=List.copyOf(evidence);
         }
     }
@@ -87,17 +88,19 @@ public final class ScenarioFiveQuestionEngine {
 
         Gate what=new Gate(numeric ? GateState.CALCULATED_SYNTHETIC : GateState.NOT_COMPUTABLE,
                 numeric?"SYNTHETIC_CALCULATION_NOT_AUTHORITATIVE":"METRIC_UNAVAILABLE_OR_MISSING_EVIDENCE");
-        Gate why=new Gate(GateState.HYPOTHESIS_ONLY,
-                "RULE_"+current.reason()+"_IS_NOT_CAUSAL_EVIDENCE");
+        Gate why=new Gate(numeric ? GateState.HYPOTHESIS_ONLY : GateState.NOT_COMPUTABLE,
+                numeric ? "RULE_"+current.reason()+"_IS_NOT_CAUSAL_EVIDENCE"
+                        : "WHY_BLOCKED_BY_MISSING_EVIDENCE");
         Gate seriousness=new Gate(GateState.NOT_ASSESSED,
                 "NO_APPROVED_SECTOR_MATERIALITY_OR_RISK_CALIBRATION");
         Gate action=new Gate(numeric?GateState.REVIEW_REQUIRED:GateState.NOT_COMPUTABLE,
                 "CANDIDATE_REVIEW_ACTION_HUMAN_APPROVAL_REQUIRED");
 
         Map<String,String> alternative=Map.of();
+        Map<String,String> assumptions=Map.of();
         Gate effect=new Gate(GateState.NOT_COMPUTABLE, "NO_VALIDATED_COUNTERFACTUAL");
         if(hypothetical!=null) {
-            requireComparable(baseline,hypothetical);
+            assumptions=requireComparable(baseline,hypothetical);
             Finding changed=single(ScenarioEconomicsEngine.evaluate(hypothetical),method);
             String updated=changed.computedValues().get(metricCode);
             if(numeric && updated!=null && changed.verdict()!=Verdict.MISSING_EVIDENCE) {
@@ -110,7 +113,7 @@ public final class ScenarioFiveQuestionEngine {
         }
         return new Result(VERSION,original.methodVersion(),baseline.scenarioCode(),method,
                 metricCode,what,why,seriousness,action,effect,
-                values,alternative,sources,REVIEW_ACTIONS.get(method),true);
+                values,alternative,assumptions,sources,REVIEW_ACTIONS.get(method),true);
     }
 
     private static Finding single(ScenarioEconomicsEngine.Report report, Method method) {
@@ -120,7 +123,7 @@ public final class ScenarioFiveQuestionEngine {
             throw new IllegalArgumentException("FIVE_Q_REQUIRES_SINGLE_METHOD_SUBJECT");
         return candidates.getFirst();
     }
-    private static void requireComparable(Input before,Input after) {
+    private static Map<String,String> requireComparable(Input before,Input after) {
         if(!before.scope().equals(after.scope())
                 ||!before.scenarioCode().equals(after.scenarioCode())
                 ||before.rows().size()!=after.rows().size())
@@ -129,14 +132,20 @@ public final class ScenarioFiveQuestionEngine {
         Map<String,InputRow> right=byStableKey(after.rows());
         if(!left.keySet().equals(right.keySet()))
             throw new IllegalArgumentException("FIVE_Q_CHANGED_SOURCE_IDENTITY");
-        boolean changed=false;
+        Map<String,String> changes=new TreeMap<>();
         for(String key:left.keySet()) {
             InputRow a=left.get(key), z=right.get(key);
             if(!a.values().keySet().equals(z.values().keySet()))
                 throw new IllegalArgumentException("FIVE_Q_CHANGED_INPUT_SCHEMA");
-            if(!a.values().equals(z.values())) changed=true;
+            for(String field:a.values().keySet()){
+                if(!a.values().get(field).equals(z.values().get(field)))
+                    changes.put(a.rowId()+"."+field,
+                            a.values().get(field).toPlainString()+" -> "
+                            +z.values().get(field).toPlainString());
+            }
         }
-        if(!changed)throw new IllegalArgumentException("FIVE_Q_NO_SCENARIO_CHANGE");
+        if(changes.isEmpty())throw new IllegalArgumentException("FIVE_Q_NO_SCENARIO_CHANGE");
+        return Map.copyOf(changes);
     }
     private static Map<String,InputRow> byStableKey(List<InputRow> rows) {
         Map<String,InputRow> byKey=new TreeMap<>();
