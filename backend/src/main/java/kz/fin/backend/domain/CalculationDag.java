@@ -113,7 +113,9 @@ public final class CalculationDag {
         if (inputDefinitions.containsKey(code)) {
             EconomicKernel.EconomicValue v = inputs.get(code);
             Result r = (v == null || !v.numeric())
-                    ? Result.missing(inputDefinitions.get(code), "MISSING_INPUT")
+                    ? Result.missing(inputDefinitions.get(code),
+                            v != null && v.state() == EconomicKernel.ValueState.NOT_APPLICABLE
+                                    ? "NOT_APPLICABLE" : "MISSING_INPUT")
                     : v.state() == EconomicKernel.ValueState.ESTIMATED
                         ? Result.estimated(v.decimal(), inputDefinitions.get(code))
                         : Result.calculated(v.decimal(), inputDefinitions.get(code));
