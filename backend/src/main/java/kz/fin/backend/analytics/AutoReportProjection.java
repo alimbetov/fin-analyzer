@@ -169,6 +169,18 @@ public final class AutoReportProjection {
 
     private static PeriodPoint calculate(Map<SeriesKey,List<Observation>> inputs,SeriesKey key,
                                          EconomicKernel.TemporalReference period,Aggregation method) {
-        return AutoIndicatorEngine.aggregate(key,period,source(inputs,key),method);
+        List<Observation> inside=new ArrayList<>();
+        for(Observation observation:source(inputs,key)) {
+            var time=observation.time();
+            boolean intersects = time.kind()==EconomicKernel.TimeKind.AS_OF
+                    ? !time.startInclusive().isBefore(period.startInclusive())
+                        && time.startInclusive().isBefore(period.endExclusive())
+                    : time.startInclusive().isBefore(period.endExclusive())
+                        && time.endExclusive().isAfter(period.startInclusive());
+            if(intersects) inside.add(observation);
+        }
+        // Only fully external points are ignored. Partially overlapping periods
+        // still reach the engine and are rejected as OUT_OF_WINDOW_OBSERVATION.
+        return AutoIndicatorEngine.aggregate(key,period,inside,method);
     }
 }
