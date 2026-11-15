@@ -1,7 +1,8 @@
 import { describe,expect,it } from "vitest";
 import formSource from "../../backend/src/main/resources/fin/form-compatibility.tsv?raw";
 import relationSource from "../../backend/src/main/resources/fin/indicator-relationships-v1.tsv?raw";
-import { GRAPH_REGISTRY_VERSION, RELATIONSHIP_REGISTRY, parseGraphRegistry, graphPlan } from "./registry";
+import problemSource from "../../backend/src/main/resources/fin/diagnostic-problem-routes-v1.tsv?raw";
+import { GRAPH_REGISTRY_VERSION, RELATIONSHIP_REGISTRY, parseGraphRegistry, parseProblemRoutes, graphPlan } from "./registry";
 
 describe("FIN R4.6 versioned relationship graph",()=>{
   it("registers all 166 forms without pretending all are numerically qualified",()=>{
@@ -39,6 +40,15 @@ describe("FIN R4.6 versioned relationship graph",()=>{
     expect(graphPlan(RELATIONSHIP_REGISTRY,{problemCode:"PROFITABILITY"},3))
       .toEqual(broad);
     expect(()=>graphPlan(RELATIONSHIP_REGISTRY,{formCode:"F02"},4)).toThrow("GRAPH_INVALID_DEPTH");
+  });
+  it("uses reviewed problem anchors from one versioned resource",()=>{
+    const routes=parseProblemRoutes(problemSource,RELATIONSHIP_REGISTRY);
+    expect(Object.keys(routes)).toHaveLength(4);
+    expect(routes["PROFITABILITY"]).toEqual(["REV_NET:CURRENT_FLOW","COGS:CURRENT_FLOW"]);
+    expect(()=>parseProblemRoutes(problemSource.replace(
+      "CFO:CURRENT_FLOW","UNKNOWN:CURRENT_FLOW"),RELATIONSHIP_REGISTRY)).toThrow();
+    expect(()=>parseProblemRoutes(problemSource.replace(
+      "SYNTHETIC_PILOT_UNQUALIFIED","PRODUCTION_QUALIFIED"),RELATIONSHIP_REGISTRY)).toThrow();
   });
   it("rejects unknown sources, fake production approvals and duplicate inputs",()=>{
     expect(()=>parseGraphRegistry(formSource,relationSource.replace(
