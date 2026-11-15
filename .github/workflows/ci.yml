@@ -94,6 +94,7 @@ jobs:
             kz.fin.backend.persistence.TrustedFinancialFormMapperIntegrationTest \
             kz.fin.backend.diagnostics.R4ProofAndDecisionTest \
             kz.fin.backend.diagnostics.DecisionOutcomeMonitorTest \
+            kz.fin.backend.diagnostics.IndicatorRelationshipRegistryTest \
             kz.fin.backend.diagnostics.CrossFormDiagnosticEngineTest \
             kz.fin.backend.diagnostics.CrossFormEvidencePlannerTest \
             kz.fin.backend.persistence.TrustedCrossFormDiagnosticIntegrationTest; do
@@ -113,6 +114,7 @@ jobs:
               "kz.fin.backend.persistence.TrustedFinancialFormMapperIntegrationTest",
               "kz.fin.backend.diagnostics.R4ProofAndDecisionTest",
               "kz.fin.backend.diagnostics.DecisionOutcomeMonitorTest",
+              "kz.fin.backend.diagnostics.IndicatorRelationshipRegistryTest",
               "kz.fin.backend.diagnostics.CrossFormDiagnosticEngineTest",
               "kz.fin.backend.diagnostics.CrossFormEvidencePlannerTest",
               "kz.fin.backend.persistence.TrustedCrossFormDiagnosticIntegrationTest",
