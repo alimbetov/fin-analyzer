@@ -134,7 +134,11 @@ class ScenarioFiveQuestionEngineTest {
             assertEquals(GateState.CALCULATED_SYNTHETIC,result.what().state());
             assertEquals(GateState.HYPOTHESIS_ONLY,result.why().state());
             assertEquals(GateState.NOT_ASSESSED,result.seriousness().state());
-            assertEquals(GateState.REVIEW_REQUIRED,result.action().state());
+            Set<Method> observed=Set.of(Method.BALANCE_RECONCILIATION,
+                    Method.CASH_FLOW_RECONCILIATION,Method.WIP_ROLLFORWARD,
+                    Method.CONSTRUCTION_EVM,Method.TRADE_GROSS_MARGIN);
+            assertEquals(observed.contains(test.method())?GateState.REVIEW_REQUIRED:
+                    GateState.REVIEW_SUGGESTED,result.action().state());
             assertEquals(GateState.SIMULATED_ONLY,result.effect().state());
             assertFalse(result.assumptions().isEmpty(),"missing scenario assumptions: "+test.name());
             assertTrue(result.assumptions().values().stream().allMatch(x->x.contains(" -> ")));
