@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import kz.fin.backend.analytics.AnalysisContext;
 import kz.fin.backend.diagnostics.CrossFormDiagnosticEngine;
+import kz.fin.backend.diagnostics.CrossFormEvidencePlanner;
 import kz.fin.backend.diagnostics.CrossFormDiagnosticEngine.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -334,6 +335,22 @@ public class TrustedCrossFormDiagnosticService {
             node.put("currency",e.currency());
             ArrayNode source=node.putArray("sources");
             e.sources().forEach(s->writeSource(source,s));
+        });
+        CrossFormEvidencePlanner.Plan evidencePlan=CrossFormEvidencePlanner.plan(report);
+        ObjectNode plan=root.putObject("nextEvidencePlan");
+        plan.put("status",evidencePlan.status());
+        ArrayNode next=plan.putArray("nextForms");
+        evidencePlan.nextForms().forEach(n->{
+            ObjectNode item=next.addObject();
+            item.put("formCode",n.formCode());
+            item.put("action",n.action().name());
+            ArrayNode needed=item.putArray("neededMetrics");
+            n.requiredSlots().forEach(k->{
+                ObjectNode slot=needed.addObject();
+                slot.put("metricCode",k.code());slot.put("timeRole",k.role().name());
+            });
+            ArrayNode rules=item.putArray("unlocksRuleCodes");
+            n.relatedRules().forEach(rules::add);
         });
         ArrayNode findings=root.putArray("findings");
         for(Finding f:report.findings()){
