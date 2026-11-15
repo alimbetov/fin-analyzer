@@ -18,8 +18,10 @@ const fixtures=new Map(SMOKE_CASES.map(x=>[x.form,x]));
 if(fixtures.size!==9 || new Set(formRows.map(x=>x[0])).size!==166 ||
     new Set(extensionRows.map(x=>x[0])).size!==30)
   throw new Error('SMOKE_CATALOG_DUPLICATES');
-if(javaHeader.join('\\t')!=='method\\tscenarioCode\\tmetricCode\\tsourceForms\\textensionSheets\\tstatus' ||
-  javaRows.length!==16 || new Set(javaRows.map(x=>x[0])).size!==14 ||
+const expectedJavaHeader=['method','scenarioCode','metricCode','sourceForms','extensionSheets','status'];
+if(javaHeader.length!==expectedJavaHeader.length ||
+  javaHeader.some((column,index)=>column!==expectedJavaHeader[index]) ||
+  javaRows.length!==16 || new Set(javaRows.map(x=>x[0])).size!==javaRows.length ||
   javaRows.some(x=>x.length!==6 || x[5]!=='SYNTHETIC_TEST_DEFINED'))
   throw new Error('SMOKE_JAVA_MANIFEST_INVALID');
 const knownForms=new Set(formRows.map(x=>x[0]));
