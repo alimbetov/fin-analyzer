@@ -11,13 +11,9 @@ import java.util.*;
  */
 public final class CrossFormEvidencePlanner {
     private CrossFormEvidencePlanner() {}
-    private static final Map<String,String> PILOT_ORIGIN_FORM=Map.ofEntries(
-            Map.entry("ASSETS","F01"),Map.entry("LIABILITIES","F01"),
-            Map.entry("EQUITY","F01"),Map.entry("CASH_END","F01"),
-            Map.entry("AR_END","F01"),Map.entry("REV_NET","F02"),
-            Map.entry("COGS","F02"),Map.entry("OPEX","F02"),
-            Map.entry("CFO","F03"),Map.entry("CFI","F03"),Map.entry("CFF","F03"),
-            Map.entry("CASH_IN","DF-CSH-01"),Map.entry("CASH_OUT","DF-CSH-02"));
+    private static final IndicatorRelationshipRegistry REGISTRY =
+            CrossFormDiagnosticEngine.RELATIONSHIPS;
+    private static final Map<String,String> PILOT_ORIGIN_FORM = REGISTRY.originByMetric();
     public enum Action { PROVIDE_FORM, COMPLETE_OR_CORRECT_FORM }
     public record Needed(String formCode, Action action,List<MetricKey> requiredSlots,
                          List<String> relatedRules) {
@@ -44,12 +40,10 @@ public final class CrossFormEvidencePlanner {
         if(available.isEmpty())return new Plan("NO_VERIFIED_ANCHOR",List.of(),List.of());
         Map<String,Mutable> missingByForm=new TreeMap<>();
         List<String> checked=new ArrayList<>();
-        Set<String> seen=new HashSet<>();
         for(Rule rule:CrossFormDiagnosticEngine.RULES){
             boolean connected=rule.required().stream().anyMatch(available::contains);
             if(!connected)continue;
             checked.add(rule.code());
-            seen.add(rule.code());
             for(MetricKey key:rule.required()){
                 if(available.contains(key))continue;
                 String form=PILOT_ORIGIN_FORM.get(key.code());
