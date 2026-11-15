@@ -51,3 +51,13 @@ models, 52 SPEC_ONLY acceptance cases, and RU/KK/EN scenario/sheet titles.
 Referential integrity is tested by `ScenarioFoundationCatalogTest`, but this
 is **not** a live FormRegistry, Excel importer, backend calculation for 166
 forms or a financially qualified industry-method suite.
+
+## FIN Diagnostic Compass — initial executable guidance
+
+`CompassCatalog` loads the checked-in form/scenario/sector registries and
+additional versioned conditional/evidence policies. `DiagnosticCompass`
+returns deterministic next-form recommendations, reuse, historical-period
+preflight, business-model questions, and catalog maturity. See
+[FIN Diagnostic Compass R1](../docs/FIN-DIAGNOSTIC-COMPASS-R1.md).
+This pure JVM engine is **not a source-approval service, HTTP controller,
+qualified business verdict or working React experience**.

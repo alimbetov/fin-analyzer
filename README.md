@@ -26,6 +26,7 @@
 - [Аудит FIN-R1A](docs/FIN-R1A-REVIEW.md) — проверенные дефекты и оставшиеся ограничения.
 - [Desktop UAT](docs/DESKTOP-UAT.md) — автоматический macOS proof и ручной чек-лист.
 - [Формы и сценарии v2](docs/FIN-FORM-CATALOG-FOUNDATION-V2.md) — 166 исходных форм, 30 листов детализации, 10 сценариев, 21 отраслевая секция и методические критерии полноты (DESIGN_ONLY).
+- [FIN Diagnostic Compass R1](docs/FIN-DIAGNOSTIC-COMPASS-R1.md) — Next Best Form, 40 условных правил применимости, 15 связей диагностики с формами и дорожная карта коммерческих сценариев (engineering pilot).
 
 ## Статус
 
