@@ -139,8 +139,11 @@ public final class CalculationDag {
         Result a=evaluateExpr(left, inputs, memo), b=evaluateExpr(right, inputs, memo);
         Dimension dim = e instanceof Multiply ? a.dimension().multiply(b.dimension())
                 : e instanceof Divide ? a.dimension().divide(b.dimension()) : equal(a.dimension(), b.dimension());
-        if (a.status() == Status.NOT_COMPUTABLE || b.status() == Status.NOT_COMPUTABLE) {
-            return Result.missing(dim, "MISSING_DEPENDENCY");
+        if (a.status() == Status.NOT_COMPUTABLE) {
+            return Result.missing(dim, a.reason() == null ? "MISSING_DEPENDENCY" : a.reason());
+        }
+        if (b.status() == Status.NOT_COMPUTABLE) {
+            return Result.missing(dim, b.reason() == null ? "MISSING_DEPENDENCY" : b.reason());
         }
         if (e instanceof Divide && b.value().signum()==0) return Result.missing(dim, "ZERO_DENOMINATOR");
         BigDecimal v;
