@@ -1,0 +1,152 @@
+package kz.fin.backend.diagnostics;
+
+import kz.fin.backend.analytics.AnalysisContext;
+import kz.fin.backend.diagnostics.ScenarioEconomicsEngine.*;
+import java.math.BigDecimal;
+import java.util.*;
+
+/**
+ * Deterministic five-question contract over synthetic scenario arithmetic.
+ *
+ * NOT a causal attribution engine, a certified severity score, or a trusted
+ * source authorization boundary. Input APPROVED flags are test assumptions.
+ * Production MUST resolve authoritative facts server-side and qualify methods.
+ */
+public final class ScenarioFiveQuestionEngine {
+    private ScenarioFiveQuestionEngine() {}
+    public static final String VERSION = "FIVE_QUESTION_SYNTHETIC_V1";
+
+    public enum GateState {
+        CALCULATED_SYNTHETIC, HYPOTHESIS_ONLY, NOT_ASSESSED,
+        REVIEW_REQUIRED, SIMULATED_ONLY, NOT_COMPUTABLE
+    }
+    public record Gate(GateState state, String reason) {
+        public Gate {
+            Objects.requireNonNull(state);
+            if(reason == null || reason.isBlank())
+                throw new IllegalArgumentException("FIVE_Q_REASON_REQUIRED");
+        }
+    }
+    public record Evidence(String formCode, String sheetCode, String sourceRevision,
+                           String itemKey, String rowId, String period) {}
+    public record Result(String contractVersion, String methodVersion, String scenarioCode,
+                         Method method, String metricCode, Gate what, Gate why,
+                         Gate seriousness, Gate action, Gate effect,
+                         Map<String,String> values, Map<String,String> alternatives,
+                         List<Evidence> evidence, String reviewAction,
+                         boolean humanApprovalRequired) {
+        public Result {
+            values=Map.copyOf(values);
+            alternatives=Map.copyOf(alternatives);
+            evidence=List.copyOf(evidence);
+        }
+    }
+
+    private static final Map<Method,String> REVIEW_ACTIONS = Map.ofEntries(
+        Map.entry(Method.OWNER_CASH_MOVEMENT, "RECONCILE_RECEIPTS_AND_PAYMENTS"),
+        Map.entry(Method.BALANCE_RECONCILIATION, "RECONCILE_BALANCE_SOURCE_LINES"),
+        Map.entry(Method.CASH_FLOW_RECONCILIATION, "RECONCILE_CASH_FLOW_BRIDGE"),
+        Map.entry(Method.ANNUAL_REVENUE_TREND, "VERIFY_REVENUE_RECOGNITION_AND_YEARS"),
+        Map.entry(Method.BUDGET_ACTUAL_VARIANCE, "REVIEW_BUDGET_ACCOUNT_MAPPING"),
+        Map.entry(Method.WIP_ROLLFORWARD, "RECONCILE_WORK_IN_PROGRESS"),
+        Map.entry(Method.UNIT_PRODUCTION_COST, "VERIFY_PRODUCTION_COST_ALLOCATION"),
+        Map.entry(Method.STANDARD_ACTUAL_VARIANCE, "VERIFY_PRICE_AND_USAGE_DRIVERS"),
+        Map.entry(Method.BOQ_RESOURCE_COST, "VERIFY_MEASUREMENTS_AND_RATE_BASIS"),
+        Map.entry(Method.CONSTRUCTION_EVM, "REVIEW_EVM_ASSUMPTIONS"),
+        Map.entry(Method.DATED_PROJECT_NPV, "REVIEW_DISCOUNT_RATE_AND_FCFF"),
+        Map.entry(Method.TRADE_GROSS_MARGIN, "RECONCILE_SALES_RETURNS_AND_COGS"),
+        Map.entry(Method.STOCK_TURNOVER, "VERIFY_AVERAGE_INVENTORY_POLICY"),
+        Map.entry(Method.DSCR_PILOT, "VERIFY_LENDER_CFADS_DEFINITION")
+    );
+
+    /**
+     * Baseline and counterfactual are evaluated separately and never persisted.
+     * Counterfactual must preserve source identity, scope, period and field names;
+     * only explicit values may change.
+     */
+    public static Result evaluate(Input baseline, Input hypothetical, Method method,
+                                  String metricCode) {
+        Objects.requireNonNull(baseline);
+        Objects.requireNonNull(method);
+        if(baseline.scope().dataSpace()!=AnalysisContext.DataSpace.SYNTHETIC)
+            throw new IllegalArgumentException("FIVE_Q_SYNTHETIC_ONLY");
+        if(!REVIEW_ACTIONS.containsKey(method))
+            throw new IllegalArgumentException("FIVE_Q_UNQUALIFIED_METHOD");
+        if(metricCode==null || !metricCode.matches("[A-Za-z][A-Za-z0-9_]{0,127}"))
+            throw new IllegalArgumentException("FIVE_Q_INVALID_METRIC");
+
+        ScenarioEconomicsEngine.Report original=ScenarioEconomicsEngine.evaluate(baseline);
+        Finding current=single(original,method);
+        List<Evidence> sources=current.sources().stream().map(source -> new Evidence(
+                source.formCode(),source.sheetCode(),source.sourceRevision(),
+                source.itemKey(),source.rowId(),source.period().toString())).toList();
+
+        boolean numeric=current.computedValues().containsKey(metricCode);
+        BigDecimal before=numeric?new BigDecimal(current.computedValues().get(metricCode)):null;
+        Map<String,String> values=numeric?Map.of("baseline",before.toPlainString()):Map.of();
+
+        Gate what=new Gate(numeric ? GateState.CALCULATED_SYNTHETIC : GateState.NOT_COMPUTABLE,
+                numeric?"SYNTHETIC_CALCULATION_NOT_AUTHORITATIVE":"METRIC_UNAVAILABLE_OR_MISSING_EVIDENCE");
+        Gate why=new Gate(GateState.HYPOTHESIS_ONLY,
+                "RULE_"+current.reason()+"_IS_NOT_CAUSAL_EVIDENCE");
+        Gate seriousness=new Gate(GateState.NOT_ASSESSED,
+                "NO_APPROVED_SECTOR_MATERIALITY_OR_RISK_CALIBRATION");
+        Gate action=new Gate(numeric?GateState.REVIEW_REQUIRED:GateState.NOT_COMPUTABLE,
+                "CANDIDATE_REVIEW_ACTION_HUMAN_APPROVAL_REQUIRED");
+
+        Map<String,String> alternative=Map.of();
+        Gate effect=new Gate(GateState.NOT_COMPUTABLE, "NO_VALIDATED_COUNTERFACTUAL");
+        if(hypothetical!=null) {
+            requireComparable(baseline,hypothetical);
+            Finding changed=single(ScenarioEconomicsEngine.evaluate(hypothetical),method);
+            String updated=changed.computedValues().get(metricCode);
+            if(numeric && updated!=null && changed.verdict()!=Verdict.MISSING_EVIDENCE) {
+                BigDecimal after=new BigDecimal(updated);
+                alternative=Map.of("after",after.toPlainString(),
+                        "delta",after.subtract(before).toPlainString());
+                effect=new Gate(GateState.SIMULATED_ONLY,
+                        "SYNTHETIC_INPUT_SUBSTITUTION_NO_COST_OR_FORECAST");
+            }
+        }
+        return new Result(VERSION,original.methodVersion(),baseline.scenarioCode(),method,
+                metricCode,what,why,seriousness,action,effect,
+                values,alternative,sources,REVIEW_ACTIONS.get(method),true);
+    }
+
+    private static Finding single(ScenarioEconomicsEngine.Report report, Method method) {
+        List<Finding> candidates=report.findings().stream()
+                .filter(f->f.method()==method).toList();
+        if(candidates.size()!=1)
+            throw new IllegalArgumentException("FIVE_Q_REQUIRES_SINGLE_METHOD_SUBJECT");
+        return candidates.getFirst();
+    }
+    private static void requireComparable(Input before,Input after) {
+        if(!before.scope().equals(after.scope())
+                ||!before.scenarioCode().equals(after.scenarioCode())
+                ||before.rows().size()!=after.rows().size())
+            throw new IllegalArgumentException("FIVE_Q_CROSS_SCOPE_OR_STRUCTURE");
+        Map<String,InputRow> left=byStableKey(before.rows());
+        Map<String,InputRow> right=byStableKey(after.rows());
+        if(!left.keySet().equals(right.keySet()))
+            throw new IllegalArgumentException("FIVE_Q_CHANGED_SOURCE_IDENTITY");
+        boolean changed=false;
+        for(String key:left.keySet()) {
+            InputRow a=left.get(key), z=right.get(key);
+            if(!a.values().keySet().equals(z.values().keySet()))
+                throw new IllegalArgumentException("FIVE_Q_CHANGED_INPUT_SCHEMA");
+            if(!a.values().equals(z.values())) changed=true;
+        }
+        if(!changed)throw new IllegalArgumentException("FIVE_Q_NO_SCENARIO_CHANGE");
+    }
+    private static Map<String,InputRow> byStableKey(List<InputRow> rows) {
+        Map<String,InputRow> byKey=new TreeMap<>();
+        for(InputRow row:rows) {
+            String key=row.formCode()+"|"+row.sheetCode()+"|"+row.itemKey()+"|"
+                    +row.rowId()+"|"+row.period()+"|"+row.eventDate()+"|"
+                    +row.currency()+"|"+row.sourceRevision()+"|"+row.state();
+            if(byKey.putIfAbsent(key,row)!=null)
+                throw new IllegalArgumentException("FIVE_Q_DUPLICATE_SOURCE_ROW");
+        }
+        return byKey;
+    }
+}
