@@ -88,6 +88,7 @@ public class TrustedFinancialPopulationService {
                    AND a.source_revision_id=? AND a.metric_code=?
                    AND a.start_inclusive=? AND a.end_exclusive=?
                    AND a.value_state IN ('PRESENT','EXPLICIT_ZERO')
+                   AND a.unit_code='MONEY'
                  ORDER BY o.source_row_id,o.source_field
                 """,(rs,i)->new MappedFact(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                     rs.getString(3),rs.getString(4),rs.getString(5),rs.getString(6),
@@ -128,6 +129,14 @@ public class TrustedFinancialPopulationService {
                 throw new IllegalArgumentException("SOURCE_POPULATION_MISSING_REGISTERED_ROWS");
             all.addAll(selected);
         }
+        Set<String> currencies=new HashSet<>();
+        for(MappedFact row:all) {
+            if(row.currency()==null || !row.currency().matches("[A-Z]{3}"))
+                throw new IllegalArgumentException("SOURCE_POPULATION_CURRENCY_MISSING");
+            currencies.add(row.currency());
+        }
+        if(currencies.size()!=1)
+            throw new IllegalArgumentException("SOURCE_POPULATION_MIXED_CURRENCIES");
         return new VerifiedPopulation(publishedFactSet,all);
     }
 }
