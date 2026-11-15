@@ -43,7 +43,6 @@ jobs:
 
   desktop-macos:
     # macOS runners provide desktop browser evidence, not a manual UAT approval.
-    if: github.event_name == 'push'
     needs: verify
     runs-on: macos-15
     steps:
@@ -141,17 +140,29 @@ jobs:
           BACKEND_STATUS: ${{ needs.backend-verification.result }}
           DESKTOP_STATUS: ${{ needs.desktop-macos.result }}
           TRIGGER: ${{ github.event_name }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          echo "Acceptance SHA: $GITHUB_SHA"
+          echo "Acceptance workflow SHA: $GITHUB_SHA"
+          echo "PR head / push SHA: $EVENT_HEAD_SHA"
+          {
+            echo "## FIN diagnostic acceptance"
+            echo ""
+            echo "| Property | Value |"
+            echo "|---|---|"
+            echo "| Event | \`$TRIGGER\` |"
+            echo "| Workflow SHA | \`$GITHUB_SHA\` |"
+            echo "| PR head/push SHA | \`$EVENT_HEAD_SHA\` |"
+            echo "| Node / browser | \`$NODE_STATUS\` |"
+            echo "| Java / PostgreSQL | \`$BACKEND_STATUS\` |"
+            echo "| macOS browsers | \`$DESKTOP_STATUS\` |"
+            echo ""
+            echo "Production readiness requires S2 review and trusted React/PostgreSQL E2E separately."
+          } >> "$GITHUB_STEP_SUMMARY"
           echo "Node / Playwright: $NODE_STATUS"
           echo "Java / PostgreSQL: $BACKEND_STATUS"
           echo "macOS desktop browsers: $DESKTOP_STATUS"
           test "$NODE_STATUS" = "success"
           test "$BACKEND_STATUS" = "success"
-          if [ "$TRIGGER" = "push" ]; then
-            test "$DESKTOP_STATUS" = "success"
-          else
-            test "$DESKTOP_STATUS" = "skipped"
-          fi
+          test "$DESKTOP_STATUS" = "success"
           echo "CI_ACCEPTANCE_GREEN_SHA=$GITHUB_SHA"
