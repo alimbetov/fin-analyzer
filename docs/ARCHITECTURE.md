@@ -43,6 +43,10 @@ src/
   features/
     companies/              # компания и reporting context
     statements/             # карточки Balance / Income / CashFlow / Equity
+    credit-forms/           # PLANNED: каталог F/C/P, применимость и табличные формы
+    credit-forecast/        # PLANNED: прогнозные сценарии, графики долга, DSCR
+    tax-evidence/           # PLANNED: метаданные и подтверждение сведений из ФНО
+    credit-dossier/         # PLANNED: документы D01-D08 и комплектность
     excel-exchange/         # Download Template / Upload Session
     financial-editor/       # React form из FormDefinition
     validation-workbench/   # ошибки и исправления
@@ -77,6 +81,7 @@ docs/
 ## 4. Типовая модель данных (концепт)
 
 ~~~typescript
+// Только четыре базовых отчёта. Для расширенного каталога потребуется независимый FormCode.
 type StatementType = "BALANCE" | "INCOME" | "CASH_FLOW" | "EQUITY";
 type Basis = "SEPARATE" | "CONSOLIDATED";
 type ReportStatus = "DRAFT" | "VALIDATED" | "APPROVED";
@@ -129,6 +134,8 @@ interface FinProject {
 ~~~
 
 Обозначения типов — проектная схема. При реализации она должна пройти ревью, включая ограничения ключей, нормализацию версий и формальную JSON Schema/Zod проверку.
+
+**Планируемое расширение:** каталог [FORM-CATALOG](FORM-CATALOG.md) содержит 44 позиции. Он требует отдельного `FormCode` и `FormKind` (STRUCTURED/COMPOSITE/EXTERNAL/ DOCUMENT), а также моделей строковых расшифровок, контрагентов, прогнозных сценариев, долговых графиков и реестра документов. Текущий `FinancialValue.source.formCode: StatementType` — только R1A-контракт, не универсальный тип. `StatementType` для четырёх основных отчётов сохраняется. Реализация расширения не должна менять уже утверждённые ревизии и расчётные snapshots.
 
 Для поточных метрик период задаётся интервалом, для балансовых — датой. При расчётах LAG и средних запрещено смешивать несоответствующие интервалы/основы консолидации.
 
