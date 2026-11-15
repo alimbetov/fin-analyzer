@@ -56,15 +56,16 @@ test('zero denominator must be distinct from missing for eight ratio tables',()=
     const row=syntheticRow(fixture);
     row.values={...row.values,[denominators[fixture.form]]:'0'};
     // Some operational constraints require both numerator and denominator to be zero.
-    if(fixture.form==='SF-C01') row.values.goodUnits='0';
+    if(fixture.form==='SF-C01') {row.values.goodUnits='0';row.values.wasteUnits='0';row.values.reworkedUnits='0';}
     if(fixture.form==='SF-C03') {row.values.runHours='0';row.values.downtimeHours='0';}
     if(fixture.form==='SF-M01') row.values.billableHours='0';
     const result=evaluateSectorForms([row]).find(x=>x.windowType==='MONTH');
     assert.equal(result.status,'CALCULATED',fixture.form);
-    assert.equal(result.metrics[fixture.metric].status,'NOT_COMPUTABLE',fixture.form);
+    const metricCode=fixture.form==='SF-G01'?'SKU_GROSS_MARGIN_PCT':fixture.metric;
+    assert.equal(result.metrics[metricCode].status,'NOT_COMPUTABLE',fixture.form);
     const findings=diagnoseSectorOutput(result);
-    assert.ok(findings.some(f=>f.kind==='NOT_COMPUTABLE'&&f.metricCode===fixture.metric),fixture.form);
-    assert.ok(!findings.some(f=>f.kind==='OBSERVATION'&&f.metricCode===fixture.metric),fixture.form);
+    assert.ok(findings.some(f=>f.kind==='NOT_COMPUTABLE'&&f.metricCode===metricCode),fixture.form);
+    assert.ok(!findings.some(f=>f.kind==='OBSERVATION'&&f.metricCode===metricCode),fixture.form);
   }
 });
 test('synthetic scenarios reject unknown fields, invalid values and incomplete baseline',()=>{
