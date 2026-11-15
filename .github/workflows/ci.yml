@@ -93,6 +93,7 @@ jobs:
             kz.fin.backend.persistence.FactPublicationIntegrationTest; do
             file="$reports/TEST-$klass.xml"
             test -s "$file" || { echo "::error::Missing mandatory JUnit report $file"; exit 1; }
+          done
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
@@ -117,7 +118,6 @@ jobs:
                   )
               print(f"REQUIRED_JUNIT_GREEN {classname} tests={tests}")
           PY
-          done
       - name: Upload backend evidence for this commit
         if: always()
         uses: actions/upload-artifact@v4
