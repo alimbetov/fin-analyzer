@@ -1,6 +1,6 @@
-# FIN Analyzer — проектное техническое задание v3.4
+# FIN Project Marketplace — единое проектное техническое задание v3.5
 
-**Продукт:** FIN Analyzer — Adaptive Business Financial Diagnosis Platform  
+**Продукт:** **FIN Project Marketplace** — международная B2B-платформа для экономики бизнеса, проектов и сотрудничества; **FIN Analyzer** — экономико-аналитический модуль.  
 **Дата:** 2026-11-15  
 **Статус:** PRODUCT SPECIFICATION / PROPOSED. **НЕ** свидетельствует о готовой реализации.
 
@@ -472,12 +472,30 @@ React App / Smart Wizard / Input Hub / Analytics Studio
 
 **REQ-CONS-04:** проверка каждого `requestItemId, engagementId, targetOrgId, documentId` и recipient scope выполняется серверным Spring Boot BFF. Keycloak не даёт полномочий на чужие документы; PostgreSQL системный источник истины, Redis не подменяет ACL, RustFS приватен, уведомления KumoMTA через durable Outbox. Сценарии CONS-01…CONS-20 — будущие обязательные E2E, не PASS.
 
-## 21. Связанные документы и приоритет интерпретации
+## 21. FIN Access Center — зоны и временные разрешения
+
+**REQ-ACCESS-01:** адресные разрешения на финансовые отчёты, бизнес-планы и документы ограничиваются recipientOrg/principal, зонами Z00–Z99, конкретными формами/полями/разделами, периодами, неизменяемыми версиями и действиями. Источник истины о permissions — FIN PostgreSQL.
+
+**REQ-ACCESS-02:** отдельные режимы FIXED_WINDOW, UNTIL_REVOKED, ENGAGEMENT_BOUND, CONTRACT_WINDOW, SINGLE_USE_VIEW, SINGLE_USE_DOWNLOAD, LIMITED_USES и MANUAL_APPROVAL. Краткосрочный или договорный доступ не продлевается автоматически.
+
+**REQ-ACCESS-03:** `VIEW` не означает `DOWNLOAD`. Для одноразового доступа нужна атомарная PostgreSQL AccessLease с защитой от гонок; просмотр без скачивания не исключает скриншотов. Отзыв блокирует будущие запросы, но не удаляет скачанные копии.
+
+**REQ-ACCESS-04:** перед выдачей обязателен точный preview глазами получателя, явное подтверждение, immutable revision/projection, audit и Outbox для уведомления. Отдельные grants для инвесторов, банков, консалтинговых организаций и партнеров, с независимым отзывом.
+
+**REQ-ACCESS-05:** при завершении сотрудничества, удалении сотрудника, отзыве выдачи или истечении времени сервер Spring Boot проверяет актуальные полномочия и блокирует доступ независимо от ещё действующего Keycloak session/JWT или stale Redis cache. RustFS объекты доступны только через backend.
+
+**REQ-ACCESS-06:** 36 проверок ZONE-01…ZONE-36 (multi-organization, IDOR, срочный отзыв, гонки на одноразовом просмотре, смена версий, приватные экспорты, ошибки KumoMTA и восстановление Redis) обязательны до hosted выпуска.
+
+**Основные решения:** [ADR-009 — доступ по зонам и срокам](ADR-009-REPORT-ACCESS-ZONES.md); [ADR-010 — основное название FIN Project Marketplace](ADR-010-PRIMARY-PRODUCT-NAME.md).
+
+## 22. Связанные документы и приоритет интерпретации
 
 - **Этот документ** — главный product vision, user experience, scoping и этапы FIN Analyzer.
 - [ECONOMIC-DIRECTIONS.md](ECONOMIC-DIRECTIONS.md) — детальное ТЗ для 12 новых направлений, бизнес-планов, поиска финансирования и безопасной публикации проектов.
 - [ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md) — окончательное наименование FIN Project Marketplace, разрешённые информационные сценарии и запрет финансовых операций.
 - [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md) — Spring Boot BFF, Keycloak, Redis, RustFS, KumoMTA, PostgreSQL, приватные соединения и E2E security gates.
+- [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md) — зоны Z00–Z99, срочный, контрактный и одноразовый доступ, 36 тестов.
+- [ADR-010](ADR-010-PRIMARY-PRODUCT-NAME.md) — FIN Project Marketplace как основное название платформы, FIN Analyzer как модуль.
 - [ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md](ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md) — стратегические гипотезы, 20 ролей, разграничение доступа, ролевые сценарии и test/acceptance gates.
 - [FIN-WORKSPACES-AND-JOURNEYS.md](FIN-WORKSPACES-AND-JOURNEYS.md) — панели пользователей и пять мастеров.
 - [FIN-MY-BUSINESS-INTERPRETER.md](FIN-MY-BUSINESS-INTERPRETER.md) — продажи и внутренние проблемы.
