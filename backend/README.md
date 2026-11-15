@@ -41,3 +41,13 @@ currency/unit, accounting basis, data space and dimensions. Calendar coverage
 and baseline/denominator readiness are checked. Sector coverage across A-U
 and example report columns are documented as DESIGN_ONLY: they are not
 qualified methods, auto-rendered React fields or an authorization-aware API.
+
+## Scenario-oriented form catalog v2 (design only)
+
+See [FIN Form Catalog Foundation v2](../docs/FIN-FORM-CATALOG-FOUNDATION-V2.md).
+It preserves 166 existing top-level form IDs, adds 30 proposed detail-sheet
+contracts, ten scenario packs, 21 sector sections with 64 candidate business
+models, 52 SPEC_ONLY acceptance cases, and RU/KK/EN scenario/sheet titles.
+Referential integrity is tested by `ScenarioFoundationCatalogTest`, but this
+is **not** a live FormRegistry, Excel importer, backend calculation for 166
+forms or a financially qualified industry-method suite.

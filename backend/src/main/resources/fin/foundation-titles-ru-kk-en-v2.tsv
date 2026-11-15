@@ -1,0 +1,41 @@
+code	titleRu	titleKk	titleEn	qualificationStatus
+EX-HIS-01	Отчётные календари и периоды	Есептік күнтізбелер мен кезеңдер	Reporting calendars and periods	DESIGN_ONLY
+EX-HIS-02	Исторические корректировки	Тарихи деректерді түзету	Historical restatements	DESIGN_ONLY
+EX-HIS-03	Курсы валют и политика пересчёта	Валюта бағамдары және қайта есептеу саясаты	Exchange rates and translation policy	DESIGN_ONLY
+EX-HIS-04	Изменения учётной политики	Есеп саясатының өзгерістері	Accounting policy changes	DESIGN_ONLY
+EX-HIS-05	Исторический периметр консолидации	Тарихи шоғырландыру периметрі	Historical consolidation perimeter	DESIGN_ONLY
+EX-HIS-06	Сопоставимость показателей	Көрсеткіштердің салыстырмалылығы	Metric comparability	DESIGN_ONLY
+EX-BUD-01	Версии бюджетов	Бюджет нұсқалары	Budget versions	DESIGN_ONLY
+EX-BUD-02	Бюджетные статьи и центры затрат	Бюджет баптары және шығын орталықтары	Budget lines and cost centres	DESIGN_ONLY
+EX-BUD-03	Реестр договорных обязательств	Шарттық міндеттемелер тізілімі	Contractual commitments	DESIGN_ONLY
+EX-BUD-04	Распределение накладных расходов	Жанама шығындарды бөлу	Overhead cost allocation	DESIGN_ONLY
+EX-BUD-05	Драйверы прогнозирования	Болжам жасау факторлары	Forecast drivers	DESIGN_ONLY
+EX-BUD-06	13-недельный денежный прогноз	13 апталық ақша ағыны болжамы	13-week cash forecast	DESIGN_ONLY
+EX-MFG-01	Версии спецификаций материалов	Материалдар спецификациясының нұсқалары	Bill of materials versions	DESIGN_ONLY
+EX-MFG-02	Движение незавершённого производства	Аяқталмаған өндіріс қозғалысы	Work in progress movement	DESIGN_ONLY
+EX-MFG-03	Технологические маршруты и ресурсы	Технологиялық маршруттар мен ресурстар	Production routings and resources	DESIGN_ONLY
+EX-MFG-04	Нормативные и фактические затраты	Нормативтік және нақты шығындар	Standard and actual costs	DESIGN_ONLY
+EX-MFG-05	Выпуск, брак и переработка	Өнім шығару, ақау және қайта өңдеу	Production yield, defects and rework	DESIGN_ONLY
+EX-MFG-06	Распределение производственных накладных	Өндірістік жанама шығындарды бөлу	Manufacturing overhead absorption	DESIGN_ONLY
+EX-CST-01	Ведомость объёмов работ	Жұмыс көлемдерінің ведомосі	Bill of quantities	DESIGN_ONLY
+EX-CST-02	Ресурсы, нормы и расценки	Ресурстар, нормалар мен бағалар	Resources, norms and rates	DESIGN_ONLY
+EX-CST-03	WBS и календарный бюджет	WBS және күнтізбелік бюджет	WBS and time-phased budget	DESIGN_ONLY
+EX-CST-04	Субподряд и изменения договоров	Қосалқы мердігерлік және шарт өзгерістері	Subcontracts and contract variations	DESIGN_ONLY
+EX-CST-05	Акты выполненных работ и удержания	Орындалған жұмыс актілері және ұсталымдар	Certified works and retentions	DESIGN_ONLY
+EX-CST-06	Освоенный объём и прогноз завершения	Игерілген құн және аяқталу болжамы	Earned value and estimate at completion	DESIGN_ONLY
+EX-INV-01	Датированные денежные потоки проекта	Жобаның күні көрсетілген ақша ағындары	Dated project cash flows	DESIGN_ONLY
+EX-INV-02	Ставки дисконтирования	Дисконттау мөлшерлемелері	Discount rate policies	DESIGN_ONLY
+EX-INV-03	Прогноз обслуживания финансирования	Қаржыландыруға қызмет көрсету болжамы	Financing service forecast	DESIGN_ONLY
+EX-INV-04	Терминальная стоимость	Терминалдық құн	Terminal valuation	DESIGN_ONLY
+EX-INV-05	Чувствительность и риски	Сезімталдық және тәуекелдер	Sensitivity and risks	DESIGN_ONLY
+EX-INV-06	Сравнение инвестиционных альтернатив	Инвестициялық баламаларды салыстыру	Investment alternatives comparison	DESIGN_ONLY
+SC-IP-HEALTH	Экспресс-диагностика ИП	ЖК-нің жедел диагностикасы	Sole proprietor health check	DESIGN_ONLY
+SC-LLC-FINANCE	Финансовое состояние компании	Компанияның қаржылық жағдайы	Company financial health	DESIGN_ONLY
+SC-HISTORY-3Y5Y	Анализ динамики за 3–5 лет	3–5 жылдық өзгеріс динамикасын талдау	Three-to-five-year trend analysis	DESIGN_ONLY
+SC-BUDGET-FPA	Управленческий учёт и бюджетирование	Басқарушылық есеп және бюджеттеу	Management accounting and budgeting	DESIGN_ONLY
+SC-RETAIL-ECONOMY	Экономика торговли	Сауда экономикасы	Retail and wholesale economics	DESIGN_ONLY
+SC-MFG-ECONOMY	Производственная экономика	Өндіріс экономикасы	Manufacturing economics	DESIGN_ONLY
+SC-CONSTRUCTION-ESTIMATE	Строительство и сметное дело	Құрылыс және сметалық іс	Construction estimating and controls	DESIGN_ONLY
+SC-INVESTMENT-APPRAISAL	Инвестиционный анализ	Инвестициялық талдау	Investment appraisal	DESIGN_ONLY
+SC-CREDIT-DOSSIER	Кредитное досье	Несиелік құжаттар топтамасы	Lending dossier	DESIGN_ONLY
+SC-SECTOR-ROUTED	Отраслевая диагностика	Салалық диагностика	Sector-specific diagnostics	DESIGN_ONLY
