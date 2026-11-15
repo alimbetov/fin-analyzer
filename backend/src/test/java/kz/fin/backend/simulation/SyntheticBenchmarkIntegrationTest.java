@@ -231,6 +231,59 @@ class SyntheticBenchmarkIntegrationTest {
 
     @Test
     @Order(3)
+    void sqlDashboardIndependentlyChecksTrendReadinessAndNeverMixesCurrencies(){
+        assertEquals(324L,jdbc.queryForObject(
+                "SELECT count(*) FROM fin_sim.monthly_dashboard",Long.class));
+        assertEquals(9L,jdbc.queryForObject("""
+                SELECT count(*) FROM fin_sim.monthly_dashboard WHERE period_month='2026-10-01'
+                """,Long.class));
+
+        var healthy=dashboard("HEALTHY_RETAIL");
+        assertTrue(((BigDecimal)healthy.get("revenue_yoy_percent")).signum()>0);
+        assertTrue(((BigDecimal)healthy.get("trailing_12m_revenue")).signum()>0);
+        assertTrue(((BigDecimal)healthy.get("moving_3m_revenue")).signum()>0);
+        assertEquals(Boolean.TRUE,healthy.get("consistent_currency"));
+
+        var stress=dashboard("WORKING_CAPITAL_STRESS");
+        assertTrue(((BigDecimal)stress.get("revenue_mom_percent")).signum()>0);
+        assertTrue(((BigDecimal)stress.get("cash_mom_change")).signum()<0);
+        assertTrue(((BigDecimal)stress.get("ar_mom_change")).signum()>0);
+
+        var manufacturing=dashboard("MARGIN_SHOCK_MANUFACTURING");
+        assertTrue(((BigDecimal)manufacturing.get("gross_margin_yoy_points")).signum()<0);
+        var seasonal=dashboard("SEASONAL_SERVICES");
+        assertTrue(((BigDecimal)seasonal.get("revenue_mom_percent")).signum()<0);
+        assertTrue(((BigDecimal)seasonal.get("revenue_yoy_percent")).signum()>0);
+        var decline=dashboard("REVENUE_DECLINE_CONSTRUCTION");
+        assertTrue(((BigDecimal)decline.get("revenue_yoy_percent")).signum()<0);
+
+        var missing=dashboard("MISSING_COGS_RETAIL");
+        assertNull(missing.get("gross_profit"));
+        assertNull(missing.get("gross_margin_percent"));
+        var zero=dashboard("ZERO_REVENUE_BASE_SERVICES");
+        assertNull(zero.get("revenue_yoy_percent"));
+        assertNull(zero.get("gross_margin_yoy_points"));
+        var yearMissing=dashboard("MISSING_PRIOR_YEAR_RETAIL");
+        assertNull(yearMissing.get("revenue_yoy_percent"));
+        assertNull(yearMissing.get("gross_margin_yoy_points"));
+
+        var mixed=dashboard("INVALID_MIXED_CURRENCY");
+        assertEquals(Boolean.FALSE,mixed.get("consistent_currency"));
+        assertNull(mixed.get("revenue_mom_percent"));
+        assertNull(mixed.get("gross_margin_percent"));
+        assertNull(mixed.get("trailing_12m_revenue"));
+        assertNull(mixed.get("moving_3m_revenue"));
+    }
+
+    private Map<String,Object> dashboard(String scenario) {
+        return jdbc.queryForMap("""
+            SELECT * FROM fin_sim.monthly_dashboard
+            WHERE scenario_code=? AND source_revision=1 AND period_month='2026-10-01'
+            """,scenario);
+    }
+
+    @Test
+    @Order(4)
     void replayAllNineCasesFromSeparateTablesThroughPublishedFactsAndGoldenOracle(){
         for(String metric:DIAGNOSTIC_METRICS) {
             boolean stock=metric.endsWith("_END");

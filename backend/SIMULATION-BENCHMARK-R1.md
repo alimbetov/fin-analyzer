@@ -18,7 +18,12 @@ Data lives in the separately named PostgreSQL schema `fin_sim`:
   published `fin_fact` snapshot and optional persisted `fin_diag` diagnosis.
 
 No financial records are inserted automatically by Flyway. V5 creates
-only the empty schema and constraints. Real `ACTUAL` remains isolated.
+the empty schema and constraints; V6 adds the read-only
+`fin_sim.monthly_dashboard` SQL view for independent finance inspection
+(MoM, YoY, gross margin, TTM, rolling average, cash/AR changes).
+The view suppresses noncomparable currency mixes, incomplete windows,
+missing COGS and zero percentage baselines as NULL rather than presenting
+false numeric results. Real `ACTUAL` remains isolated.
 
 ## Data set inventory
 
@@ -79,7 +84,7 @@ risk. Never use its numbers as a production report.
 
 The detector is tested on the **published revision path**, not merely
 on a list of in-memory figures. PostgreSQL Testcontainers materializes
-all `fin_sim` rows, then explicitly replays the 4 currently qualified
+all `fin_sim` rows, then explicitly replays the 4 currently implemented
 *diagnostic input candidates* to `fin_fact.fact_assertion`,
 `fact_selection`, `fact_set_publication`, calls
 `TrustedBusinessDiagnosticService.assessAndPublish`, compares all 81
