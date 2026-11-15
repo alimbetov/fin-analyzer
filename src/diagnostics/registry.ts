@@ -1,5 +1,6 @@
 import catalogText from "../../backend/src/main/resources/fin/form-compatibility.tsv?raw";
 import relationText from "../../backend/src/main/resources/fin/indicator-relationships-v1.tsv?raw";
+import problemText from "../../backend/src/main/resources/fin/diagnostic-problem-routes-v1.tsv?raw";
 
 const FORM_HEADER = "formCode\tcatalog\tformKind\taggregateRoot\tgrain\tfieldContract\tfieldEvidence\tqualificationStatus";
 const RELATION_HEADER = "relationCode\trelationVersion\trelationType\tmethodCode\tqualificationStatus\taccountingPolicy\tperiodPolicy\tsourceBindings";
@@ -120,12 +121,27 @@ export function parseGraphRegistry(formsText: string, policyText: string): Regis
   };
 }
 export const RELATIONSHIP_REGISTRY = parseGraphRegistry(catalogText,relationText);
-const PROBLEMS: Readonly<Record<string,readonly string[]>> = {
-  CASH_SHORTFALL: ["CASH_END:CURRENT_STOCK","CFO:CURRENT_FLOW"],
-  PROFITABILITY: ["REV_NET:CURRENT_FLOW","COGS:CURRENT_FLOW"],
-  BALANCE_RECONCILIATION: ["ASSETS:CURRENT_STOCK","EQUITY:CURRENT_STOCK"],
-  RECEIVABLES: ["AR_END:CURRENT_STOCK","REV_NET:CURRENT_FLOW"]
-};
+const PROBLEM_HEADER = "problemCode\tqualificationStatus\tanchorBindings";
+export function parseProblemRoutes(
+  text: string, registry: Registry
+): Readonly<Record<string,readonly string[]>> {
+  const items=rows(text,PROBLEM_HEADER,3);
+  const knownMetrics=new Set(registry.relations.flatMap(r=>r.inputs.map(key)));
+  const routes:Record<string,readonly string[]>={};
+  for(const row of items) {
+    const [code,status,raw] = row;
+    if (!code || !/^[A-Z][A-Z0-9_]{1,127}$/.test(code) ||
+        status !== "SYNTHETIC_PILOT_UNQUALIFIED" || routes[code] !== undefined)
+      throw new Error("GRAPH_PROBLEM_ROUTE_NOT_QUALIFIED");
+    const inputs=raw!.split(";");
+    if (!inputs.length || new Set(inputs).size!==inputs.length ||
+        inputs.some(x=>!knownMetrics.has(x))) throw new Error("GRAPH_PROBLEM_UNKNOWN_METRIC");
+    routes[code]=inputs;
+  }
+  if(Object.keys(routes).length!==4) throw new Error("GRAPH_PROBLEM_ROUTE_COUNT_DRIFT");
+  return Object.freeze(routes);
+}
+const PROBLEMS = parseProblemRoutes(problemText, RELATIONSHIP_REGISTRY);
 export const BUSINESS_PROBLEMS = [
   { code: "CASH_SHORTFALL", label: "Недостаток денежных средств" },
   { code: "PROFITABILITY", label: "Снижение прибыльности" },
