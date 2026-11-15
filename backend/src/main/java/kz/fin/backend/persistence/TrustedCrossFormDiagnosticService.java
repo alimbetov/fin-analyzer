@@ -38,13 +38,20 @@ import java.util.*;
 public class TrustedCrossFormDiagnosticService {
     private static final String RULE_SET_CODE="CROSS_FORM_PILOT";
     private static final String RULE_SET_VERSION="2.0.0";
-    private static final Set<String> STOCK_METRICS=Set.of(
-            "ASSETS","LIABILITIES","EQUITY","CASH_END","AR_END");
+    private static final Set<String> STOCK_METRICS;
     private static final Set<String> SUPPORTED_METRICS;
     static {
-        Set<String> all=new TreeSet<>();
-        CrossFormDiagnosticEngine.REQUIRED_KEYS.forEach(k->all.add(k.code()));
-        SUPPORTED_METRICS=Set.copyOf(all);
+        Map<String,String> timeKinds=new TreeMap<>();
+        Set<String> stocks=new TreeSet<>();
+        for(MetricKey key:CrossFormDiagnosticEngine.REQUIRED_KEYS){
+            String kind=key.role()==TimeRole.CURRENT_FLOW?"INTERVAL":"AS_OF";
+            String previous=timeKinds.putIfAbsent(key.code(),kind);
+            if(previous!=null && !previous.equals(kind))
+                throw new IllegalStateException("REGISTRY_STOCK_FLOW_SEMANTICS_CONFLICT");
+            if(kind.equals("AS_OF"))stocks.add(key.code());
+        }
+        SUPPORTED_METRICS=Set.copyOf(timeKinds.keySet());
+        STOCK_METRICS=Set.copyOf(stocks);
     }
     private final JdbcTemplate jdbc;
     private final TrustedFinancialPopulationService population;
@@ -88,7 +95,16 @@ public class TrustedCrossFormDiagnosticService {
         if(pub.dataSpace()!=AnalysisContext.DataSpace.SYNTHETIC)
             throw new IllegalArgumentException("CROSS_FORM_ACTUAL_NOT_QUALIFIED");
 
-        // Fixed metric whitelist is also enforced in memory; raw SQL is server-owned.
+        // Parameterized server-owned registry metrics; no user-supplied SQL or
+        // unchecked automatically generated metric names are allowed.
+        List<String> metricCodes=new ArrayList<>(SUPPORTED_METRICS);
+        Collections.sort(metricCodes);
+        String placeholders=String.join(",",Collections.nCopies(metricCodes.size(),"?"));
+        List<Object> queryParameters=new ArrayList<>();
+        queryParameters.add(org);queryParameters.add(revision);
+        queryParameters.addAll(metricCodes);
+        queryParameters.add(month.minusMonths(1).atDay(1));
+        queryParameters.add(month.plusMonths(1).atDay(1));
         List<FactRow> raw=jdbc.query("""
             SELECT a.id,a.source_revision_id,a.metric_code,a.metric_version,
                    a.time_kind,a.start_inclusive,a.end_exclusive,a.unit_code,
@@ -118,18 +134,16 @@ public class TrustedCrossFormDiagnosticService {
              AND c.metric_code=a.metric_code
              AND c.time_start=a.start_inclusive AND c.time_end=a.end_exclusive
             WHERE selection.organization_id=? AND selection.fact_set_revision_id=?
-              AND a.metric_code IN ('ASSETS','LIABILITIES','EQUITY','CASH_END',
-                                    'AR_END','REV_NET','COGS','OPEX','CFO','CFI',
-                                    'CFF','CASH_IN','CASH_OUT')
+              AND a.metric_code IN (%s)
               AND a.start_inclusive>=? AND a.start_inclusive<?
             ORDER BY a.metric_code,a.start_inclusive,a.source_revision_id,a.id
-            """,(rs,i)->new FactRow(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
+            """.formatted(placeholders),(rs,i)->new FactRow(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                 rs.getString(3),rs.getString(4),rs.getString(5),
                 rs.getObject(6,LocalDate.class),rs.getObject(7,LocalDate.class),
                 rs.getString(8),rs.getString(9),rs.getString(10),rs.getBigDecimal(11),
                 rs.getString(12),rs.getString(13),rs.getString(14),rs.getString(15),
                 rs.getString(16),rs.getString(17),rs.getString(18),rs.getString(19)),
-                org,revision,month.minusMonths(1).atDay(1),month.plusMonths(1).atDay(1));
+                queryParameters.toArray());
 
         Map<MetricKey,List<FactRow>> groups=new HashMap<>();
         SortedSet<Group> validatedGroups=new TreeSet<>(
