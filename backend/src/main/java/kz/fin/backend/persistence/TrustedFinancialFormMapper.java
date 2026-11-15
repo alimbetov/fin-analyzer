@@ -125,7 +125,7 @@ public class TrustedFinancialFormMapper {
             if(amount.precision()>38 || amount.scale()>12)
                 throw new IllegalArgumentException("SCALED_AMOUNT_OUT_OF_RANGE");
             boolean detail=approved.form().startsWith("DF-CSH-");
-            String dimensions=detail?"{\\"sourceRow\\":\\""+cell.sourceRowId()+"\\"}":"{}";
+            String dimensions=detail?"{\"sourceRow\":\""+cell.sourceRowId()+"\"}":"{}";
             UUID factId=UUID.randomUUID();
             jdbc.update("""
                 INSERT INTO fin_fact.fact_assertion(
