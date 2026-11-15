@@ -1,4 +1,4 @@
-# FIN Analyzer — дополнительные экономические направления и FIN Project Marketplace
+# FIN Project Marketplace — дополнительные экономические направления и FIN Project Marketplace
 
 **Версия:** ECONOMIC-DIRECTIONS v1.1 · **Дата:** 2026-11-15  
 **Статус:** PROJECT REQUIREMENTS / NOT IMPLEMENTED  

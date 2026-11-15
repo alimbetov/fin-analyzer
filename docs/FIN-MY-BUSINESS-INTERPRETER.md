@@ -1,4 +1,4 @@
-# FIN Analyzer — «Мой бизнес»: продажи, диагностика и интерпретатор
+# FIN Project Marketplace — «Мой бизнес»: продажи, диагностика и интерпретатор
 
 **Версия:** MB-R0 v1.0 · 2026-11-15 · **Статус:** PLANNED / NOT IMPLEMENTED  
 **Связано:** [Рабочие пространства](FIN-WORKSPACES-AND-JOURNEYS.md), [Финансовые отчёты](FIN-FINANCIAL-REPORT-PUBLICATION.md), [«Мой проект»](FIN-MY-PROJECT-STRATEGY.md).

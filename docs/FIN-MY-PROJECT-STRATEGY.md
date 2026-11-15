@@ -1,4 +1,4 @@
-# FIN Analyzer — «Мой проект»: стратегия и бизнес-план для инвесторов
+# FIN Project Marketplace — «Мой проект»: стратегия и бизнес-план для инвесторов
 
 **Версия:** PR-R0 v1.0 · 2026-11-15 · **Статус:** PLANNED / NOT IMPLEMENTED  
 **Связано:** [Рабочие пространства](FIN-WORKSPACES-AND-JOURNEYS.md), [«Мой бизнес»](FIN-MY-BUSINESS-INTERPRETER.md), [Отчёты](FIN-FINANCIAL-REPORT-PUBLICATION.md), [Консалтинговые запросы](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md).

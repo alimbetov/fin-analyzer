@@ -1,4 +1,4 @@
-# FIN Analyzer — самостоятельная публикация финансовых отчётов
+# FIN Project Marketplace — самостоятельная публикация финансовых отчётов
 
 **Functional Specification:** REPORT-R0 v1.0 · **Дата:** 2026-11-15 · **Статус:** PLANNED / NOT IMPLEMENTED  
 **Связь:** [Рабочие пространства](FIN-WORKSPACES-AND-JOURNEYS.md), [Консалтинговые запросы](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md), [ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md).

@@ -1,4 +1,4 @@
-# FIN Analyzer — Консалтинговая компания и запросы дополнительных материалов
+# FIN Project Marketplace — Консалтинговая компания и запросы дополнительных материалов
 
 **Functional Specification:** CONSULT-R0 v1.0 · **Дата:** 2026-11-15  
 **Статус:** REQUIREMENTS / NOT IMPLEMENTED  

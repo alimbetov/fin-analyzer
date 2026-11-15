@@ -1,4 +1,4 @@
-# FIN Analyzer — перспективность продукта, роли, сквозные сценарии и архитектурные границы
+# FIN Project Marketplace — перспективность продукта, роли, сквозные сценарии и архитектурные границы
 
 **Версия:** FIN-ROLE-SCENARIOS v1.1, 2026-11-15  
 **Статус:** PRODUCT REQUIREMENTS / PROPOSED / NOT IMPLEMENTED  
