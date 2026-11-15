@@ -157,3 +157,29 @@ footer { text-align: center; color: #536c87; font-size: 11px; margin: 28px 0; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .kpi strong { font-size: 18px; }
 }
+
+/* IND-R0/R1 sector pilot. Reuses the existing FIN panel and field primitives. */
+.sector-panel { scroll-margin-top: 24px; }
+.sector-note,.sector-catalog-note { color: #9ab4cf; font-size: 12px; line-height: 1.7; margin: 12px 0 17px; }
+.sector-catalog-note { overflow-wrap: anywhere; background: #162a43; border-radius: 9px; padding: 12px; }
+.sector-inputs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 13px; margin: 13px 0; }
+.sector-inputs .field { min-width: 0; }
+.sector-inputs select,.sector-inputs input { display: block; width: 100%; max-width: 100%; border: 1px solid #34506c; border-radius: 8px; background: #16283e; padding: 12px; color: #f5faff; margin-top: 8px; }
+.sector-table { margin: 16px 0 0; }
+.sector-table input { max-width: 240px; }
+.sector-error,.sector-ok { padding: 12px 14px; border-radius: 8px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.sector-error { color: #ffdce6; background: #522a3b; }
+.sector-ok { color: #dcfff0; background: #1d4a42; }
+.sector-unavailable { padding: 18px; border: 1px dashed #4b6884; border-radius: 10px; color: #afc5db; background: #182c42; font-size: 13px; line-height: 1.7; }
+.sector-results { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 16px; }
+.sector-result { border: 1px solid #314d6d; background: #14283f; padding: 15px; border-radius: 11px; min-width: 0; }
+.sector-result-title { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 9px; align-items: center; margin-bottom: 14px; }
+.sector-result-title strong { font-size: 13px; }
+.sector-metric { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; padding: 9px 0; border-bottom: 1px solid #2b455f; }
+.sector-metric span { color: #a6c6e4; font-size: 11px; }
+.sector-metric strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.sector-metric small { grid-column: 1 / -1; color: #829bb7; font-size: 10px; }
+.sector-result p { color: #dfbe80; font-size: 11px; }
+.sector-source { display: block; color: #829bb7; font-size: 10px; overflow-wrap: anywhere; line-height: 1.5; margin-top: 12px; }
+@media (max-width: 900px) { .sector-inputs { grid-template-columns: 1fr 1fr; } .sector-results { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .sector-inputs { grid-template-columns: 1fr; } }
