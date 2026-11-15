@@ -30,6 +30,12 @@ below sections require versioned classifier coverage and separate method qualifi
 
 `auto-indicator-operators.tsv` lists nine implemented pure-Java operators plus
 six future candidates. `auto-report-columns.tsv` proposes example report ordering.
+**The pure Java AutoReportProjection now executes requested, strongly typed
+report columns in deterministic numeric display order**, including sums, means,
+period comparisons, moving averages, ratios and complete group shares. It
+returns CALCULATED / INCOMPLETE / ESTIMATED / NOT_COMPUTABLE status with
+explanatory reason. A report may not mix organizations, data spaces or fact-set
+revisions. The supplied `auto-report-columns.tsv` remains DESIGN_ONLY:
 **Columns are not yet rendered by a ReportRegistry**, therefore remain DESIGN_ONLY.
 The Java engine accepts `SeriesKey` identity with factSetRevisionId, data space,
 basis, unit, currency and dimensions. It does NOT verify approval, tenant authorization,
