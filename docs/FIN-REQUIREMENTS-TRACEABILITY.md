@@ -192,6 +192,17 @@ Mapping legacy: MB-WIZ=WZ-02; PR-WIZ=WZ-03/04; PUB-WIZ=WZ-07; REP-WIZ=WZ-06; CON
 
 Обязательные cross-context проверки: S0/S1/S2 → diagnosis → business plan; profit≠cash; loan≠income; inventory purchase≠COGS; fact≠forecast; same revision→same numbers in HTML/PDF/XLSX; report publication ≠ project publication; lost Keycloak membership / stale Redis deny; concurrent one-use exactly 1; KumoMTA outbox retry; consulting partial response; international method with insufficient coverage.
 
+### 7.1. FIN-BH и трёхъязычный Metric Registry — трассировка дополнений
+
+| Требование | Нормативный источник | Доказательство реализации | Текущий статус |
+|---|---|---|---|
+| CORE-15 — диагностика ИП | [FIN Business Health](FIN-BUSINESS-HEALTH.md) | BH-T01…BH-T12; E2E Express → Full → actions | SPECIFIED / NOT RUN |
+| CORE-16 — единые KPI + ru/kk/en | [Indicator Dictionary](FIN-INDICATOR-DICTIONARY-RU-KK-EN.md) | MET-01…MET-12, проверка 27 кодов × 3 локали | SPECIFIED / NOT RUN |
+| CORE-17 — доказуемость выводов | [Business Health](FIN-BUSINESS-HEALTH.md) | BH-T04/BH-T08/BH-T09, no universal score | SPECIFIED / NOT RUN |
+| CORE-18 — withdrawals/scenario/private | [Business Health](FIN-BUSINESS-HEALTH.md), [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md) | BH-T05/BH-T07/BH-T10/BH-T11 и ZONE suites | SPECIFIED / NOT RUN |
+
+**Оговорка:** запись в RTM доказывает только документное покрытие, **не** запуск автотестов, переводы в React, миграции или готовую диагностику.
+
 ## 8. Состояние и остаточная работа
 
 - [x] Уникальные идентификаторы всех 39 модулей.
