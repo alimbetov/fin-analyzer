@@ -53,7 +53,7 @@
 
 | Код | Таблица / бизнес-событие | Поля (типизированные) | Зернистость | Предлагаемый KPI и формула | Решаемый вопрос | Базовые DF-формы | Сбор / анализ |
 |---|---|---|---|---|---|---|---|
-| SF-E01 | Водоснабжение: баланс воды | network:REF;waterInputM3:DECIMAL;authorizedDeliveredM3:DECIMAL;unbilledAuthorizedM3:DECIMAL | network×month | NON_REVENUE_WATER_PCT = 100 * (waterInputM3 - billedVolumeM3) / waterInputM3 (requires billedVolumeM3) | Где теряется выручка от поставленной воды? | DF-AST-04;DF-SAL-01 | D/M |
+| SF-E01 | Водоснабжение: баланс воды | network:REF;waterInputM3:DECIMAL;authorizedDeliveredM3:DECIMAL;billedVolumeM3:DECIMAL;unbilledAuthorizedM3:DECIMAL | network×month | NON_REVENUE_WATER_PCT = 100 * (waterInputM3 - billedVolumeM3) / waterInputM3 (not same as physical leakage) | Где теряется выручка от поставленной воды? | DF-AST-04;DF-SAL-01 | D/M |
 | SF-E02 | Канализация и очистка: объём и затраты | plant:REF;treatedM3:DECIMAL;processCost:MONEY;energyKWh:DECIMAL;complianceEvidence:REF | plant×month | TREATMENT_COST_M3 = processCost / treatedM3 | Как сократить стоимость обработки? | DF-OPS-01;DF-AST-04 | D/M |
 | SF-E03 | Переработка отходов: сортировка и выход | facility:REF;incomingT:DECIMAL;recoveredT:DECIMAL;disposedT:DECIMAL;period:PERIOD | facility×month | RECOVERY_SHARE_PCT = 100 * recoveredT / incomingT | Как увеличить полезный выход материала? | DF-OPS-03;DF-STK-03 | D/M |
 
@@ -63,7 +63,7 @@
 |---|---|---|---|---|---|---|---|
 | SF-F01 | Строительство: выполненный объём и акты | project:REF;wbsCode:CODE;plannedQty:DECIMAL;actualQty:DECIMAL;certifiedQty:DECIMAL;unit:CODE | project×WBS×month | CERTIFIED_SHARE_PCT = 100 * certifiedQty / actualQty | Почему работа выполнена, но не оплачена? | DF-PRJ-06;DF-CSH-04 | W/M |
 | SF-F02 | Строительство: бюджет, смета, затраты | project:REF;wbsCode:CODE;budgetCost:MONEY;actualCost:MONEY;committedCost:MONEY | project×WBS×month | COST_OVERRUN_PCT = 100 * (actualCost - budgetCost) / budgetCost (comparable WBS scope) | Какой этап превышает бюджет? | DF-PRJ-02;DF-CST-01 | W/M |
-| SF-F03 | Строительство: удержания и cash gap | project:REF;invoiceGross:MONEY;retention:MONEY;receipts:MONEY;dueAt:DATE;period:PERIOD | project×month | CONSTRUCTION_NET_COLLECTION = receipts - retention (not revenue) | Когда не хватает оборотных средств? | DF-CSH-01;DF-CSH-04 | E/M |
+| SF-F03 | Строительство: удержания и cash gap | project:REF;invoiceGross:MONEY;retention:MONEY;matchedReceipts:MONEY;dueAt:DATE;asOf:DATE;period:PERIOD | project×month | INVOICE_OUTSTANDING = invoiceGross - matchedReceipts (requires invoice-level matching) | Когда не хватает оборотных средств? | DF-CSH-01;DF-CSH-04 | E/M |
 
 ### G — Торговля и ремонт транспорта
 
@@ -79,7 +79,7 @@
 |---|---|---|---|---|---|---|---|
 | SF-H01 | Транспорт: рейсы, загрузка, расстояния | trip:REF;distanceKm:DECIMAL;loadedKm:DECIMAL;shipmentQty:DECIMAL;fuelL:DECIMAL;tripCost:MONEY | trip | LOADED_KM_SHARE_PCT = 100 * loadedKm / distanceKm | Какие рейсы убыточны или пустые? | DF-OPS-05;DF-CST-02 | E/W |
 | SF-H02 | Логистика: соблюдение сроков | shipment:REF;promisedAt:DATE;deliveredAt:DATE;deliveredComplete:BOOLEAN;damageQty:DECIMAL | shipment | ON_TIME_DELIVERY_PCT = 100 * onTimeComplete / completedShipments | Где нарушаются сроки доставки? | DF-SAL-02;DF-OPS-05 | E/M |
-| SF-H03 | Складской оператор: площадь и обработка | warehouse:REF;processedOrders:DECIMAL;laborHours:DECIMAL;storageM2:DECIMAL;occupancyM2:DECIMAL | warehouse×week | ORDER_LINES_PER_HOUR = processedOrderLines / laborHours (requires lines) | Когда нужен персонал или площадь? | DF-HR-02;DF-STK-01 | D/W |
+| SF-H03 | Складской оператор: площадь и обработка | warehouse:REF;processedOrders:DECIMAL;processedOrderLines:DECIMAL;laborHours:DECIMAL;storageM2:DECIMAL;occupancyM2:DECIMAL | warehouse×week | ORDER_LINES_PER_HOUR = processedOrderLines / laborHours (requires lines) | Когда нужен персонал или площадь? | DF-HR-02;DF-STK-01 | D/W |
 
 ### I — Гостиницы и общественное питание
 
@@ -173,7 +173,7 @@
 
 | Код | Таблица / бизнес-событие | Поля (типизированные) | Зернистость | Предлагаемый KPI и формула | Решаемый вопрос | Базовые DF-формы | Сбор / анализ |
 |---|---|---|---|---|---|---|---|
-| SF-T01 | Домашние хозяйства: бюджет и расходы | household:REF;period:PERIOD;income:MONEY;expenses:MONEY;savings:MONEY | household×month | HOUSEHOLD_SAVINGS_RATE = 100 * savings / income | Какова финансовая устойчивость домохозяйства? | DF-CSH-01;DF-CSH-02 | M/Q |
+| SF-T01 | Домашние хозяйства: бюджет и расходы | household:REF;period:PERIOD;income:MONEY;expenses:MONEY;savings:MONEY | household×month | HOUSEHOLD_SAVINGS_RATE = 100 * (income - expenses) / income (reconcile savings input) | Какова финансовая устойчивость домохозяйства? | DF-CSH-01;DF-CSH-02 | M/Q |
 | SF-T02 | Домашняя занятость: рабочие часы | household:REF;workHours:DECIMAL;wagePaid:MONEY;period:PERIOD | household×month | DOMESTIC_LABOR_COST_H = wagePaid / workHours | Как планировать расходы домашнего работодателя? | DF-HR-02;DF-CST-01 | M/Q |
 | SF-T03 | Домашнее производство для собственного использования | household:REF;product:CODE;qtyProduced:DECIMAL;inputCost:MONEY;period:PERIOD | household×season | HOME_UNIT_COST = inputCost / qtyProduced | Как оценить ресурсные затраты без ложной выручки? | DF-OPS-01;DF-CST-02 | S/Y |
 

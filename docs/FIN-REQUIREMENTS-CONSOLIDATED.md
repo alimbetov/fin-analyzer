@@ -1,4 +1,4 @@
-# FIN Project Marketplace — единая консолидированная спецификация требований (SRS v1.0)
+# FIN Project Marketplace — единая консолидированная спецификация требований (SRS v1.1)
 
 **Дата:** 2026-11-15 · **Статус:** CONSOLIDATED FOR REVIEW / NOT IMPLEMENTED.
 **Ветка:** `docs/fin-marketplace-requirements-baseline` · **База:** `e946aa36c8f7391362293c02aa0212e758f64c44`.
@@ -110,6 +110,12 @@
 | R20 INDEPENDENT_REVIEWER | независимый S2/auditor/quality reviewer | оценка качества расчётов/методологии и доказательств | только выбранные для ревью материалы | P1 |
 
 **ConsultingOrganization** — организация с собственными `CONSULT_ORG_ADMIN/ENGAGEMENT_LEAD/CONSULT_ANALYST/CONSULT_REVIEWER`, а не право R08 на все проекты. Один пользователь может состоять в нескольких организациях; активный tenant не расширяет права. Детальные положительные/отрицательные истории: [ROLE-SCENARIOS](ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md), [CONSULTING](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md).
+
+### Дополнение FIN-DATA-FORMS / FIN-SECTOR-FORMS (v1.1)
+
+**59 `DF-*` форм** собирают первичные данные о продаже, cash, затратах, складе, клиентах, операциях, персонале, активах, капитале и стратегиях. **63 `SF-*` отраслевых формы** разработаны на уровне 21 международной секции деятельности A–U с привязкой к версиям ОКЭД. Это **логические формы**, не 122 обязательных анкеты. 44 отчётные F/C/P/T/D формы ниже остаются отдельным неизменным нормативным перечнем.
+
+[Каталог DF](FIN-BUSINESS-DATA-FORMS.md) · [Каталог SF](FIN-SECTOR-FORM-CATALOG.md) · [Календарь/методы](FIN-SECTOR-METHODS-PERIODICITY.md) · [Business Health](FIN-BUSINESS-HEALTH.md) · [Indicator Dictionary RU/KK/EN](FIN-INDICATOR-DICTIONARY-RU-KK-EN.md). **Канонический путь:** sector-specific input → typed validated economic fact → applicable MetricDefinition → diagnostic finding → decision recommendation. Каждый SF-метод пока `PROPOSED`, до квалификации не рассчитывается как утверждённый KPI. Сбор событий по мере появления; сводка месячная/квартальная/полугодовая/годовая автоматически с учётом stock/flow и весов.
 
 ## 5. Каталог форм: 44 объектов, запрашиваемых по применимости
 

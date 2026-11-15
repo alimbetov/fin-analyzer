@@ -1,4 +1,4 @@
-# FIN Project Marketplace — единое проектное техническое задание v4.0 (consolidated baseline)
+# FIN Project Marketplace — единое проектное техническое задание v4.1 (sector forms and cadence)
 
 **Продукт:** **FIN Project Marketplace** — международная B2B-платформа для экономики бизнеса, проектов и сотрудничества; **FIN Analyzer** — экономико-аналитический модуль.  
 **Дата:** 2026-11-15  
@@ -495,6 +495,17 @@ React App / Smart Wizard / Input Hub / Analytics Studio
 **[MODULE-CATALOG.md](MODULE-CATALOG.md)** — нормативный реестр 39 логических модулей в пяти группах: 12 FND, 9 BUS, 8 PRJ, 7 CON, 3 ADM. В нём для каждого модуля описаны акторы, входы/выходы, панель, этап реализации, PASS-критерий, 11 мастеров, межролевые сценарии и границы общей предметной модели.
 
 **REQ-MOD-01:** stable moduleId для каждого bounded context; модуль не равен отдельному микросервису. **REQ-MOD-02:** G1 должен приносить пользу без hosted авторизации и других участников. **REQ-MOD-03:** все модули используют общие EconomicFacts, версии и методики. **REQ-MOD-04:** публикация отчёта, проекта и выдача файла имеют разные grants, состояния и snapshots. **REQ-MOD-05:** проверка готовности модулей по E2E/golden tests и независимому review, не по количеству экранов.
+
+## 22B. Отраслевые входные данные, экономические и операционные задачи
+
+**REQ-SECTOR-01:** [59 общих форм DF-*](FIN-BUSINESS-DATA-FORMS.md) и [63 отраслевых формы SF-*](FIN-SECTOR-FORM-CATALOG.md) для 21 раздела A–U: охват ИП, ТОО и АО по фактической сфере деятельности, составу данных и стадии S0–S4. 44 формы F/C/P/T/D не переименовываются и не дублируются.
+**REQ-SECTOR-02:** `SectorPack` привязан к versioned code/classifier/country/effectiveDate, без ложного обещания готовых отраслевых расчётов для всех конкретных кодов ОКЭД.
+**REQ-SECTOR-03:** [CadencePolicy](FIN-SECTOR-METHODS-PERIODICITY.md) различает частоту источника и управленческой сводки: `EVENT/DAILY/WEEKLY` → monthly; quarterly, half-year, yearly и seasonal/term/project stage — производные отчёты по правилам.
+**REQ-SECTOR-04:** денежные потоки суммируются, stock balances выбираются на дату, ratios пересчитываются из агрегированных числителя/знаменателя. Сезонные и проектные циклы анализируются по своим календарям; не смешивать месячные остатки, валюты и fiscal/year-to-date windows.
+**REQ-SECTOR-05:** `FIN Business Health` предлагает вопрос/сценарий, затем минимальный набор DF/SF-форм, далее approved FinancialFacts → версионированный KPI → Observation/Hypothesis/MissingData → план действий. Не выдавать новые sector metric candidates за методически утверждённые.
+**REQ-SECTOR-06:** для новых KPI обязательны formula AST, precision/units/period, source, applicability, golden fixtures, RU/KK/EN name/what/how/shows, независимое review; `TRIBUO/ML` необязателен и не подменяет точные финансовые расчёты.
+**REQ-SECTOR-07:** 20 требований `DF-T01…DF-T20` и 30 `SF-T01…SF-T30` — mandatory RED/GREEN/E2E до соответствующего отраслевого релиза, а не готовые PASS.
+**REQ-SECTOR-08:** рекомендованные ежемесячные/квартальные/полугодовые/годовые управленческие циклы не являются налоговой/статистической/пруденциальной периодичностью; юридические сроки требуют отдельного versioned `RegulatoryCalendar`.
 
 ## 22A. Самодиагностика ИП и единая терминология KPI
 

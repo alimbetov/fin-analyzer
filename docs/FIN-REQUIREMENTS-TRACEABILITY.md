@@ -203,6 +203,17 @@ Mapping legacy: MB-WIZ=WZ-02; PR-WIZ=WZ-03/04; PUB-WIZ=WZ-07; REP-WIZ=WZ-06; CON
 
 **Оговорка:** запись в RTM доказывает только документное покрытие, **не** запуск автотестов, переводы в React, миграции или готовую диагностику.
 
+### 7.2. Формы исходных данных, отраслевые показатели и cadence
+
+| Набор | Нормативный документ | Объём | Доказательство до выпуска | Сейчас |
+|---|---|---:|---|---|
+| `DF-*` | [Business Data Forms](FIN-BUSINESS-DATA-FORMS.md) | 59 | DF-T01…DF-T20; schema/fact/decision mapping | SPECIFIED / NOT RUN |
+| `SF-*` | [Sector Form Catalog](FIN-SECTOR-FORM-CATALOG.md) | 63 (21×3) | SF-T01…SF-T30; tested sector method/version | SPECIFIED / NOT RUN |
+| Cadence | [Sector Methods & Periodicity](FIN-SECTOR-METHODS-PERIODICITY.md) | daily→monthly, quarterly, half-year, annual, seasonal | semantic aggregations and reporting cutoffs | SPECIFIED / NOT RUN |
+| `FIN-METRIC-REGISTRY` | [Indicator Dictionary](FIN-INDICATOR-DICTIONARY-RU-KK-EN.md) | 27 | ru/kk/en parity, formula/dataset review | SPECIFIED / NOT RUN |
+
+**Модель:** DF/sector SF → approved facts → qualified KPI → health/report/business plan → DecisionPacket. Числа 59/63 относятся к **дополнительным классам исходных форм**, не увеличивают существующий каталог 44 F/C/P/T/D отчётных форм. MethodCandidate не превращается в реализованную формулу из-за упоминания в ТЗ.
+
 ## 8. Состояние и остаточная работа
 
 - [x] Уникальные идентификаторы всех 39 модулей.

@@ -15,6 +15,27 @@
 
 **Правила применимости:** показатели запасов только при подтверждённом движении/оценке товаров; DSCR только при наличии CFADS и графика обслуживания долга; CAC/ROAS в будущем только при доказуемой атрибуции. Ни одно число не превращается в «плохо/хорошо» без отраслевой базы, порога с источником и применимости. При нехватке данных вместо фиктивной оценки — пояснение и next-best-question.
 
+### Трассировка от бизнес-форм и отраслевых таблиц
+
+[59 форм DF-*](FIN-BUSINESS-DATA-FORMS.md) поставляют общие факты для 27 зарегистрированных KPI, [63 формы SF-*](FIN-SECTOR-FORM-CATALOG.md) — отраслевые данные и будущие показатели. [Правила периодичности](FIN-SECTOR-METHODS-PERIODICITY.md) устанавливают разные stock/flow/ratio aggregation, country/season/fiscal time windows.
+
+| KPI из текущего словаря | Основные источники фактов | Дополнительные требования |
+|---|---|---|
+| REV_NET, AVG_ORDER, RETURNS_RATE | DF-SAL-01/02/03 | orderId и saleId различаются; коррекция возвратов один раз |
+| COGS, GROSS_PROFIT, GROSS_MARGIN | DF-CST-02, DF-SAL-01/03 | подтвержденная оценка реализованной себестоимости |
+| CONTRIBUTION_PROFIT, CONTRIBUTION_MARGIN | DF-CST-01/02/03, DF-SAL-01 | variable costs без дублирования |
+| OPERATING_PROFIT, NET_PROFIT, NET_MARGIN | DF-SAL-01/03, DF-CST-01/02/05 | все необходимые P&L разделы, включая прочие доходы и налоги |
+| CASH_IN_OP, CASH_OUT_OP, NET_CASH_FLOW | DF-CSH-01/02 | операционные категории денежного потока |
+| CASH_END, CASH_COVER_30D, CASH_RUNWAY | DF-CSH-03/05, DF-CSH-01/02 | cash as-of, платежный горизонт и cash burn |
+| AR_END, AR_OVERDUE_SHARE, AP_END | DF-CSH-04/05 | дедлайны и долги на одну дату |
+| DEBT_SERVICE_COVER | DF-CSH-06 + CFADS source | не считать без согласованного CFADS |
+| CLIENT_TOP1_SHARE | DF-CUS-04 + DF-SAL-01 | подтвержденная база всех клиентов |
+| INV_TURNOVER, INVENTORY_DAYS | DF-STK-01, DF-CST-02 | стоимость запасов и период |
+| BREAK_EVEN_REV, SAFETY_MARGIN | DF-CST-01/02 + DF-SAL-01 | margin policy, share fixed/variable cost |
+| OWNER_DRAWS | DF-CST-04 | ИП, не дивиденды ТОО/АО |
+
+Это **карта потенциальных входов**, не гарантия вычисления KPI без полного набора фактов. Отраслевые SF-метрики остаются `PROPOSED` до отдельного approved MetricDefinition, formula AST, RU/KK/EN name/what/how/shows и golden fixtures. Смена языка не меняет формулы, исходные данные, период или статус.
+
 ## 2. Определения и переводы
 
 Ниже формулы используют **псевдокод** с английскими кодами входов. Все необходимые части финансовой модели должны быть подтверждены, иначе результат `NOT_COMPUTABLE`; необязательные отраслевые показатели могут быть `NOT_APPLICABLE`. Метрика с суффиксом `_END` относится к дате, потоки — к интервалу. `100 ×` означает процент, не коэффициент.

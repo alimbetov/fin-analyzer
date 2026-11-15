@@ -59,6 +59,16 @@
 | GAP-19 | P2 | Нагрузочные критерии и эксплуатационные SLO | workloads, p95/p99/CPU/RAM recovery in staging, avoid invented SLAs |
 | GAP-20 | P2 | Единая UI-языковая и методическая локализация RU/KZ/EN и других стран | i18n key registry, country templates and compliance review |
 
+### Дополнительные открытые методические решения по отраслям
+
+| ID | Приоритет | Вопрос | Артефакт/доказательство |
+|---|---|---|---|
+| GAP-21 | P0 | 63 отраслевых SF-формы и рекомендованные частоты существуют, но нет полной методической квалификации каждого KPI | SectorPack review, versioned inputs, formula AST, 3 локали, golden tests |
+| GAP-22 | P1 | Как формально отнести к отрасли деятельность ИП/ТОО/АО при множественных ОКЭД и смене редакций | классификатор+версия+effectiveDate+mapping, независимый review |
+| GAP-23 | P1 | Какие данные собирать ежедневно, а какие только ежемесячно без чрезмерной нагрузки | CadencePolicy+UX pilots по G/M/C/A/F, high-frequency inputs optional |
+| GAP-24 | P1 | Отделить юридические сроки сдачи отчетности от cadence экономической диагностики | CountryRegulatoryCalendar with verified effective rules |
+| GAP-25 | P2 | Станет ли ML/Tribuo улучшением для отдельных отраслевых диагнозов | temporal holdout and tenant leakage checks versus deterministic/seasonal baselines |
+
 ## 4. Управление версиями и готовностью
 
 **Статус каждого требования:** SPECIFIED → REVIEWED → READY_FOR_IMPLEMENTATION → IMPLEMENTED → TESTED → UAT_PASS → INDEPENDENT_APPROVE → RELEASED. Не считать записи в ТЗ выполненной функциональностью.

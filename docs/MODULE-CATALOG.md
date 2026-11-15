@@ -4,6 +4,8 @@
 
 **Главное ТЗ:** [FIN Project Marketplace](FIN-ANALYZER-PROJECT-TZ.md). Архитектура: [ADR-008](ADR-008-FIN-CONNECT-BACKEND-STACK.md), доступ: [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md), наименование: [ADR-010](ADR-010-PRIMARY-PRODUCT-NAME.md), ролевая карта: [ROLE-SCENARIOS](ROLE-SCENARIOS-AND-PRODUCT-STRATEGY.md).
 
+**Отраслевые данные и экономические решения:** [59 DF-форм](FIN-BUSINESS-DATA-FORMS.md), [63 SF-формы](FIN-SECTOR-FORM-CATALOG.md), [сбор/агрегирование по периодам](FIN-SECTOR-METHODS-PERIODICITY.md). Эти реестры входят в существующие `FND-05 Form Registry`, `FND-08 Methodology` и `BUS-01…09 / PRJ-*`; **новые 122 микросервиса не создаются**.
+
 ## 1. Продуктовая модель
 
 FIN Project Marketplace — единая международная B2B-платформа. **FIN Analyzer** — внутреннее аналитическое ядро, «Мой бизнес» — диагностика действующего бизнеса, «Мой проект» — стратегия/инвестиционная модель/Business Plan, Project Discovery — информационный каталог, FIN Connect — взаимодействие сторон, Report Center — отчёты и публикация, Access Center — адресные и временные разрешения.
