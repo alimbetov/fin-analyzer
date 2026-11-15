@@ -74,7 +74,7 @@ public class TrustedBusinessDiagnosticService {
             throw new IllegalArgumentException("UNQUALIFIED_DIAGNOSTIC_RULES_FOR_ACTUAL");
 
         List<MetricHistory> history=trustedHistory(publication,asOf);
-        Assessment assessment=BusinessDiagnosticEngine.assess(asOf,history,PILOT_RULES);
+        Assessment assessment=BusinessDiagnosticEngine.assess(asOf,history,BusinessDiagnosticEngine.PILOT_RULES);
         String definitionHash=definitionHash();
         JsonNode snapshot=buildSnapshot(assessment,publication);
         String snapshotJson=snapshot.toString();
@@ -249,7 +249,7 @@ public class TrustedBusinessDiagnosticService {
             put(md,RULE_SET_CODE);
             put(md,RULE_SET_VERSION);
             put(md,BusinessDiagnosticEngine.METHOD_VERSION);
-            for(RuleDefinition rule:PILOT_RULES){
+            for(RuleDefinition rule:BusinessDiagnosticEngine.PILOT_RULES){
                 put(md,rule.code().name());put(md,rule.version());
                 put(md,rule.explanationKey());put(md,rule.playbookCode());
                 for(String dependency:rule.requiredMetrics()) put(md,dependency);
