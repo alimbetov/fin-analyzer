@@ -11,9 +11,9 @@ test('every one of 166 registered tables and 30 extension sheets has an honest s
   assert.equal(payload.schemaVersion,'FIN_FORM_SMOKE_MATRIX_V2');
   assert.equal(payload.sectorFormsCalculated,9);
   assert.equal(payload.sectorFormsNotImplemented,54);
-  assert.equal(payload.javaScenarioMethodsDefined,14);
-  assert.equal(payload.javaSourceFormsInGoldenTests,14);
-  assert.equal(payload.javaExtensionSheetsInGoldenTests,8);
+  assert.equal(payload.javaScenarioMethodsDefined,16);
+  assert.equal(payload.javaSourceFormsInGoldenTests,16);
+  assert.equal(payload.javaExtensionSheetsInGoldenTests,10);
   assert.equal(payload.fullFiveQuestionMethodologyAccepted,0);
   assert.equal(payload.forms.filter(x=>x.sectorSmokeStatus==='EXECUTED_SYNTHETIC_ONLY').length,9);
   assert.equal(payload.forms.filter(x=>x.sectorSmokeStatus==='NOT_EXECUTABLE_IN_SECTOR_KERNEL').length,157);
@@ -25,9 +25,9 @@ test('every one of 166 registered tables and 30 extension sheets has an honest s
       &&x.questions.effect==='SIMULATED_ONLY'));
   assert.equal(new Set(payload.forms.map(x=>x.formCode)).size,166);
   assert.equal(new Set(payload.extensionSheets.map(x=>x.sheetCode)).size,30);
-  assert.equal(payload.extensionSheets.filter(x=>x.status==='GOLDEN_TEST_DEFINED_CI_MUST_VERIFY').length,8);
-  assert.equal(payload.extensionSheets.filter(x=>x.status==='CONTRACT_TEST_DEFINED_ONLY').length,22);
-  assert.equal(payload.forms.filter(x=>x.javaScenarioMethods.length>0).length,14);
+  assert.equal(payload.extensionSheets.filter(x=>x.status==='GOLDEN_TEST_DEFINED_CI_MUST_VERIFY').length,10);
+  assert.equal(payload.extensionSheets.filter(x=>x.status==='CONTRACT_TEST_DEFINED_ONLY').length,20);
+  assert.equal(payload.forms.filter(x=>x.javaScenarioMethods.length>0).length,16);
   assert.ok(payload.forms.every(x=>x.javaScenarioMethods.length>0
     ? x.javaScenarioStatus==='GOLDEN_TEST_DEFINED_CI_MUST_VERIFY'
     : x.javaScenarioStatus==='NOT_DEFINED'));
