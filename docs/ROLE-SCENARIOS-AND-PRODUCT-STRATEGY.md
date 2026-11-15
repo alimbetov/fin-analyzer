@@ -257,6 +257,8 @@ FundingApplication получил REQUEST_MORE_INFO / DECLINED → исходн�
 
 Company A с country-specific IFRS/GAAP context, country B/филиал с local standard → standard mapping+FX rates+period checks → отдельные company snapshots → group consolidated result **только с элиминациями** → investor safe version. В противном случае NOT_COMPUTABLE/INCOMPLETE.
 
+**Уточнение:** организационная роль сама по себе не открывает финансовую отчетность. Зоны Z00–Z99, immutable revision, field/period allowlist, срочный/контрактный/одноразовый доступ и отзыв описаны в [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md). Основное название платформы — FIN Project Marketplace ([ADR-010](ADR-010-PRIMARY-PRODUCT-NAME.md)).
+
 ## 6. Матрица прав доступа: принцип deny-by-default
 
 | Ресурс/операция | Project owner | Accountant / analyst | Consultant | Investor | Bank reviewer | Platform moderator |

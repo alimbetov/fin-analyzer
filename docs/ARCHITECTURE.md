@@ -20,6 +20,8 @@
 
 **ADR-006 — Revision Safety.** Импорт не изменяет APPROVED непосредственно; обязательно стадирование, проверка и явное подтверждение.
 
+**ADR-009:** Access Center — [зоны, временный и одноразовый доступ, revoke](ADR-009-REPORT-ACCESS-ZONES.md), PostgreSQL-authoritative grants; **ADR-010:** [FIN Project Marketplace — название всей платформы](ADR-010-PRIMARY-PRODUCT-NAME.md), FIN Analyzer — модуль.
+
 ## 2. Рекомендуемый стек
 
 | Слой | Решение | Назначение |

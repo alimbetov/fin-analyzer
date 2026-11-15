@@ -1,4 +1,4 @@
-# FIN Analyzer — пользовательские пространства, мастера и публикация
+# FIN Project Marketplace — пользовательские пространства, мастера и публикация
 
 **Версия:** WORKSPACE-FLOWS v1.0 · **Дата:** 2026-11-15 · **Статус:** PROPOSED / NOT IMPLEMENTED  
 **Связанные документы:** [Master TZ](FIN-ANALYZER-PROJECT-TZ.md), [«Мой бизнес»](FIN-MY-BUSINESS-INTERPRETER.md), [«Мой проект»](FIN-MY-PROJECT-STRATEGY.md), [Публикация финансовых отчётов](FIN-FINANCIAL-REPORT-PUBLICATION.md), [Консалтинг](FIN-CONSULTING-COMPANY-DOCUMENT-REQUESTS.md).
@@ -10,6 +10,8 @@
 - **FIN Project Marketplace** — информационный каталог и сотрудничество участников: инвесторы, банки, компании, консалтинговые фирмы, партнёры; только раскрываемые владельцем сведения. **Нет денежных операций и исполнения сделок**.
 
 Создатель может быть без действующей компании; действующий бизнес может иметь много проектов. \`BusinessActualSnapshot\` — исторические подтверждённые на доступном уровне факты; \`ProjectAssumptions\` — независимые прогнозы, которые не редактируют исторический источник.
+
+**Иерархия продуктов:** [ADR-010](ADR-010-PRIMARY-PRODUCT-NAME.md) — FIN Project Marketplace как платформа, FIN Analyzer как экономическая подсистема.
 
 ## 2. Панели управления
 
@@ -61,6 +63,10 @@ Dashboard каждого рабочего пространства показы�
 | FLOW-15 | Система | PG Outbox → KumoMTA retry/callback → UI inbox | email accepted не равно delivered |
 | FLOW-16 | Security | multi-org user → change context → revoke grant → try old link | IDOR/cache stale fail closed |
 | FLOW-17 | Компания | corrected published financial report → new revision | historical published snapshot immutable |
+
+### Access Center / Wizard-ACCESS
+
+Пользователь «Мой бизнес» или «Мой проект» выбирает отчёт, зону Z00–Z99, формы/поля, период/версию, адресата (банк/инвестор/консалтинг/партнёр), действия VIEW/COMMENT/DOWNLOAD/EXPORT и срок: фиксированный, договорный, до завершения сотрудничества, одноразовый или N использований. После подтверждения точного preview система выдаёт адресное право; в кабинете отображаются история, expiry, one-time consumption и срочный отзыв. Keycloak session не отменяет актуальный revoke. [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md).
 
 ## 5. Публикация: отдельные объекты и статусы
 

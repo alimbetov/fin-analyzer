@@ -99,6 +99,8 @@
 
 **Конструктор кастомных форм:** RequestItemType \`FILE / TEXT / NUMBER / DATE / TABLE / EXPLANATION / EXISTING_REPORT_REFERENCE\`, валидация по схеме, версии шаблона и требуемым единицам. Непредоставленный \`required\` не становится нулём и не блокирует право компании отказать; консультант видит \`UNAVAILABLE/DECLINED\`, а анализ — \`NOT_COMPUTABLE\` при нехватке операндов.
 
+**Зоны и срочный доступ:** для каждого `ProvidedEvidenceRevision` — отдельная выдача `AccessGrant`, ограниченная конкретной зоной/периодом/версией и действиями. Engagement может ограничивать expiry, one-time VIEW/DOWNLOAD и revoke. Изменение или завершение внешнего контракта не расширяет доступ автоматически. [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md).
+
 ## 7. Раздельные жизненные циклы
 
 \`\`\`text

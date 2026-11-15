@@ -48,6 +48,8 @@
 
 **OIDC exception explained:** the browser *necessarily* receives Keycloak's user-facing login and authorization screens during interactive OIDC flows. To satisfy the selected network boundary, expose only Keycloak's required authentication endpoints **through the edge reverse proxy** (e.g. \`/auth/**\`), not a direct public internal service port. The BFF handles code exchange and tokens server-side. Keycloak Admin UI/API, master realm and management endpoints are restricted to trusted administration paths.
 
+**Access Center contract:** [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md) — zones Z00–Z99, PostgreSQL authoritative AccessGrant/AccessLease, expiry/contract/one-use/revoke. [ADR-010](ADR-010-PRIMARY-PRODUCT-NAME.md) — product identity; FIN Analyzer is module.
+
 ## 3. Identity, session and authorization
 
 - Spring Boot is a **confidential OIDC client**, using Authorization Code flow (with supported protections, state, nonce, redirect-URI allowlist). No password grant / custom password proxy through React; password entry occurs on Keycloak-controlled login UI.

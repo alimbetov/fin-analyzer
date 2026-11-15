@@ -9,6 +9,8 @@
 
 Официальное представление отчётности государственному органу, аудит и юридическая сертификация не являются автоматическими результатами публикации внутри FIN. Источники, периоды и методики явно указываются; \`FIN_VALIDATED\` означает только проверки FIN, **не** внешний аудит.
 
+**Access Center:** INVITE_ONLY и ограниченная передача любого отчёта дополнительно требуют `AccessGrant`: zone Z00–Z99, конкретные формы/поля/period/revision, allowed VIEW/DOWNLOAD/EXPORT, recipientOrg/principal, FIXED_WINDOW, ENGAGEMENT_BOUND, CONTRACT_WINDOW или ONE_USE. Отзыв блокирует новые выдачи, но не удаляет скачанные копии. Разрешённые projections формируются на backend. [ADR-009](ADR-009-REPORT-ACCESS-ZONES.md).
+
 ## 2. Публикационные режимы
 
 | Mode | Audience | Default and restrictions |
