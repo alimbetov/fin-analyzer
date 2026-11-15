@@ -18,8 +18,20 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
-      - name: Sector pilot kernel tests
+      - name: Sector pilot kernel and five-question diagnostic smoke tests
         run: npm --prefix packages/sector-pilot test
+      - name: Generate 166-form / 30-sheet smoke matrix
+        run: |
+          mkdir -p test-results
+          node packages/sector-pilot/src/smoke-cli.mjs > test-results/fin-form-smoke-matrix.json
+      - name: Upload FIN diagnostic form smoke matrix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-diagnostic-smoke-matrix
+          path: test-results/fin-form-smoke-matrix.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Unit tests
         run: npm test
       - name: Production build
