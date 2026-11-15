@@ -20,7 +20,7 @@ Local application (with FIN_DB_URL/FIN_DB_USER/FIN_DB_PASSWORD set):
     mvn -f backend/pom.xml spring-boot:run
 
 ## Non-goals
-No frontend changes, no bank approval, no public API, no completed 166-form implementation,
+No backend-to-React trusted API integration (the separate local-only IND-R1 React pilot is documented in ../docs/FIN-IND-R0-R1-STATUS.md), no bank approval, no public API, no completed 166-form implementation,
 no production identity/security boundary, no server integration with existing React project.
 No automatic approval of PDF/Excel contents.
 
