@@ -79,3 +79,16 @@ The repository's `FIN CI` runs the complete coordinated gate. Review a **single 
 Next numeric expansion should prioritize finance F01/F02/F03 deeper decomposition, 13-week budget scenarios across periods and sector-specific calculations based on **a reviewed applicability matrix**, not indiscriminately assigning one formula to all remaining 144 forms.
 
 **Decision:** `HOLD` until full single-SHA CI evidence and all mandatory methodology/trusted-E2E gates are satisfied.
+
+## R3.1 — CI evidence collection and evidence-only catalog controls
+
+**Status (2026-11-16): NOT VERIFIED — no GitHub Actions GREEN run ID obtained from accessible APIs.**
+The available `fetch_commit_workflow_runs` connector lists PR-triggered runs only and returned zero for the head; it does not establish whether push-triggered `FIN CI` succeeded, failed, was cancelled, or is still in progress. Direct network access to GitHub REST API from the isolated execution runtime was unavailable. Do not use a missing connector result as a success or failure signal.
+
+The unified `FIN CI / acceptance-gate` now requires `desktop-macos` on **both** push and PR events, and creates a GitHub job summary showing the workflow SHA, PR head/push SHA, and three prerequisite job statuses. As usual, PR event's `GITHUB_SHA` may be a synthetic merge SHA; the summary exposes both identities. For the strictly same *source* SHA acceptance, use the push run on `feat/fin-r0-r1a` and record exact SHA, run ID, job conclusions, plus artifacts.
+
+**Manual verification path:** [FIN CI runs](https://github.com/alimbetov/fin-analyzer/actions/workflows/ci.yml) → select newest `feat/fin-r0-r1a` **push** run → read `acceptance-gate` job summary and all three prerequisite jobs → download `fin-diagnostic-smoke-matrix` and `fin-backend-golden-and-postgres-evidence`. If any failed, collect exact failing job/step, Maven Surefire XML, Node test output or Playwright trace; never patch a guessed failure.
+
+The machine-readable `FIN_FORM_SMOKE_MATRIX_V2` distinguishes `DOCUMENT` (8) and `EXTERNAL_TAX` (4) as **evidence-only**, prohibiting the inference that these 12 forms have numerical KPI calculators. The other 154 form entries are only *potential* numerical sources; 22 unique forms have a defined JS or Java numerical golden fixture. This is consistent with the rule that documents and reference tax/policy sheets may corroborate accounting conclusions but cannot manufacture business metrics.
+
+**Release state:** `HOLD`. A machine check suite GREEN does not qualify financial recommendations or substitute for independent S2 and trusted React/PostgreSQL/Keycloak E2E.
