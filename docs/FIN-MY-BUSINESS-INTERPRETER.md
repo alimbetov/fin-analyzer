@@ -43,6 +43,12 @@ Canonical Facts + Context/Period/Source
 
 Кейсы: MB-01 динамика продаж; MB-02 маржа; MB-03 profit vs cash; MB-04 AR/AP aging; MB-05 SKU contribution; MB-06 маркетинг с attribution caveat; MB-07 inventory turnover; MB-08 unit manufacturing cost; MB-09 workforce; MB-10 data coverage and missingness. Каждый — golden tests и negative scenarios.
 
+### 3.1. FIN Business Health: ИП и малый бизнес
+
+Нормативный пользовательский путь S1: [FIN Business Health](FIN-BUSINESS-HEALTH.md). Express → Full → Continuous (поэтапно), отраслевые вопросы без бухгалтерского жаргона, отдельно наблюдения/гипотезы/недостающие доказательства, корректирующий план и симулятор без записи в actuals.
+
+Все показатели используют [общий словарь FIN Indicator Dictionary ru/kk/en](FIN-INDICATOR-DICTIONARY-RU-KK-EN.md): 27 стабильных кодов, единые формулы и входные факты, три перевода **что считает / как считает / что показывает**. Показатели без достаточных данных не демонстрируются как достоверные; отраслевые оценки не имеют вымышленных порогов. Справочник и Business Health — требования, не готовый UI.
+
 ## 4. Связь с проектами и публикацией отчётности
 
 «Создать стратегический проект из проблемы бизнеса» → сохраняется версия \`BusinessActualSnapshot\` → новый \`EconomicProject\` ссылочно использует факты, но **forecast не пишет в actuals**. Для публичного отчёта нужен **отдельный report disclosure wizard**: [публикация отчётов](FIN-FINANCIAL-REPORT-PUBLICATION.md); нет автоматического раскрытия private facts.

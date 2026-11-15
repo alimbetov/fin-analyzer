@@ -1,0 +1,413 @@
+[
+  {
+    "formCode": "SF-G01",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-G01-demo-shop-2026-01",
+    "revisionId": "approved-SF-G01-2026-01",
+    "approved": true,
+    "values": {
+      "netRevenue": "100",
+      "cogs": "90",
+      "soldQty": "10"
+    }
+  },
+  {
+    "formCode": "SF-G01",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-G01-demo-shop-2026-02",
+    "revisionId": "approved-SF-G01-2026-02",
+    "approved": true,
+    "values": {
+      "netRevenue": "900",
+      "cogs": "450",
+      "soldQty": "90"
+    }
+  },
+  {
+    "formCode": "SF-G01",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-G01-demo-shop-2026-03",
+    "revisionId": "approved-SF-G01-2026-03",
+    "approved": true,
+    "values": {
+      "netRevenue": "0",
+      "cogs": "0",
+      "soldQty": "0"
+    }
+  },
+  {
+    "formCode": "SF-G02",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-G02-demo-shop-2026-01",
+    "revisionId": "approved-SF-G02-2026-01",
+    "approved": true,
+    "values": {
+      "periodCogs": "100",
+      "avgStockValue": "50"
+    }
+  },
+  {
+    "formCode": "SF-G02",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-G02-demo-shop-2026-02",
+    "revisionId": "approved-SF-G02-2026-02",
+    "approved": true,
+    "values": {
+      "periodCogs": "200",
+      "avgStockValue": "100"
+    }
+  },
+  {
+    "formCode": "SF-G02",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-G02-demo-shop-2026-03",
+    "revisionId": "approved-SF-G02-2026-03",
+    "approved": true,
+    "values": {
+      "periodCogs": "300",
+      "avgStockValue": "150"
+    }
+  },
+  {
+    "formCode": "SF-G03",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-G03-demo-shop-2026-01",
+    "revisionId": "approved-SF-G03-2026-01",
+    "approved": true,
+    "values": {
+      "purchasePrice": "12",
+      "receivedQty": "10",
+      "freight": "20"
+    }
+  },
+  {
+    "formCode": "SF-G03",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-G03-demo-shop-2026-02",
+    "revisionId": "approved-SF-G03-2026-02",
+    "approved": true,
+    "values": {
+      "purchasePrice": "10",
+      "receivedQty": "90",
+      "freight": "0"
+    }
+  },
+  {
+    "formCode": "SF-G03",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-G03-demo-shop-2026-03",
+    "revisionId": "approved-SF-G03-2026-03",
+    "approved": true,
+    "values": {
+      "purchasePrice": "0",
+      "receivedQty": "0",
+      "freight": "0"
+    }
+  },
+  {
+    "formCode": "SF-M01",
+    "businessId": "demo-consult",
+    "dimensionId": "team-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-M01-demo-consult-2026-01",
+    "revisionId": "approved-SF-M01-2026-01",
+    "approved": true,
+    "values": {
+      "billableHours": "60",
+      "availableHours": "100"
+    }
+  },
+  {
+    "formCode": "SF-M01",
+    "businessId": "demo-consult",
+    "dimensionId": "team-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-M01-demo-consult-2026-02",
+    "revisionId": "approved-SF-M01-2026-02",
+    "approved": true,
+    "values": {
+      "billableHours": "180",
+      "availableHours": "300"
+    }
+  },
+  {
+    "formCode": "SF-M01",
+    "businessId": "demo-consult",
+    "dimensionId": "team-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-M01-demo-consult-2026-03",
+    "revisionId": "approved-SF-M01-2026-03",
+    "approved": true,
+    "values": {
+      "billableHours": "0",
+      "availableHours": "100"
+    }
+  },
+  {
+    "formCode": "SF-M02",
+    "businessId": "demo-consult",
+    "dimensionId": "eng-1",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-M02-demo-consult-2026-01",
+    "revisionId": "approved-SF-M02-2026-01",
+    "approved": true,
+    "values": {
+      "recognizedFee": "1000",
+      "directHours": "10",
+      "hourCost": "20",
+      "otherCost": "100"
+    }
+  },
+  {
+    "formCode": "SF-M02",
+    "businessId": "demo-consult",
+    "dimensionId": "eng-1",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-M02-demo-consult-2026-02",
+    "revisionId": "approved-SF-M02-2026-02",
+    "approved": true,
+    "values": {
+      "recognizedFee": "1500",
+      "directHours": "15",
+      "hourCost": "30",
+      "otherCost": "200"
+    }
+  },
+  {
+    "formCode": "SF-M02",
+    "businessId": "demo-consult",
+    "dimensionId": "eng-1",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-M02-demo-consult-2026-03",
+    "revisionId": "approved-SF-M02-2026-03",
+    "approved": true,
+    "values": {
+      "recognizedFee": "0",
+      "directHours": "0",
+      "hourCost": "30",
+      "otherCost": "0"
+    }
+  },
+  {
+    "formCode": "SF-S01",
+    "businessId": "demo-salon",
+    "dimensionId": "service-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-S01-demo-salon-2026-01",
+    "revisionId": "approved-SF-S01-2026-01",
+    "approved": true,
+    "values": {
+      "netRevenue": "1000",
+      "directLaborCost": "200",
+      "materialsCost": "300",
+      "completedJobs": "10"
+    }
+  },
+  {
+    "formCode": "SF-S01",
+    "businessId": "demo-salon",
+    "dimensionId": "service-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-S01-demo-salon-2026-02",
+    "revisionId": "approved-SF-S01-2026-02",
+    "approved": true,
+    "values": {
+      "netRevenue": "1500",
+      "directLaborCost": "400",
+      "materialsCost": "350",
+      "completedJobs": "15"
+    }
+  },
+  {
+    "formCode": "SF-S01",
+    "businessId": "demo-salon",
+    "dimensionId": "service-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-S01-demo-salon-2026-03",
+    "revisionId": "approved-SF-S01-2026-03",
+    "approved": true,
+    "values": {
+      "netRevenue": "0",
+      "directLaborCost": "0",
+      "materialsCost": "0",
+      "completedJobs": "0"
+    }
+  },
+  {
+    "formCode": "SF-C01",
+    "businessId": "demo-factory",
+    "dimensionId": "line-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-C01-demo-factory-2026-01",
+    "revisionId": "approved-SF-C01-2026-01",
+    "approved": true,
+    "values": {
+      "unitsStarted": "100",
+      "goodUnits": "90",
+      "reworkedUnits": "5",
+      "wasteUnits": "5"
+    }
+  },
+  {
+    "formCode": "SF-C01",
+    "businessId": "demo-factory",
+    "dimensionId": "line-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-C01-demo-factory-2026-02",
+    "revisionId": "approved-SF-C01-2026-02",
+    "approved": true,
+    "values": {
+      "unitsStarted": "900",
+      "goodUnits": "450",
+      "reworkedUnits": "30",
+      "wasteUnits": "420"
+    }
+  },
+  {
+    "formCode": "SF-C01",
+    "businessId": "demo-factory",
+    "dimensionId": "line-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-C01-demo-factory-2026-03",
+    "revisionId": "approved-SF-C01-2026-03",
+    "approved": true,
+    "values": {
+      "unitsStarted": "0",
+      "goodUnits": "0",
+      "reworkedUnits": "0",
+      "wasteUnits": "0"
+    }
+  },
+  {
+    "formCode": "SF-C02",
+    "businessId": "demo-factory",
+    "dimensionId": "product-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-C02-demo-factory-2026-01",
+    "revisionId": "approved-SF-C02-2026-01",
+    "approved": true,
+    "values": {
+      "materialUsed": "900",
+      "directLabor": "100",
+      "overhead": "100",
+      "goodUnits": "90"
+    }
+  },
+  {
+    "formCode": "SF-C02",
+    "businessId": "demo-factory",
+    "dimensionId": "product-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-C02-demo-factory-2026-02",
+    "revisionId": "approved-SF-C02-2026-02",
+    "approved": true,
+    "values": {
+      "materialUsed": "4500",
+      "directLabor": "500",
+      "overhead": "0",
+      "goodUnits": "450"
+    }
+  },
+  {
+    "formCode": "SF-C02",
+    "businessId": "demo-factory",
+    "dimensionId": "product-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-C02-demo-factory-2026-03",
+    "revisionId": "approved-SF-C02-2026-03",
+    "approved": true,
+    "values": {
+      "materialUsed": "0",
+      "directLabor": "0",
+      "overhead": "0",
+      "goodUnits": "0"
+    }
+  },
+  {
+    "formCode": "SF-C03",
+    "businessId": "demo-factory",
+    "dimensionId": "machine-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "SF-C03-demo-factory-2026-01",
+    "revisionId": "approved-SF-C03-2026-01",
+    "approved": true,
+    "values": {
+      "runHours": "80",
+      "plannedHours": "100",
+      "downtimeHours": "20"
+    }
+  },
+  {
+    "formCode": "SF-C03",
+    "businessId": "demo-factory",
+    "dimensionId": "machine-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "SF-C03-demo-factory-2026-02",
+    "revisionId": "approved-SF-C03-2026-02",
+    "approved": true,
+    "values": {
+      "runHours": "180",
+      "plannedHours": "300",
+      "downtimeHours": "120"
+    }
+  },
+  {
+    "formCode": "SF-C03",
+    "businessId": "demo-factory",
+    "dimensionId": "machine-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "SF-C03-demo-factory-2026-03",
+    "revisionId": "approved-SF-C03-2026-03",
+    "approved": true,
+    "values": {
+      "runHours": "0",
+      "plannedHours": "0",
+      "downtimeHours": "0"
+    }
+  }
+]

@@ -1,0 +1,77 @@
+[
+  {
+    "formCode": "SF-G01",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "g01-jan",
+    "revisionId": "approved-01",
+    "approved": true,
+    "values": {
+      "netRevenue": "100",
+      "cogs": "90",
+      "soldQty": "10"
+    }
+  },
+  {
+    "formCode": "SF-G01",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-02",
+    "sourceId": "g01-feb",
+    "revisionId": "approved-02",
+    "approved": true,
+    "values": {
+      "netRevenue": "900",
+      "cogs": "450",
+      "soldQty": "90"
+    }
+  },
+  {
+    "formCode": "SF-G01",
+    "businessId": "demo-shop",
+    "dimensionId": "sku-a",
+    "currency": "KZT",
+    "period": "2026-03",
+    "sourceId": "g01-mar",
+    "revisionId": "approved-03",
+    "approved": true,
+    "values": {
+      "netRevenue": "0",
+      "cogs": "0",
+      "soldQty": "0"
+    }
+  },
+  {
+    "formCode": "SF-M01",
+    "businessId": "demo-consult",
+    "dimensionId": "team-a",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "m01-jan",
+    "revisionId": "approved-01",
+    "approved": true,
+    "values": {
+      "billableHours": "60",
+      "availableHours": "100"
+    }
+  },
+  {
+    "formCode": "SF-C01",
+    "businessId": "demo-factory",
+    "dimensionId": "line-1",
+    "currency": "KZT",
+    "period": "2026-01",
+    "sourceId": "c01-jan",
+    "revisionId": "approved-01",
+    "approved": true,
+    "values": {
+      "unitsStarted": "100",
+      "goodUnits": "90",
+      "reworkedUnits": "5",
+      "wasteUnits": "5"
+    }
+  }
+]
