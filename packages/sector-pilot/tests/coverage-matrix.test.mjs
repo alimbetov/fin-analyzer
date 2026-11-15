@@ -15,6 +15,15 @@ test('every one of 166 registered tables and 30 extension sheets has an honest s
   assert.equal(payload.javaSourceFormsInGoldenTests,16);
   assert.equal(payload.javaExtensionSheetsInGoldenTests,10);
   assert.equal(payload.fullFiveQuestionMethodologyAccepted,0);
+  const documents=payload.forms.filter(x=>x.formKind==='DOCUMENT');
+  const external=payload.forms.filter(x=>x.formKind==='EXTERNAL_TAX');
+  assert.equal(documents.length,8);
+  assert.equal(external.length,4);
+  assert.ok(documents.every(x=>x.evidenceRole==='EVIDENCE_ONLY_NO_NUMERIC_KPI'
+    && x.javaScenarioMethods.length===0 && x.sectorSmokeStatus==='NOT_EXECUTABLE_IN_SECTOR_KERNEL'));
+  assert.ok(external.every(x=>x.evidenceRole==='EXTERNAL_POLICY_EVIDENCE_NO_NUMERIC_KPI'
+    && x.javaScenarioMethods.length===0 && x.sectorSmokeStatus==='NOT_EXECUTABLE_IN_SECTOR_KERNEL'));
+  assert.equal(payload.forms.filter(x=>x.evidenceRole==='POTENTIAL_STRUCTURED_NUMERIC_INPUT').length,154);
   assert.equal(payload.forms.filter(x=>x.sectorSmokeStatus==='EXECUTED_SYNTHETIC_ONLY').length,9);
   assert.equal(payload.forms.filter(x=>x.sectorSmokeStatus==='NOT_EXECUTABLE_IN_SECTOR_KERNEL').length,157);
   assert.ok(payload.forms.filter(x=>x.sectorSmokeStatus==='NOT_EXECUTABLE_IN_SECTOR_KERNEL')
