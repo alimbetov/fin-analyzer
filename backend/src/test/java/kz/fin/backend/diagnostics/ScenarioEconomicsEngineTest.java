@@ -377,6 +377,6 @@ class ScenarioEconomicsEngineTest {
                 row("SF-C02","EX-MFG-04","BATCH","resource",P,n("standardQty","1",
                         "actualQty","2","standardRate","10","actualRate","12")));
         assertEquals("SYNTHETIC_PILOT_UNQUALIFIED",r.qualification());
-        assertEquals(METHOD_VERSION,r.methodVersion());
+        assertEquals(ScenarioEconomicsEngine.METHOD_VERSION,r.methodVersion());
     }
 }
