@@ -3,9 +3,10 @@ import {
   type ApprovedRevision, type BalanceValues, type FinProject, type MetricCode
 } from "./financial";
 import { canApprove, validateBalance } from "./validation";
+import { readSectorState, type SectorState } from "../sector/state";
 
-export function createProject(company: string, draft: BalanceValues, revisions: ApprovedRevision[]): FinProject {
-  return { schemaVersion: PROJECT_SCHEMA, company, draft, revisions };
+export function createProject(company: string, draft: BalanceValues, revisions: ApprovedRevision[], sector?: SectorState): FinProject {
+  return { schemaVersion: PROJECT_SCHEMA, company, draft, revisions, ...(sector ? { sector } : {}) };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,5 +47,6 @@ export function readProject(text: string): FinProject {
       formVersion: FORM_VERSION, values: rev.values
     });
   }
-  return createProject(value.company, value.draft, revisions);
+  const sector = value.sector === undefined ? undefined : readSectorState(value.sector);
+  return createProject(value.company, value.draft, revisions, sector);
 }
