@@ -1,6 +1,6 @@
 # FIN Analyzer — перспективность продукта, роли, сквозные сценарии и архитектурные границы
 
-**Версия:** FIN-ROLE-SCENARIOS v1.0, 2026-11-15  
+**Версия:** FIN-ROLE-SCENARIOS v1.1, 2026-11-15  
 **Статус:** PRODUCT REQUIREMENTS / PROPOSED / NOT IMPLEMENTED  
 **Главное ТЗ:** [FIN-ANALYZER-PROJECT-TZ.md](FIN-ANALYZER-PROJECT-TZ.md)  
 **Экономические направления:** [ECONOMIC-DIRECTIONS.md](ECONOMIC-DIRECTIONS.md)  
@@ -39,7 +39,7 @@ FIN Analyzer должен превращать бизнес-вопрос в пр
 | P1 / Trust & Packaging | sector/country methodology coverage, evidence register, share-safe teaser, investor/bank data package, versioned valuation | усиливают качество и применимость результатов |
 | P2 / Collaborative Finance | organization accounts, RBAC/ABAC, Connect discovery, invitations, Deal Room, bank/lender workspace, advisor collaboration, project monitoring | требуют backend, безопасности, нескольких сторон и реального спроса |
 | P3 / Network & Governance | recommendation/matching, portfolio analytics, grant programs, cross-border onboarding, open ecosystem | высокая стоимость данных, интеграций и комплаенса |
-| HOLD / Regulated | matching/execution constituting regulated investment/crowdfunding intermediation, holding funds, trading, automatic lending decisions | до отдельного юридического и технического разрешения запрещено |
+| OUT OF SCOPE | платежи, хранение средств, биржевые торги, исполнение сделок, автоматическая выдача кредитов; регулируемые формы посредничества не входят в FIN | исключены из roadmap; до hosted публикации — юридическая оценка предлагаемых информационных действий в каждой стране |
 
 Первоначальный продукт — **single-player utility** (пользователь получает пользу даже без инвесторов и банков). Только затем multi-party network; иначе marketplace столкнётся с отсутствием проверенных проектов и активных контрагентов.
 
@@ -261,6 +261,8 @@ Company A с country-specific IFRS/GAAP context, country B/филиал с local
 
 **Hosted identity**: organization-specific RBAC + resource ABAC (ownerOrg, projectId, documentId, sensitivity, recipientOrg, action, expiry, status), explicit ACL scopes, signed invitations, revocation, access audit and non-disclosure of sensitive fields. Avoid mixing requester and provider roles with one global role claim. Authentication/identity and KYC requirements must be validated for the particular legally allowed service.
 
+**Official product boundary:** [FIN Project Marketplace ADR-007](ADR-007-FIN-PROJECT-MARKETPLACE.md) — information, project discovery, communication and controlled document access only; financial transactions are outside FIN.
+
 **Core offline**: no implementation of cross-user authorization. Users can export data; once recipient downloads a file it cannot be remotely revoked. Do not promise enforceable no-forwarding or deletion of recipient copies.
 
 ## 7. What is required for a real international platform
@@ -380,7 +382,7 @@ Each test must have executable fixture/data, test code, CI run URL/commit SHA an
 
 ## 12. Explicit non-goals of first release
 
-Not in initial MVP: operating a public hosted marketplace, conducting deals/transfers/custody, issuing bank credit decisions, approving regulatory eligibility, verifying investor net worth, universal country tax rules, universal bank integrations, all industry models, external real-time market research or voice/OCR processing of financial data without human review.
+Not in initial MVP: operating a public hosted project marketplace, bank credit decisions, regulatory eligibility approvals, universal country tax rules, universal bank integrations, all industry models, external real-time research or unreviewed voice/OCR. **Not part of FIN at any planned stage:** processing payments, holding/transferring funds, exchange trading, custody, securities settlement and execution of investment/credit agreements.
 
 ## 13. Implementation traceability
 
