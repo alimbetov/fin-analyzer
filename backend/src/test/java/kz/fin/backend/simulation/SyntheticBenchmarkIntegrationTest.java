@@ -79,11 +79,11 @@ class SyntheticBenchmarkIntegrationTest {
             var reader=new BufferedReader(new InputStreamReader(stream,StandardCharsets.UTF_8))){
             List<String[]> all=new ArrayList<>();
             String row=reader.readLine();
-            assertNotNull(row,filename);
+            assertNotNull(row,path);
             while((row=reader.readLine())!=null){
                 if(row.isBlank())continue;
                 String[] fields=row.split("\\t",-1);
-                assertEquals(columns,fields.length,filename+": "+row);
+                assertEquals(columns,fields.length,path+": "+row);
                 all.add(fields);
             }
             return List.copyOf(all);
