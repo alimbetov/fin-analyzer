@@ -136,6 +136,8 @@ class ScenarioFiveQuestionEngineTest {
             assertEquals(GateState.NOT_ASSESSED,result.seriousness().state());
             assertEquals(GateState.REVIEW_REQUIRED,result.action().state());
             assertEquals(GateState.SIMULATED_ONLY,result.effect().state());
+            assertFalse(result.assumptions().isEmpty(),"missing scenario assumptions: "+test.name());
+            assertTrue(result.assumptions().values().stream().allMatch(x->x.contains(" -> ")));
             assertTrue(result.humanApprovalRequired());
             assertFalse(result.reviewAction().isBlank());
             assertEquals(0,new BigDecimal(test.initial()).compareTo(
