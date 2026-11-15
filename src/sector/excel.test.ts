@@ -14,7 +14,7 @@ async function workbook() {
 }
 async function asBuffer(book:ExcelJS.Workbook):Promise<ArrayBuffer> {
   const bytes=await book.xlsx.writeBuffer();
-  return Uint8Array.from(new Uint8Array(bytes as ArrayBuffer)).buffer;
+  return Uint8Array.from(new Uint8Array(bytes as ArrayBuffer)).buffer as ArrayBuffer;
 }
 describe("IND-R1 controlled sector XLSX", () => {
   it("round-trips typed inputs without auto-approval", async () => {
@@ -29,7 +29,7 @@ describe("IND-R1 controlled sector XLSX", () => {
   });
   it("rejects cross-company, cross-period, tampered codes and formulas",async()=>{
     const book=await workbook();
-    expect(parseSectorTemplate(await asBuffer(book),{...context,period:"2026-10"})).rejects.toThrow(/METADATA_MISMATCH/);
+    await expect(parseSectorTemplate(await asBuffer(book),{...context,period:"2026-10"})).rejects.toThrow(/METADATA_MISMATCH/);
     book.getWorksheet("Sector")!.getCell("A5").value="other";
     await expect(parseSectorTemplate(await asBuffer(book),context)).rejects.toThrow(/FIELD_CHANGED/);
     book.getWorksheet("Sector")!.getCell("A5").value="netRevenue";
