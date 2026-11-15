@@ -89,7 +89,9 @@ jobs:
             kz.fin.backend.diagnostics.ExtensionSheetContractSmokeTest \
             kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest \
             kz.fin.backend.persistence.PostgresInvariantTest \
-            kz.fin.backend.persistence.FactPublicationIntegrationTest; do
+            kz.fin.backend.persistence.FactPublicationIntegrationTest \
+            kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest \
+            kz.fin.backend.diagnostics.R4ProofAndDecisionTest; do
             file="$reports/TEST-$klass.xml"
             test -s "$file" || { echo "::error::Missing mandatory JUnit report $file"; exit 1; }
           done
@@ -102,6 +104,8 @@ jobs:
               "kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest",
               "kz.fin.backend.persistence.PostgresInvariantTest",
               "kz.fin.backend.persistence.FactPublicationIntegrationTest",
+              "kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest",
+              "kz.fin.backend.diagnostics.R4ProofAndDecisionTest",
           ]
           for classname in classes:
               report = Path("backend/target/surefire-reports") / f"TEST-{classname}.xml"
