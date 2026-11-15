@@ -71,3 +71,27 @@ production WIP, resource estimates, EVM, dated FCFF NPV and pilot DSCR.
 contracts and never asks to fill DERIVED formulas manually. These classes
 have **no trusted form approval, Keycloak/ABAC, real ACTUAL capability or
 React client integration**.
+
+## FIN-DIAG-SMOKE-R2 synthetic qualification (NOT production)
+
+- `ScenarioFiveQuestionEngine` answers five diagnostic gates over the existing
+  `ScenarioEconomicsEngine` (only `SYNTHETIC` data). It exposes row-level
+  sources, rule reason, explicit severity-not-assessed, human-review action,
+  and conditional arithmetic before/after with changed assumptions.
+- `ScenarioFiveQuestionEngineTest` contains 14 golden financial-method
+  scenarios, including F01/F02/F03, cash movement, plan/fact, manufacturing,
+  construction EVM and dated NPV. Every method is cross-checked against
+  `src/test/resources/simulation/scenario-five-question-coverage.tsv`.
+- `ExtensionSheetContractSmokeTest` checks every one of 30 EX sheet entries
+  for its registered parent, unknown fields, and untrusted/ACTUAL boundaries.
+  Only 8 EX sheets occur in the 14 numerical golden cases; other 22 have
+  no qualified numerical diagnostics.
+- Run `mvn -B -ntp -f backend/pom.xml verify` and inspect the attached CI
+  `fin-java-five-question-smoke` artifact and exact commit SHA. Existing
+  PostgreSQL Testcontainers require a usable Docker runtime.
+- No approved real-world formulas, causal attribution, severity thresholds,
+  authenticated company access or end-to-end React/PostgreSQL proof is claimed.
+  **Status: DRAFT/HOLD**, pending single-SHA CI, independent S2 finance review,
+  Keycloak/ABAC, trusted source mapping and manual desktop acceptance.
+
+See `docs/FIN-DIAGNOSTIC-SMOKE-MATRIX-R2.md`.
