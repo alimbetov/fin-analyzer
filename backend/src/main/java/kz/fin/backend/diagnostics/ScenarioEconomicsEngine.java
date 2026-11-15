@@ -36,7 +36,8 @@ public final class ScenarioEconomicsEngine {
         ANNUAL_REVENUE_TREND, BUDGET_ACTUAL_VARIANCE, WIP_ROLLFORWARD,
         UNIT_PRODUCTION_COST, STANDARD_ACTUAL_VARIANCE, BOQ_RESOURCE_COST,
         CONSTRUCTION_EVM, DATED_PROJECT_NPV, TRADE_GROSS_MARGIN, STOCK_TURNOVER,
-        DSCR_PILOT, SECTOR_METHOD_QUALIFICATION
+        DSCR_PILOT, WEEKLY_CASH_FORECAST_ROLLFORWARD, OVERHEAD_ABSORPTION_VARIANCE,
+        SECTOR_METHOD_QUALIFICATION
     }
 
     public record Scope(UUID organizationId,UUID entityId,UUID businessScopeId,
@@ -184,8 +185,9 @@ public final class ScenarioEconomicsEngine {
                     Map.of(),List.of(),List.of()));
             case "SC-LLC-FINANCE" -> {balance(rows,findings); cashFlow(rows,findings);}
             case "SC-HISTORY-3Y5Y" -> annualHistory(rows,findings);
-            case "SC-BUDGET-FPA" -> budget(rows,findings);
-            case "SC-MFG-ECONOMY" -> {wip(rows,findings); productionCost(rows,findings); standards(rows,findings);}
+            case "SC-BUDGET-FPA" -> {budget(rows,findings); weeklyCashForecast(rows,findings);}
+            case "SC-MFG-ECONOMY" -> {wip(rows,findings); productionCost(rows,findings); standards(rows,findings);
+                overheadAbsorption(rows,findings);}
             case "SC-CONSTRUCTION-ESTIMATE" -> {boq(rows,findings); earnedValue(rows,findings);}
             case "SC-INVESTMENT-APPRAISAL" -> datedProjectNpv(rows,findings);
             default -> throw new IllegalArgumentException("SCENARIO_METHOD_NOT_IMPLEMENTED");
@@ -531,6 +533,89 @@ public final class ScenarioEconomicsEngine {
             add(out,Method.DSCR_PILOT,Verdict.REVIEW,
                     "DSCR_DEFINITION_REQUIRES_LENDER_POLICY",r.itemKey(),
                     Map.of("dscr",result),r);
+        }
+    }
+
+
+    /** 13 consecutive Monday-based forecast weeks, exactly one synthetic scenario. */
+    private static void weeklyCashForecast(List<InputRow> rows,List<Finding> out) {
+        var weeks=approved(rows,"EX-BUD-06");
+        if(weeks.size()!=13) {
+            missing(out,Method.WEEKLY_CASH_FORECAST_ROLLFORWARD,
+                    "EX-BUD-06:13_APPROVED_CONSECUTIVE_WEEKS","FORECAST");return;
+        }
+        List<InputRow> ordered=weeks.stream()
+                .sorted(Comparator.comparing(r->r.eventDate()==null?LocalDate.MIN:r.eventDate())).toList();
+        String scope=ordered.getFirst().itemKey();
+        for(int i=0;i<ordered.size();i++) {
+            InputRow row=ordered.get(i);
+            if(row.eventDate()==null || row.eventDate().getDayOfWeek()!=java.time.DayOfWeek.MONDAY
+                    || !row.itemKey().equals(scope)
+                    || !has(row,"openingCash","inflow","outflow","restrictedCash","closingCash")
+                    || (i>0 && !row.eventDate().equals(ordered.get(i-1).eventDate().plusWeeks(1)))) {
+                missing(out,Method.WEEKLY_CASH_FORECAST_ROLLFORWARD,
+                        "EX-BUD-06:ALIGNED_MONDAY_WEEK_STARTS_AND_CASH_FIELDS",scope);return;
+            }
+            if(v(row,"inflow").signum()<0 || v(row,"outflow").signum()<0
+                    || v(row,"restrictedCash").signum()<0)
+                throw new IllegalArgumentException("INVALID_13W_NONNEGATIVE_FLOW_OR_RESTRICTED");
+        }
+        BigDecimal totalMismatch=BigDecimal.ZERO;
+        BigDecimal lowestAvailable=null;
+        for(int i=0;i<ordered.size();i++) {
+            InputRow row=ordered.get(i);
+            BigDecimal expected=v(row,"openingCash").add(v(row,"inflow"))
+                    .subtract(v(row,"outflow"));
+            totalMismatch=totalMismatch.add(v(row,"closingCash").subtract(expected).abs());
+            if(i>0) totalMismatch=totalMismatch.add(
+                    v(row,"openingCash").subtract(v(ordered.get(i-1),"closingCash")).abs());
+            BigDecimal available=v(row,"closingCash").subtract(v(row,"restrictedCash"));
+            lowestAvailable=lowestAvailable==null?available:lowestAvailable.min(available);
+        }
+        List<SourceRef> evidence=ordered.stream().map(ScenarioEconomicsEngine::ref).toList();
+        if(totalMismatch.signum()!=0) {
+            out.add(new Finding(Method.WEEKLY_CASH_FORECAST_ROLLFORWARD,Verdict.OBSERVATION,
+                    "FORECAST_ROLLFORWARD_OR_CONTINUITY_MISMATCH",scope,
+                    Map.of("reconciliationAbsoluteDifference",
+                            totalMismatch.stripTrailingZeros().toPlainString()),
+                    List.of(),evidence));
+        }else {
+            BigDecimal initial=v(ordered.getFirst(),"openingCash");
+            BigDecimal closing=v(ordered.getLast(),"closingCash");
+            out.add(new Finding(Method.WEEKLY_CASH_FORECAST_ROLLFORWARD,Verdict.REVIEW,
+                    "SYNTHETIC_FORECAST_NOT_REALIZED_CASH",scope,
+                    Map.of("closingCashForecast",closing.stripTrailingZeros().toPlainString(),
+                            "forecastNetMovement",closing.subtract(initial).stripTrailingZeros().toPlainString(),
+                            "minimumUnrestrictedCash",lowestAvailable.stripTrailingZeros().toPlainString()),
+                    List.of(),evidence));
+        }
+    }
+
+    /** Explicit allocation difference, without inferring accounting treatment. */
+    private static void overheadAbsorption(List<InputRow> rows,List<Finding> out) {
+        var entries=approved(rows,"EX-MFG-06");
+        if(entries.isEmpty()) {
+            missing(out,Method.OVERHEAD_ABSORPTION_VARIANCE,"EX-MFG-06","COST_POOL");return;
+        }
+        for(InputRow row:entries) {
+            if(!has(row,"actualOverhead","absorbedOverhead","capacityBase")) {
+                missing(out,Method.OVERHEAD_ABSORPTION_VARIANCE,
+                        "EX-MFG-06:ACTUAL_ABSORBED_CAPACITY",row.itemKey());continue;
+            }
+            BigDecimal actual=v(row,"actualOverhead"),absorbed=v(row,"absorbedOverhead"),
+                    capacity=v(row,"capacityBase");
+            if(actual.signum()<0 || absorbed.signum()<0 || capacity.signum()<0)
+                throw new IllegalArgumentException("NEGATIVE_OVERHEAD_OR_CAPACITY");
+            BigDecimal delta=actual.subtract(absorbed);
+            Map<String,BigDecimal> result=new TreeMap<>();
+            result.put("overheadAbsorptionDifference",delta);
+            if(capacity.signum()>0)
+                result.put("absorbedOverheadPerCapacityUnit",ratio(absorbed,capacity));
+            add(out,Method.OVERHEAD_ABSORPTION_VARIANCE,
+                    delta.signum()!=0?Verdict.OBSERVATION:Verdict.REVIEW,
+                    delta.signum()>0?"OVERHEAD_UNDERABSORBED"
+                            :delta.signum()<0?"OVERHEAD_OVERABSORBED":"OVERHEAD_RECONCILED",
+                    row.itemKey(),result,row);
         }
     }
 
