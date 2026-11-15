@@ -310,7 +310,7 @@ public final class ScenarioEconomicsEngine {
                         "yearAgoRevenue",before,"currentRevenue",last),old,prior,recent);
     }
     private static void budget(List<InputRow> rows,List<Finding> out){
-        var budget=approved(rows,"EX-BUD-02"),actual=approved(rows,"C09");
+        List<InputRow> budget=approved(rows,"EX-BUD-02"), actual=approved(rows,"C09");
         if(budget.isEmpty()||actual.isEmpty()){
             missing(out,Method.BUDGET_ACTUAL_VARIANCE,
                     budget.isEmpty()?"EX-BUD-02":"C09","BUSINESS");return;
@@ -400,7 +400,7 @@ public final class ScenarioEconomicsEngine {
         }
     }
     private static void boq(List<InputRow> rows,List<Finding> out){
-        var quantities=approved(rows,"EX-CST-01"),rates=approved(rows,"EX-CST-02");
+        List<InputRow> quantities=approved(rows,"EX-CST-01"), rates=approved(rows,"EX-CST-02");
         if(quantities.isEmpty() || rates.isEmpty()){
             missing(out,Method.BOQ_RESOURCE_COST,
                     quantities.isEmpty()?"EX-CST-01":"EX-CST-02","BOQ");return;
@@ -524,7 +524,7 @@ public final class ScenarioEconomicsEngine {
     }
 
     private static void datedProjectNpv(List<InputRow> rows,List<Finding> out){
-        var flows=approved(rows,"EX-INV-01"),policies=approved(rows,"EX-INV-02");
+        List<InputRow> flows=approved(rows,"EX-INV-01"), policies=approved(rows,"EX-INV-02");
         if(flows.isEmpty() || policies.size()!=1){
             missing(out,Method.DATED_PROJECT_NPV,
                     flows.isEmpty()?"EX-INV-01":"EX-INV-02:ONE_DISCOUNT_POLICY","PROJECT");return;
