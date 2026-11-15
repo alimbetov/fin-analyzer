@@ -47,9 +47,12 @@ export interface ApprovedRevision {
   values: BalanceValues;
 }
 
+import type { SectorState } from "../sector/state";
+
 export interface FinProject {
   schemaVersion: typeof PROJECT_SCHEMA;
   company: string;
   draft: BalanceValues;
   revisions: ApprovedRevision[];
+  sector?: SectorState;
 }
