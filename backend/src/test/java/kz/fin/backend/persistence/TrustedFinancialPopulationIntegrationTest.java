@@ -43,7 +43,9 @@ class TrustedFinancialPopulationIntegrationTest {
         }
     }
 
-    private Context setup(int count) {
+    private Context setup(int count) { return setup(count,false); }
+
+    private Context setup(int count,boolean mixedCurrency) {
         UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),scope=UUID.randomUUID();
         UUID source=UUID.randomUUID(),revision=UUID.randomUUID();
         jdbc.update("""
@@ -62,10 +64,10 @@ class TrustedFinancialPopulationIntegrationTest {
                     time_kind,start_inclusive,end_exclusive,reporting_basis,unit_code,currency_code,
                     dimension_hash,dimensions,value_state,numeric_value,estimate_method_ref,
                     source_revision_id,recorded_at
-                ) VALUES (?,?,?,?,'REV_NET','1.0.0','INTERVAL',?,?,'MANAGEMENT','MONEY','KZT',
+                ) VALUES (?,?,?,?,'REV_NET','1.0.0','INTERVAL',?,?,'MANAGEMENT','MONEY',?,
                     encode(sha256(convert_to(?::jsonb::text,'UTF8')),'hex'),
                     ?::jsonb,'PRESENT',?,NULL,?,now())
-                """,fact,org,entity,scope,FROM,TO,
+                """,fact,org,entity,scope,FROM,TO,mixedCurrency&&i==1?"USD":"KZT",
                 "{\"sale\":\""+i+"\"}", "{\"sale\":\""+i+"\"}",amount,source);
             jdbc.update("""
                 INSERT INTO fin_fact.fact_origin(
@@ -140,6 +142,14 @@ class TrustedFinancialPopulationIntegrationTest {
         select(c,1);
         assertThrows(IllegalArgumentException.class,
                 ()->population.requireComplete(c.org(),c.revision(),List.of()));
+    }
+
+    @Test void mixedCurrenciesFromOneSourceCannotBecomeAQualifiedMoneyTotal() {
+        var c=setup(2,true);
+        select(c,2);
+        var error=assertThrows(IllegalArgumentException.class,
+                ()->population.requireComplete(c.org(),c.revision(),List.of(c.group())));
+        assertEquals("SOURCE_POPULATION_MIXED_CURRENCIES",error.getMessage());
     }
 
     @Test void registeredSourceControlCannotLieAboutRowCountOrTotal() {
