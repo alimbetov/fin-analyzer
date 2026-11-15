@@ -101,3 +101,26 @@ test('exact decimal rounding, without floating-point drift',()=>{
 test('only nine pilot forms; all other sector metrics NOT IMPLEMENTED',()=>{
   assert.deepEqual([...PILOT_FORMS].sort(),['SF-G01','SF-G02','SF-G03','SF-M01','SF-M02','SF-S01','SF-C01','SF-C02','SF-C03'].sort());
 });
+
+
+test('semiannual and annual aggregations use all monthly facts, no mean-of-ratios shortcut',()=>{
+  const months=Array.from({length:12},(_,i)=>'2026-'+String(i+1).padStart(2,'0'));
+  const trade=months.map(p=>row('SF-G01',p,{netRevenue:'100',cogs:'50',soldQty:'10'}));
+  const services=months.map(p=>row('SF-M01',p,{billableHours:'3',availableHours:'10'}));
+  const factory=months.map(p=>row('SF-C02',p,{materialUsed:'12',directLabor:'6',overhead:'2',goodUnits:'4'}));
+  const results=evaluateSectorForms([...trade,...services,...factory]);
+  assert.equal(val(results,'SF-G01','2026-H1','SKU_GROSS_MARGIN_PCT'),'50.00');
+  assert.equal(val(results,'SF-G01','2026','SKU_GROSS_PROFIT'),'600.00');
+  assert.equal(val(results,'SF-M01','2026','BILLABLE_UTILIZATION_PCT'),'30.00');
+  assert.equal(val(results,'SF-C02','2026','UNIT_MFG_COST'),'5.00');
+  for(const form of ['SF-G01','SF-M01','SF-C02'])
+    assert.equal(pick(results,form,'2026').status,'CALCULATED');
+});
+test('complete quarter with zero denominator differs from incomplete half-year',()=>{
+  const r=evaluateSectorForms(['2026-01','2026-02','2026-03'].map(p=>
+    row('SF-M01',p,{billableHours:'0',availableHours:'0'})));
+  assert.equal(pick(r,'SF-M01','2026-Q1').status,'CALCULATED');
+  assert.equal(pick(r,'SF-M01','2026-Q1').metrics.BILLABLE_UTILIZATION_PCT.reason,'ZERO_DENOMINATOR');
+  assert.equal(pick(r,'SF-M01','2026-H1').status,'INCOMPLETE');
+  assert.equal(pick(r,'SF-M01','2026-H1').metrics.BILLABLE_UTILIZATION_PCT.reason,'MISSING_PERIODS');
+});
