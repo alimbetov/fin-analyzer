@@ -64,6 +64,17 @@ class IndicatorRelationshipRegistryTest {
         assertThrows(IllegalArgumentException.class,
                 ()->IndicatorRelationshipRegistry.parse(catalog.replace("F01\t","F99\t"),original));
     }
+    @Test void anyCatalogFieldContractChangeInvalidatesThePinnedRegistryHash() throws Exception {
+        String catalog=resource("form-compatibility.tsv");
+        String policy=resource("indicator-relationships-v1.tsv");
+        String edited=catalog.replace("C01\tFCP_TD\tSTRUCTURED\tReceivableLedger\tSOURCE_ROW\t",
+                "C01\tFCP_TD\tSTRUCTURED\tReceivableLedger\tAS_OF\t");
+        assertNotEquals(catalog,edited);
+        var previous=IndicatorRelationshipRegistry.parse(catalog,policy);
+        var next=IndicatorRelationshipRegistry.parse(edited,policy);
+        assertNotEquals(previous.definitionHash(),next.definitionHash());
+    }
+
     @Test void graphTerminatesAndDoesNotFabricateRelationshipsForUnqualifiedCatalogForms(){
         var c=new MetricKey("REV_NET",TimeRole.CURRENT_FLOW);
         var cost=new MetricKey("COGS",TimeRole.CURRENT_FLOW);
