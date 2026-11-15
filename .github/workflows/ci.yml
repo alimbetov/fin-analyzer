@@ -95,6 +95,7 @@ jobs:
             kz.fin.backend.diagnostics.R4ProofAndDecisionTest \
             kz.fin.backend.diagnostics.DecisionOutcomeMonitorTest \
             kz.fin.backend.diagnostics.CrossFormDiagnosticEngineTest \
+            kz.fin.backend.diagnostics.CrossFormEvidencePlannerTest \
             kz.fin.backend.persistence.TrustedCrossFormDiagnosticIntegrationTest; do
             file="$reports/TEST-$klass.xml"
             test -s "$file" || { echo "::error::Missing mandatory JUnit report $file"; exit 1; }
@@ -113,6 +114,7 @@ jobs:
               "kz.fin.backend.diagnostics.R4ProofAndDecisionTest",
               "kz.fin.backend.diagnostics.DecisionOutcomeMonitorTest",
               "kz.fin.backend.diagnostics.CrossFormDiagnosticEngineTest",
+              "kz.fin.backend.diagnostics.CrossFormEvidencePlannerTest",
               "kz.fin.backend.persistence.TrustedCrossFormDiagnosticIntegrationTest",
           ]
           for classname in classes:
