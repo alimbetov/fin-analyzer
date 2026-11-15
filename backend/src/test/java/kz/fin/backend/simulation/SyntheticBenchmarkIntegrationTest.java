@@ -70,8 +70,12 @@ class SyntheticBenchmarkIntegrationTest {
     private static List<Expected> oracle;
 
     private static List<String[]> readTsv(String filename,int columns) throws Exception {
+        return readResourceTsv("/simulation/"+filename,columns);
+    }
+
+    private static List<String[]> readResourceTsv(String path,int columns) throws Exception {
         try(var stream=Objects.requireNonNull(SyntheticBenchmarkIntegrationTest.class
-                        .getResourceAsStream("/simulation/"+filename),filename);
+                        .getResourceAsStream(path),path);
             var reader=new BufferedReader(new InputStreamReader(stream,StandardCharsets.UTF_8))){
             List<String[]> all=new ArrayList<>();
             String row=reader.readLine();
@@ -157,6 +161,16 @@ class SyntheticBenchmarkIntegrationTest {
         var coverage=readTsv("form-coverage.tsv",4);
         assertEquals(166,coverage.size());
         assertEquals(166,coverage.stream().map(x->x[0]).distinct().count());
+        var currentCatalog=readResourceTsv("/fin/form-compatibility.tsv",8);
+        var catalogByCode=new HashMap<String,String[]>();
+        for(String[] row:currentCatalog)
+            assertNull(catalogByCode.put(row[0],row),"Duplicate form contract "+row[0]);
+        assertEquals(catalogByCode.keySet(),coverage.stream()
+                .map(x->x[0]).collect(Collectors.toSet()),
+                "Stale synthetic form coverage; must match all live registry form codes");
+        for(String[] row:coverage)
+            assertEquals(catalogByCode.get(row[0])[1],row[1],
+                    "Catalog group drift for "+row[0]);
         var used=points.stream().map(DataPoint::form).collect(Collectors.toSet());
         assertTrue(used.size()>=20);
         assertEquals(used,coverage.stream().filter(x->x[2].equals("SYNTHETIC_AGGREGATE_SAMPLE"))
