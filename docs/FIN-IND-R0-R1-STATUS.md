@@ -48,6 +48,8 @@ npm run test:e2e -- --project=chromium
 | IND-09 | Unified React + backend canonical EconomicFact and Formula AST reconciliation | NOT IMPLEMENTED |
 | IND-10 | Hardened XLSX decompression resource/time sandbox (Worker) | NOT IMPLEMENTED |
 
+**Draft warning:** unapproved sector field edits remain in React memory and are not included in `.fin.json`; changing the selected form/context requires explicit discard confirmation. Browser refresh before approval still loses the draft. Only approved sector revisions are retained.
+
 **Additional limitations:** the pilot accepts nonnegative decimal fields at up to six decimal places and does not support corrections through negative operational inputs, arbitrary 5-digit OKED codes, fractional physical-unit policy changes, audited approval or currency conversion. A business with multiple model variants receives dimension-keyed separate calculations; full consolidated cross-model financial results and shared cost allocations remain out of scope.
 
 ## Next acceptance
