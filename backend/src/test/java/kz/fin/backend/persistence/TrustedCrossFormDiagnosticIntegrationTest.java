@@ -141,6 +141,7 @@ class TrustedCrossFormDiagnosticIntegrationTest {
         var stored=diagnostic.loadPublished(s.org(),first.id());
         assertEquals("CROSS_FORM_PILOT",stored.snapshot().path("ruleSetCode").asText());
         assertEquals(6,stored.snapshot().path("findings").size());
+        assertEquals(0,stored.snapshot().path("nextEvidencePlan").path("nextForms").size());
         assertThrows(IllegalArgumentException.class,
                 ()->diagnostic.loadPublished(UUID.randomUUID(),first.id()));
     }
@@ -157,6 +158,13 @@ class TrustedCrossFormDiagnosticIntegrationTest {
         assertEquals(CrossFormDiagnosticEngine.Verdict.MISSING_EVIDENCE,missing.verdict());
         assertTrue(missing.computed().isEmpty());
         assertTrue(missing.missing().stream().anyMatch(m->m.code().equals("CFO")));
+        var snapshot=diagnostic.assessAndPublish(s.org(),s.revision(),MONTH);
+        var next=diagnostic.loadPublished(s.org(),snapshot.id()).snapshot()
+                .path("nextEvidencePlan").path("nextForms");
+        assertEquals(2,next.size());
+        assertEquals("F03",next.get(0).path("formCode").asText());
+        assertEquals("F01",next.get(1).path("formCode").asText());
+
     }
     @Test void foreignTenantOrUnpublishedRevisionMustNotRevealAnyFinancialEvidence(){
         var s=fixture(true);
