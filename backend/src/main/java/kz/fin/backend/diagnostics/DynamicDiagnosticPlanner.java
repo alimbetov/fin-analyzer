@@ -31,16 +31,8 @@ public final class DynamicDiagnosticPlanner {
             formsWithoutQualifiedCalculations=List.copyOf(formsWithoutQualifiedCalculations);
         }
     }
-    public static final Map<String,List<MetricKey>> PROBLEMS=Map.of(
-        "CASH_SHORTFALL",List.of(new MetricKey("CASH_END",TimeRole.CURRENT_STOCK),
-                                 new MetricKey("CFO",TimeRole.CURRENT_FLOW)),
-        "PROFITABILITY",List.of(new MetricKey("REV_NET",TimeRole.CURRENT_FLOW),
-                                new MetricKey("COGS",TimeRole.CURRENT_FLOW)),
-        "BALANCE_RECONCILIATION",List.of(new MetricKey("ASSETS",TimeRole.CURRENT_STOCK),
-                                        new MetricKey("EQUITY",TimeRole.CURRENT_STOCK)),
-        "RECEIVABLES",List.of(new MetricKey("AR_END",TimeRole.CURRENT_STOCK),
-                              new MetricKey("REV_NET",TimeRole.CURRENT_FLOW))
-    );
+    public static final Map<String,List<MetricKey>> PROBLEMS =
+            DiagnosticProblemCatalog.bundled().routes();
     public static GraphPlan fromProblem(String code,Set<MetricKey> verifiedAvailable,int depth) {
         List<MetricKey> anchor=PROBLEMS.get(code);
         if(anchor==null)return empty(Status.NO_REVIEWED_RELATIONSHIP,depth);
