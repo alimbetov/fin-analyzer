@@ -226,16 +226,27 @@ public final class ScenarioEconomicsEngine {
         var in=approved(rows,"DF-CSH-01");var paid=approved(rows,"DF-CSH-02");
         if(in.isEmpty()||paid.isEmpty()){missing(out,Method.OWNER_CASH_MOVEMENT,
                 in.isEmpty()?"DF-CSH-01":"DF-CSH-02","BUSINESS");return;}
-        // Single periods and source-grain must match. Inflow and outflow
-        // are never represented as profit (cash and accrual differ).
+        // Cash movement is NOT accrual profit. Preserve the source lineage
+        // of every included row and never silently drop unpaired months.
         Map<YearMonth,BigDecimal> incoming=sumByPeriod(in,"amount");
         Map<YearMonth,BigDecimal> outgoing=sumByPeriod(paid,"amount");
-        Set<YearMonth> periods=new TreeSet<>(incoming.keySet());periods.retainAll(outgoing.keySet());
-        if(periods.isEmpty()){missing(out,Method.OWNER_CASH_MOVEMENT,"MATCHING_CASH_PERIODS","BUSINESS");return;}
+        Set<YearMonth> periods=new TreeSet<>(incoming.keySet());
+        periods.addAll(outgoing.keySet());
         for(YearMonth month:periods){
+            if(!incoming.containsKey(month) || !outgoing.containsKey(month)){
+                missing(out,Method.OWNER_CASH_MOVEMENT,
+                        (incoming.containsKey(month)?"DF-CSH-02":"DF-CSH-01")+":"+month,
+                        month.toString());
+                continue;
+            }
             BigDecimal amount=incoming.get(month).subtract(outgoing.get(month));
-            add(out,Method.OWNER_CASH_MOVEMENT,Verdict.REVIEW,"CASH_MOVEMENT_NOT_NET_PROFIT",
-                    month.toString(),Map.of("cashMovement",amount));
+            List<SourceRef> provenance=new ArrayList<>();
+            in.stream().filter(row->row.period().equals(month)).forEach(row->provenance.add(ref(row)));
+            paid.stream().filter(row->row.period().equals(month)).forEach(row->provenance.add(ref(row)));
+            out.add(new Finding(Method.OWNER_CASH_MOVEMENT,Verdict.REVIEW,
+                    "CASH_MOVEMENT_NOT_NET_PROFIT",month.toString(),
+                    Map.of("cashMovement",amount.stripTrailingZeros().toPlainString()),
+                    List.of(),provenance));
         }
     }
     private static Map<YearMonth,BigDecimal> sumByPeriod(List<InputRow> list,String field){
