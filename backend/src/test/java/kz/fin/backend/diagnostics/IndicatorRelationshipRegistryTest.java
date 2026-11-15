@@ -76,7 +76,9 @@ class IndicatorRelationshipRegistryTest {
         assertEquals(Set.of("F03","F01"),new HashSet<>(near.missingEvidence().stream()
                 .map(DynamicDiagnosticPlanner.Demand::originForm).toList()));
         var far=DynamicDiagnosticPlanner.fromVerifiedFacts(available,3);
-        assertEquals(6,far.relatedRuleCodes().size());
+        assertEquals(5,far.relatedRuleCodes().size());
+        assertFalse(far.relatedRuleCodes().contains("BALANCE_IDENTITY"),
+                "balance identity is a separate metric component, not a fabricated correlation");
         assertTrue(far.missingEvidence().stream().anyMatch(x->x.originForm().equals("DF-CSH-01")));
         assertEquals(new HashSet<>(far.missingEvidence().stream().map(
                 DynamicDiagnosticPlanner.Demand::metric).toList()).size(),far.missingEvidence().size());
