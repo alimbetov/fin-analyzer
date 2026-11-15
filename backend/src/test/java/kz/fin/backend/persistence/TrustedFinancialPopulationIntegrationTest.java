@@ -63,8 +63,10 @@ class TrustedFinancialPopulationIntegrationTest {
                     dimension_hash,dimensions,value_state,numeric_value,estimate_method_ref,
                     source_revision_id,recorded_at
                 ) VALUES (?,?,?,?,'REV_NET','1.0.0','INTERVAL',?,?,'MANAGEMENT','MONEY','KZT',
-                    ?,?::jsonb,'PRESENT',?,NULL,?,now())
-                """,fact,org,entity,scope,FROM,TO,"0".repeat(64),"{}",amount,source);
+                    encode(sha256(convert_to(?::jsonb::text,'UTF8')),'hex'),
+                    ?::jsonb,'PRESENT',?,NULL,?,now())
+                """,fact,org,entity,scope,FROM,TO,
+                "{\\"sale\\":\\""+i+"\\"}", "{\\"sale\\":\\""+i+"\\"}",amount,source);
             jdbc.update("""
                 INSERT INTO fin_fact.fact_origin(
                     fact_assertion_id,organization_id,source_revision_id,source_row_id,source_field)
