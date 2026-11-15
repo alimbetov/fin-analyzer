@@ -66,6 +66,7 @@ export function parseGraphRegistry(formsText: string, policyText: string): Regis
     const kind = r[2]!;
     const qualification = r[7]!;
     if (!/^[A-Z][A-Z0-9-]{0,127}$/.test(code) ||
+        !["STRUCTURED","STRUCTURED_INPUT","COMPOSITE","SECTOR_INPUT","DOCUMENT","EXTERNAL_TAX"].includes(kind) ||
         !["DESIGN_ONLY","PILOT_UNQUALIFIED"].includes(qualification))
       throw new Error("GRAPH_UNKNOWN_CATALOG_STATUS");
     return {
@@ -113,7 +114,7 @@ export function parseGraphRegistry(formsText: string, policyText: string): Regis
   });
   if (relations.length !== 6) throw new Error("GRAPH_UNREVIEWED_RELATION_COUNT");
   return {
-    forms: forms.map(f => metricOwners.size && [...metricOwners.values()].includes(f.code)
+    forms: forms.map(f => [...new Set(metricOwners.values())].includes(f.code)
       ? { ...f, disposition: "PILOT_NUMERIC_SOURCE" } : f),
     relations
   };
