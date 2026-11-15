@@ -130,12 +130,12 @@ public final class ScenarioFiveQuestionEngine {
                 ||!before.scenarioCode().equals(after.scenarioCode())
                 ||before.rows().size()!=after.rows().size())
             throw new IllegalArgumentException("FIVE_Q_CROSS_SCOPE_OR_STRUCTURE");
-        Map<String,InputRow> left=byStableKey(before.rows());
-        Map<String,InputRow> right=byStableKey(after.rows());
+        Map<RowIdentity,InputRow> left=byStableKey(before.rows());
+        Map<RowIdentity,InputRow> right=byStableKey(after.rows());
         if(!left.keySet().equals(right.keySet()))
             throw new IllegalArgumentException("FIVE_Q_CHANGED_SOURCE_IDENTITY");
         Map<String,String> changes=new TreeMap<>();
-        for(String key:left.keySet()) {
+        for(RowIdentity key:left.keySet()) {
             InputRow a=left.get(key), z=right.get(key);
             if(!a.values().keySet().equals(z.values().keySet()))
                 throw new IllegalArgumentException("FIVE_Q_CHANGED_INPUT_SCHEMA");
@@ -149,12 +149,17 @@ public final class ScenarioFiveQuestionEngine {
         if(changes.isEmpty())throw new IllegalArgumentException("FIVE_Q_NO_SCENARIO_CHANGE");
         return Map.copyOf(changes);
     }
-    private static Map<String,InputRow> byStableKey(List<InputRow> rows) {
-        Map<String,InputRow> byKey=new TreeMap<>();
+    // Structural identity avoids delimiter collisions in arbitrary source IDs.
+    private record RowIdentity(String formCode,String sheetCode,String itemKey,
+                               String rowId,java.time.YearMonth period,
+                               java.time.LocalDate eventDate,String currency,
+                               String sourceRevision,EvidenceState state) {}
+    private static Map<RowIdentity,InputRow> byStableKey(List<InputRow> rows) {
+        Map<RowIdentity,InputRow> byKey=new LinkedHashMap<>();
         for(InputRow row:rows) {
-            String key=row.formCode()+"|"+row.sheetCode()+"|"+row.itemKey()+"|"
-                    +row.rowId()+"|"+row.period()+"|"+row.eventDate()+"|"
-                    +row.currency()+"|"+row.sourceRevision()+"|"+row.state();
+            RowIdentity key=new RowIdentity(row.formCode(),row.sheetCode(),
+                    row.itemKey(),row.rowId(),row.period(),row.eventDate(),
+                    row.currency(),row.sourceRevision(),row.state());
             if(byKey.putIfAbsent(key,row)!=null)
                 throw new IllegalArgumentException("FIVE_Q_DUPLICATE_SOURCE_ROW");
         }
