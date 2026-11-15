@@ -22,8 +22,15 @@ public final class PeriodAggregation {
             if (o.time().kind() != EconomicKernel.TimeKind.INTERVAL) {
                 throw new IllegalArgumentException("AS_OF cannot be summed");
             }
-            if (!o.time().startInclusive().equals(cursor) || o.time().endExclusive().isAfter(target.endExclusive())) {
-                throw new IllegalArgumentException("overlap, gap or out-of-window observation");
+            if (o.time().startInclusive().isBefore(target.startInclusive())
+                    || o.time().endExclusive().isAfter(target.endExclusive())) {
+                throw new IllegalArgumentException("out-of-window observation");
+            }
+            if (o.time().startInclusive().isBefore(cursor)) {
+                throw new IllegalArgumentException("overlapping observation");
+            }
+            if (o.time().startInclusive().isAfter(cursor)) {
+                return new Aggregate(Status.INCOMPLETE, null, "MISSING_PERIODS");
             }
             cursor = o.time().endExclusive();
             if (!o.value().numeric() || o.value().state() == EconomicKernel.ValueState.ESTIMATED) {
@@ -46,6 +53,9 @@ public final class PeriodAggregation {
         if (matching.size() > 1) throw new IllegalArgumentException("ambiguous stock closing date");
         if (matching.isEmpty() || !matching.getFirst().value().numeric()) {
             return new Aggregate(Status.INCOMPLETE, null, "MISSING_CLOSING_STOCK");
+        }
+        if (matching.getFirst().value().state() == EconomicKernel.ValueState.ESTIMATED) {
+            return new Aggregate(Status.INCOMPLETE, null, "ESTIMATED_CLOSING_STOCK");
         }
         return new Aggregate(Status.CALCULATED, matching.getFirst().value().decimal(), null);
     }

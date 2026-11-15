@@ -118,4 +118,112 @@ class PostgresInvariantTest {
                 "DELETE FROM fin_fact.fact_set_revision WHERE id = ?", setId));
     }
 
+
+
+    private UUID smokeUuid(String label) {
+        return UUID.nameUUIDFromBytes(("FIN-SMOKE:"+label).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    @Test void smokeFixturePersistsAllSourcesPeriodsEntitiesAndAmounts() throws Exception {
+        var stream = getClass().getResourceAsStream("/smoke/postgres-facts.tsv");
+        assertNotNull(stream);
+        java.util.List<EconomicKernel.FactAssertion> facts = new java.util.ArrayList<>();
+        try (var reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+            assertEquals("org\tsourceRevision\tmetric\ttimeKind\tstart\tend\tstore\tunit\tcurrency\tvalue",
+                    reader.readLine());
+            String row;
+            while ((row=reader.readLine())!=null) {
+                if (row.isBlank()) continue;
+                String[] columns=row.split("\\t",-1);
+                assertEquals(10,columns.length,row);
+                String org=columns[0], source=columns[1], metric=columns[2], store=columns[6];
+                UUID organization=smokeUuid(org);
+                var time=new EconomicKernel.TemporalReference(
+                        EconomicKernel.TimeKind.valueOf(columns[3]),
+                        LocalDate.parse(columns[4]),LocalDate.parse(columns[5]));
+                var key=new EconomicKernel.FactKey(
+                        organization,smokeUuid(org+":ENTITY"),smokeUuid(org+":SCOPE"),
+                        metric,"smoke-v1",time,EconomicKernel.ReportingBasis.MANAGEMENT,
+                        columns[7],columns[8].equals("-")?null:columns[8],
+                        new java.util.TreeMap<>(java.util.Map.of("store",store)));
+                var value=columns[9].equals("0!")
+                        ? EconomicKernel.EconomicValue.explicitZero()
+                        : EconomicKernel.EconomicValue.present(columns[9]);
+                UUID id=smokeUuid(String.join("|",columns));
+                facts.add(new EconomicKernel.FactAssertion(
+                        id,key,value,smokeUuid(org+":"+source),Instant.parse("2026-11-15T00:00:00Z")));
+            }
+        }
+        assertEquals(16,facts.size());
+        for(var f : facts) repository.saveAndFlush(FactAssertionJpaEntity.from(f));
+
+        UUID orgA=smokeUuid("ORG_A"),orgB=smokeUuid("ORG_B");
+        assertEquals(14L,jdbc.queryForObject(
+                "SELECT COUNT(*) FROM fin_fact.fact_assertion WHERE organization_id = ?",Long.class,orgA));
+        assertEquals(2L,jdbc.queryForObject(
+                "SELECT COUNT(*) FROM fin_fact.fact_assertion WHERE organization_id = ?",Long.class,orgB));
+
+        // 3 independent assertions for the same business/month/metric, including a restatement.
+        assertEquals(3L,jdbc.queryForObject(
+                "SELECT COUNT(*) FROM fin_fact.fact_assertion WHERE organization_id = ? " +
+                "AND metric_code = 'REV_NET' AND start_inclusive = DATE '2026-01-01' " +
+                "AND dimensions ->> 'store' = 'NORTH'",
+                Long.class,orgA));
+
+        // Four different values remain distinct; do not silently sum or select latest by timestamp.
+        var competing=jdbc.queryForList(
+                "SELECT numeric_value FROM fin_fact.fact_assertion WHERE organization_id = ? " +
+                "AND metric_code = 'REV_NET' AND start_inclusive = DATE '2026-01-01' " +
+                "AND dimensions ->> 'store' = 'NORTH' ORDER BY numeric_value",
+                java.math.BigDecimal.class,orgA);
+        assertEquals(3,competing.size());
+        assertEquals(0,competing.get(0).compareTo(new java.math.BigDecimal("980")));
+        assertEquals(0,competing.get(1).compareTo(new java.math.BigDecimal("1000")));
+        assertEquals(0,competing.get(2).compareTo(new java.math.BigDecimal("1050")));
+
+        assertEquals(1L,jdbc.queryForObject(
+                "SELECT COUNT(*) FROM fin_fact.fact_assertion WHERE organization_id = ? " +
+                "AND metric_code = 'SOLD_QTY' AND currency_code IS NULL AND value_state = 'EXPLICIT_ZERO'",
+                Long.class,orgA));
+
+        // One logical approved key, two immutable revision snapshots, distinct selected sources.
+        var original=facts.stream().filter(f -> f.key().organizationId().equals(orgA)
+                && f.key().metricCode().equals("REV_NET")
+                && f.key().time().startInclusive().equals(LocalDate.of(2026,1,1))
+                && f.key().dimensions().get("store").equals("NORTH")
+                && f.sourceRevisionId().equals(smokeUuid("ORG_A:ERP_R1"))).findFirst().orElseThrow();
+        var corrected=facts.stream().filter(f -> f.key().organizationId().equals(orgA)
+                && f.key().metricCode().equals("REV_NET")
+                && f.key().time().startInclusive().equals(LocalDate.of(2026,1,1))
+                && f.key().dimensions().get("store").equals("NORTH")
+                && f.sourceRevisionId().equals(smokeUuid("ORG_A:RESTATEMENT_R2"))).findFirst().orElseThrow();
+
+        UUID oldSet=UUID.randomUUID(),newSet=UUID.randomUUID();
+        jdbc.update("INSERT INTO fin_fact.fact_set_revision(id,organization_id,status,approved_at) VALUES(?,?,?,now())",
+                oldSet,orgA,"APPROVED");
+        jdbc.update("INSERT INTO fin_fact.fact_selection(organization_id,fact_set_revision_id,fact_key_hash,fact_assertion_id) " +
+                "VALUES(?,?,?,?)",orgA,oldSet,"smoke-revenue-jan-north",original.id());
+        jdbc.update("INSERT INTO fin_fact.fact_set_revision(id,organization_id,parent_revision_id,status,approved_at) " +
+                "VALUES(?,?,?,?,now())",newSet,orgA,oldSet,"APPROVED");
+        jdbc.update("INSERT INTO fin_fact.fact_selection(organization_id,fact_set_revision_id,fact_key_hash,fact_assertion_id) " +
+                "VALUES(?,?,?,?)",orgA,newSet,"smoke-revenue-jan-north",corrected.id());
+
+        assertEquals(original.id(),jdbc.queryForObject(
+                "SELECT fact_assertion_id FROM fin_fact.fact_selection WHERE fact_set_revision_id = ?",
+                UUID.class,oldSet));
+        assertEquals(corrected.id(),jdbc.queryForObject(
+                "SELECT fact_assertion_id FROM fin_fact.fact_selection WHERE fact_set_revision_id = ?",
+                UUID.class,newSet));
+        assertEquals(0,jdbc.queryForObject(
+                "SELECT a.numeric_value FROM fin_fact.fact_selection s " +
+                "JOIN fin_fact.fact_assertion a ON a.id = s.fact_assertion_id " +
+                "WHERE s.fact_set_revision_id = ?",java.math.BigDecimal.class,oldSet)
+                .compareTo(new java.math.BigDecimal("1000")));
+        assertEquals(0,jdbc.queryForObject(
+                "SELECT a.numeric_value FROM fin_fact.fact_selection s " +
+                "JOIN fin_fact.fact_assertion a ON a.id = s.fact_assertion_id " +
+                "WHERE s.fact_set_revision_id = ?",java.math.BigDecimal.class,newSet)
+                .compareTo(new java.math.BigDecimal("1050")));
+    }
 }
