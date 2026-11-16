@@ -29,7 +29,8 @@ public class CatalogReportPresentationService {
     public record Label(String fieldCode, String label, Status status) {}
     public record Coverage(String locale, int knownFields, int labelled, int missing) {}
 
-    private record Inventory(String type, Map<String, String> labels, String reviewStatus) {
+    private record Inventory(String type, Map<String, String> labels, String reviewStatus,
+                             String requiredness, String unitPolicy) {
         Inventory {
             labels = Map.copyOf(labels);
         }
@@ -75,7 +76,7 @@ public class CatalogReportPresentationService {
                             && row[3].isBlank() && row[4].isBlank() && row[5].isBlank()))
                         throw new IllegalStateException("FIN_REPORT_TRANSLATIONS_UNREVIEWED_LABEL");
                     String k = key(row[0], row[1]);
-                    if (result.putIfAbsent(k, new Inventory(row[2], labels, row[7])) != null)
+                    if (result.putIfAbsent(k, new Inventory(row[2], labels, row[7], row[8], row[9])) != null)
                         throw new IllegalStateException("FIN_REPORT_TRANSLATIONS_DUPLICATE");
                 }
             }
@@ -119,6 +120,63 @@ public class CatalogReportPresentationService {
         for (var field : CatalogXlsxRoundTripService.fields(formCode))
             labels.add(label(formCode, field.code(), displayLocale));
         return List.copyOf(labels);
+    }
+
+
+    /** Presentation-only view. Source locale remains the immutable ru/kk/en
+     * input/parser coordinate while Chinese is display-only. No DB reads or writes. */
+    public record FieldView(
+            String fieldCode, CatalogCaptureRegistry.FieldType fieldType,
+            String label, Status status, String requiredness, String unitPolicy,
+            String unitContext, String help) {}
+    public record FormView(
+            String formCode, Label formTitle, String captureMode,
+            String sourceInputLocale, String displayLocale,
+            String currency, int amountScale, String sourceStatus,
+            List<FieldView> fields) {
+        public FormView { fields = List.copyOf(fields); }
+    }
+
+    private static final Map<String, String> HELP = Map.of(
+        "ru", "Черновая форма. Обязательность, единицы измерения и экономический смысл требуют независимой проверки.",
+        "kk", "Алдын ала нысан. Міндеттілік, өлшем бірліктері және экономикалық мәні тәуелсіз тексеруді талап етеді.",
+        "en", "Provisional form. Requiredness, measurement units and accounting meaning require independent review.",
+        "zh-Hans", "临时表单。必填性、计量单位及会计含义仍须经独立审核。"
+    );
+
+    /** No audited financial form-title translations exist. Return a truthful
+     * MISSING code fallback rather than inventing a localized form title. */
+    public Label formTitle(String formCode, String displayLocale) {
+        CatalogReportLocale.requireDisplay(displayLocale);
+        CatalogCaptureRegistry.require(formCode);
+        return new Label(formCode, formCode, Status.MISSING);
+    }
+
+    public FormView present(CatalogXlsxRoundTripService.Context source,
+                            String displayLocale) {
+        Objects.requireNonNull(source, "source");
+        var selection = new CatalogReportLocale.Selection(source.locale(), displayLocale);
+        var form = CatalogCaptureRegistry.require(source.formCode());
+        var fields = new ArrayList<FieldView>();
+        for (var field : CatalogXlsxRoundTripService.fields(form.code())) {
+            var label = label(form.code(), field.code(), selection.displayLocale());
+            var info = inventory.get(key(form.code(), field.code()));
+            if (info == null && form.captureMode() != CatalogCaptureRegistry.Mode.EVIDENCE_ONLY)
+                throw new IllegalStateException("FIN_REPORT_TRANSLATIONS_SCHEMA_DRIFT");
+            String unitPolicy = info == null ? "PENDING_UNIT_REVIEW" : info.unitPolicy();
+            String requiredness = info == null ? "PENDING_METHOD_REVIEW" : info.requiredness();
+            // No assumed KZT. Money unit/scale is always issued source context,
+            // while other fields retain an explicitly unqualified unit policy.
+            String unit = field.type() == CatalogCaptureRegistry.FieldType.MONEY
+                    ? source.currency() + " x " + source.amountScale() : unitPolicy;
+            fields.add(new FieldView(field.code(), field.type(), label.label(),
+                    label.status(), requiredness, unitPolicy, unit,
+                    HELP.get(selection.displayLocale())));
+        }
+        return new FormView(form.code(), formTitle(form.code(), displayLocale),
+                form.captureMode().name(), selection.sourceInputLocale(),
+                selection.displayLocale(), source.currency(), source.amountScale(),
+                "UNQUALIFIED_DRAFT", fields);
     }
 
     public Coverage coverage(String displayLocale) {
