@@ -55,6 +55,47 @@ class PilotXlsxIntakeIntegrationTest {
             }
         });
     }
+    @Test void allFiveLegacyPilotFormsExportImportInSchemaOrderWithoutPublishing(){
+        Map<String,double[]> examples=new LinkedHashMap<>();
+        examples.put("F01",new double[]{100,40,60,10,5});
+        examples.put("F02",new double[]{400,260,90});
+        examples.put("F03",new double[]{35,-10,-5});
+        examples.put("DF-CSH-01",new double[]{160});
+        examples.put("DF-CSH-02",new double[]{280});
+        for(var entry:examples.entrySet()){
+            var c=context(entry.getKey());
+            byte[] original=xlsx.template(c);
+            byte[] uploaded=edit(original,book->{
+                Sheet data=book.getSheet("FIN_Data");
+                for(int index=0;index<entry.getValue().length;index++){
+                    data.getRow(index+1).getCell(2).setCellValue("2026-10");
+                    data.getRow(index+1).getCell(3).setCellValue(entry.getValue()[index]);
+                }
+            });
+            var parsed=xlsx.parse(c,uploaded);
+            assertEquals(entry.getValue().length,parsed.size(),entry.getKey());
+            assertEquals("2026-10",parsed.getFirst().period().toString(),entry.getKey());
+            assertEquals(0L,jdbc.queryForObject("""
+              SELECT count(*) FROM fin_intake.submission WHERE organization_id=?
+              """,Long.class,c.organizationId()),"Parsing must not approve or persist source");
+        }
+    }
+    @Test void legacyServerXlsxRejectsMalformedEmptyAndPrecisionUnsafeUploads(){
+        var c=context("F02");
+        assertThrows(IllegalArgumentException.class,()->xlsx.parse(c,new byte[]{1,2,3}));
+        assertThrows(IllegalArgumentException.class,()->xlsx.parse(c,null));
+        assertThrows(IllegalArgumentException.class,()->xlsx.parse(c,xlsx.template(c)));
+        byte[] populated=completeF02(xlsx.template(c));
+        byte[] moved=edit(populated,book->book.getSheet("FIN_Data")
+            .createRow(900).createCell(0).setCellValue("forged"));
+        assertThrows(IllegalArgumentException.class,()->xlsx.parse(c,moved));
+        byte[] unsafe=edit(populated,book->book.getSheet("FIN_Data")
+            .getRow(1).getCell(3).setCellValue(1234567890123456d));
+        assertThrows(IllegalArgumentException.class,()->xlsx.parse(c,unsafe));
+        byte[] invalid=edit(populated,book->book.getSheet("FIN_Data")
+            .getRow(1).getCell(3).setCellValue("1,000.00"));
+        assertThrows(IllegalArgumentException.class,()->xlsx.parse(c,invalid));
+    }
     @Test void exactOriginalXlsxSurvivesSeparateReviewAndActualPublication(){
         var c=context("F02");
         byte[] original=completeF02(xlsx.template(c));
