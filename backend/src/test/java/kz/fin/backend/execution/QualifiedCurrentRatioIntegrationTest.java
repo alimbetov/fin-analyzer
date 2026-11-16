@@ -81,8 +81,9 @@ class QualifiedCurrentRatioIntegrationTest {
              (organization_id,source_revision_id,normalized_cell_fingerprint,
               source_document_hash,input_currency,amount_scale,
               expected_cell_count,reviewed_by,reviewed_at)
-            VALUES (?,?,?,?,'KZT',1,2,'FIN04_TEST_REVIEWER',now())
-            """,org,source,"a".repeat(64),DOC_HASH);
+            VALUES (?,?,?,?,'KZT',1,?,'FIN04_TEST_REVIEWER',now())
+            """,org,source,"a".repeat(64),DOC_HASH,
+                additionalUnqualifiedFact ? 3 : 2);
         jdbc.update("""
             INSERT INTO fin_fact.fact_set_revision(id,organization_id,status,approved_at)
             VALUES (?,?,'APPROVED',now())
