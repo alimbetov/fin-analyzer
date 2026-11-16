@@ -35,19 +35,36 @@ public final class PilotXlsxTemplateService {
             "DF-CSH-02",List.of("payment"));
     private static final Map<String,String> ROW_IDS=Map.of(
             "F01","balance","F02","pnl","F03","cf");
+    private static final String LIQUIDITY_VERSION="FIN-LIQUIDITY-V1";
+    private static final List<String> F01_LIQUIDITY_FIELDS=List.of(
+            "assets","liabilities","equity","cash","receivables",
+            "currentAssets","currentLiabilities");
+
     public record Context(UUID organizationId,UUID entityId,UUID businessScopeId,
-                          String formCode,String reportingBasis,String currency,int scale){
+                          String formCode,String reportingBasis,String currency,int scale,
+                          String formVersion){
+        // Preserve every legacy call site and the old template's exact identity.
+        public Context(UUID org,UUID entity,UUID scope,String form,String basis,
+                       String currency,int scale){
+            this(org,entity,scope,form,basis,currency,scale,VERSION);
+        }
         public Context {
             Objects.requireNonNull(organizationId);Objects.requireNonNull(entityId);
             Objects.requireNonNull(businessScopeId);
             if(!FIELDS.containsKey(formCode)||!Set.of("MANAGEMENT","SEPARATE","CONSOLIDATED").contains(reportingBasis)
                     ||currency==null||!currency.matches("[A-Z]{3}")
-                    ||scale!=1&&scale!=1000)
+                    ||scale!=1&&scale!=1000
+                    ||!(VERSION.equals(formVersion)
+                         || ("F01".equals(formCode)&&LIQUIDITY_VERSION.equals(formVersion))))
                 throw new IllegalArgumentException("XLSX_UNSUPPORTED_CONTEXT");
         }
     }
+    private static List<String> fields(Context c){
+        return LIQUIDITY_VERSION.equals(c.formVersion())
+                ? F01_LIQUIDITY_FIELDS : FIELDS.get(c.formCode());
+    }
     private static String[] metadata(Context c){
-        return new String[]{FORMAT,c.formCode(),VERSION,c.organizationId().toString(),
+        return new String[]{FORMAT,c.formCode(),c.formVersion(),c.organizationId().toString(),
                 c.entityId().toString(),c.businessScopeId().toString(),
                 c.reportingBasis(),c.currency(),Integer.toString(c.scale())};
     }
@@ -59,7 +76,7 @@ public final class PilotXlsxTemplateService {
             String[] names={"SOURCE_ROW","SOURCE_FIELD","PERIOD_YYYY_MM","AMOUNT"};
             for(int i=0;i<4;i++)header.createCell(i).setCellValue(names[i]);
             int index=1;
-            for(String field:FIELDS.get(context.formCode())){
+            for(String field:fields(context)){
                 Row row=data.createRow(index++);
                 row.createCell(0).setCellValue(ROW_IDS.getOrDefault(
                         context.formCode(),context.formCode().equals("DF-CSH-01")?"receipt1":"payment1"));
@@ -133,7 +150,7 @@ public final class PilotXlsxTemplateService {
                 if(period.isBlank() && value==null)continue;
                 if(rowId.isBlank()||field.isBlank()||period.isBlank()||value==null)
                     throw new IllegalArgumentException("XLSX_PARTIAL_SOURCE_ROW");
-                if(!FIELDS.get(context.formCode()).contains(field))
+                if(!fields(context).contains(field))
                     throw new IllegalArgumentException("XLSX_UNKNOWN_SOURCE_FIELD");
                 String fixed=ROW_IDS.get(context.formCode());
                 if(fixed!=null && !fixed.equals(rowId))
