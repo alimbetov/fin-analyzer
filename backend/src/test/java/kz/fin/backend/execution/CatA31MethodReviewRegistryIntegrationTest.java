@@ -90,6 +90,16 @@ class CatA31MethodReviewRegistryIntegrationTest {
             VALUES (?,?,'supervisor','duplicate',?)
             """,UUID.randomUUID(),id,SHA));
     }
+    @Test void contradictoryReviewDecisionsForSameVersionNeverQualify(){
+        String version="T-"+UUID.randomUUID();
+        insert(version,"APPROVED","-1 hour","1 day");
+        insert(version,"REJECTED","-1 hour","1 day");
+        var decision=review.lookup(key(version));
+        assertEquals(CatA31MethodReviewRegistry.ReviewStatus.AMBIGUOUS,
+            decision.status());
+        assertFalse(decision.independentlyReviewed());
+        assertFalse(decision.permitsExecution());
+    }
     @Test void timeBoundAndIdentityConstraintsFailClosed(){
         String future="T-"+UUID.randomUUID();
         insert(future,"APPROVED","1 day","2 days");
