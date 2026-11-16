@@ -39,7 +39,7 @@ describe("FIN V5 one-resource F02 field catalog",()=>{
       {rowId:"pnl",fieldCode:"netRevenue",rawValue:"400.0"}
     ];
     const ru=validateF02(ctx,rows);
-    const en=validateF02({...ctx,locale:"en"},rows.toReversed());
+    const en=validateF02({...ctx,locale:"en"},[...rows].reverse());
     expect(ru.valid).toBe(true);
     expect(en.valid).toBe(true);
     expect(ru.rows).toEqual(en.rows);
