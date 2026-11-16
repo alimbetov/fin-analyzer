@@ -268,6 +268,17 @@ class ReviewedSkuSingleExecutorIntegrationTest {
         assertEquals(0L,planned(f,QualifiedSkuAbcAdapter.CODE));
     }
 
+    @Test void reviewAfterOutboxConsumptionFailsInsteadOfSilentlyLosingConTasks(){
+        Fixture f=publishedF02();
+        Source s=source(f,5,"1000",false);
+        standardSales(s);
+        toTerminal(f);
+        assertEquals(0L,planned(f,QualifiedSkuParetoAdapter.CODE));
+        assertThrows(DataAccessException.class,
+                ()->review(s,"independent-sku-reviewer"));
+        assertTrue(loader.load(revision(f)).isEmpty());
+    }
+
     @Test void duplicateOrOrphanReturnAndOverRefundAreRejected(){
         Fixture f=publishedF02();
         Source missingSale=source(f,3,"1000",false);
