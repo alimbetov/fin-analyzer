@@ -82,9 +82,12 @@ def main():
                 "output was not actually validated " + str(key))
         revision = row.get("sourceRevisionId")
         fp = row.get("snapshotFingerprint")
+        fp_v2 = row.get("contentFingerprintV2")
         digest = row.get("artifactDigest")
         require(isinstance(revision, str) and len(revision) == 36
                 and isinstance(fp, str) and len(fp) == 64
+                and isinstance(fp_v2, str) and len(fp_v2) == 64
+                and all(ch in "0123456789abcdef" for ch in fp_v2)
                 and isinstance(digest, str) and len(digest) == 64
                 and all(c in "0123456789abcdef" for c in digest),
                 "missing source provenance/digest " + str(key))
@@ -98,8 +101,8 @@ def main():
         else:
             require(row.get("pageCount") == 0,
                     "HTML has spurious PDF page count " + str(key))
-        prior = each_revision.setdefault(code, (revision, fp))
-        require(prior == (revision, fp), "HTML/PDF not bound to same snapshot " + code)
+        prior = each_revision.setdefault(code, (revision, fp, fp_v2))
+        require(prior == (revision, fp, fp_v2), "HTML/PDF not bound to same snapshot " + code)
     require(unique == {(c, l, f) for c in form_codes for l in LOCALES for f in FORMATS},
             "some form/locale outputs missing")
     print("FIN_BE_R1_X3_X4_RENDERERS_GREEN",

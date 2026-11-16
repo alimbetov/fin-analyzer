@@ -63,6 +63,7 @@ public class CatalogXlsxExportService {
                            int revisionNumber, String formCode, String periodCode,
                            String sourceInputLocale, String displayLocale, String currency,
                            int amountScale, String sourceState, String normalizedFingerprint,
+                           String contentFingerprintV2,
                            String workbookSha256, byte[] workbook) {
         public Exported {
             workbook = workbook.clone();
@@ -107,6 +108,7 @@ public class CatalogXlsxExportService {
                 + " | " + words.labelWarning());
         if (snapshot.documentSha256() != null)
             instructions.add(words.evidenceNotice());
+        instructions.add("FIN_SNAPSHOT_CONTENT_V2: " + snapshot.contentFingerprintV2());
         for (var field : localized.fields()) {
             instructions.add(field.fieldCode() + ": " + field.label()
                     + " [" + field.status() + "]");
@@ -123,7 +125,7 @@ public class CatalogXlsxExportService {
                 snapshot.revisionNumber(), snapshot.formCode(), snapshot.periodCode(),
                 snapshot.sourceInputLocale(), displayLocale, snapshot.currency(),
                 snapshot.amountScale(), snapshot.sourceStatus(),
-                snapshot.normalizedFingerprint(), workbook.templateSha256(),
-                workbook.workbook());
+                snapshot.normalizedFingerprint(), snapshot.contentFingerprintV2(),
+                workbook.templateSha256(), workbook.workbook());
     }
 }

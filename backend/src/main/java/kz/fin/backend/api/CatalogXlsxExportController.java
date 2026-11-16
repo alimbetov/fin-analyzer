@@ -135,6 +135,7 @@ public class CatalogXlsxExportController {
                 .header("X-FIN-Export-ID", report.exportId().toString())
                 .header("X-FIN-Issued-Template", report.issuedTemplateId().toString())
                 .header("X-FIN-Workbook-SHA256", report.workbookSha256())
+                .header("X-FIN-Content-Fingerprint-V2", report.contentFingerprintV2())
                 .headers(headers -> headers.setContentDisposition(
                         ContentDisposition.attachment()
                                 .filename(filename, StandardCharsets.UTF_8).build()))
@@ -178,6 +179,7 @@ public class CatalogXlsxExportController {
                 .header("Content-Security-Policy", FinancialReportHtmlRenderer.CSP)
                 .header("X-FIN-Source-Revision", result.sourceRevisionId().toString())
                 .header("X-FIN-Content-SHA256", result.sha256())
+                .header("X-FIN-Content-Fingerprint-V2", result.contentFingerprintV2())
                 .header("X-FIN-Source-State", snapshot.sourceStatus())
                 .headers(h -> h.setContentDisposition(ContentDisposition.attachment()
                         .filename(filename, StandardCharsets.UTF_8).build()))
@@ -205,6 +207,7 @@ public class CatalogXlsxExportController {
                 .header("X-Content-Type-Options", "nosniff")
                 .header("X-FIN-Source-Revision", result.sourceRevisionId().toString())
                 .header("X-FIN-Content-SHA256", result.sha256())
+                .header("X-FIN-Content-Fingerprint-V2", result.contentFingerprintV2())
                 .header("X-FIN-Source-State", snapshot.sourceStatus())
                 .headers(h -> h.setContentDisposition(ContentDisposition.attachment()
                         .filename(filename, StandardCharsets.UTF_8).build()))

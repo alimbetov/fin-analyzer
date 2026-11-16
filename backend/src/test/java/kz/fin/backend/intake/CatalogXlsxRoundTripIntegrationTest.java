@@ -157,9 +157,25 @@ class CatalogXlsxRoundTripIntegrationTest {
         };
     }
 
+    // A real parsed PDFBox document, cached for byte-exact persistence tests.
+    // The former %PDF+%%EOF-only fixture is intentionally no longer accepted.
+    private static final byte[] VALID_PDF = createValidPdf(1);
+
     private static byte[] pdf() {
-        return "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n"
-                .getBytes(StandardCharsets.US_ASCII);
+        return VALID_PDF.clone();
+    }
+
+    private static byte[] createValidPdf(int pageCount) {
+        try (var doc = new org.apache.pdfbox.pdmodel.PDDocument();
+             var out = new ByteArrayOutputStream()) {
+            for (int i = 0; i < pageCount; i++) {
+                doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            }
+            doc.save(out);
+            return out.toByteArray();
+        } catch (IOException ex) {
+            throw new IllegalStateException("TEST_VALID_PDF_GENERATION_FAILED", ex);
+        }
     }
 
     private static CatalogXlsxRoundTripService.OriginalDocument original() {
@@ -1370,9 +1386,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                 repeated.id(), repeated.normalizedFingerprint(), 1, "author", "same PDF");
         assertEquals(first.revisionId(), same.revisionId());
 
-        byte[] changedPdf = (
-                "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 1 0 R >>\nendobj\n%%EOF\n")
-                .getBytes(StandardCharsets.US_ASCII);
+        byte[] changedPdf = createValidPdf(2);
         var changedOriginal = new CatalogXlsxRoundTripService.OriginalDocument(
                 "evidence.pdf", "application/pdf", changedPdf);
         var changed = xlsx.saveDraft(context, register, changedOriginal);

@@ -32,6 +32,7 @@ def fixture():
                 "formCode": code, "format": "XLSX", "displayLocale": lang,
                 "sourceRevisionId": revision,
                 "snapshotFingerprint": "a" * 64,
+                "contentFingerprintV2": "f" * 64,
                 "artifactSha256": "b" * 64,
                 "sourceInputLocale": "ru", "mode": mode,
                 "rowCount": rows, "fieldCount": fields,
@@ -48,6 +49,7 @@ def fixture():
                     "formCode": code, "displayLocale": lang, "format": fmt,
                     "sourceRevisionId": revision,
                     "snapshotFingerprint": "a" * 64,
+                "contentFingerprintV2": "f" * 64,
                     "artifactDigest": "c" * 64,
                     "sourceState": "CONFIRMED_UNQUALIFIED_DRAFT",
                     "translationStatus": "PROVISIONAL_OR_MISSING_ONLY",
@@ -88,6 +90,14 @@ class X5ThreeFormatIntegrityValidatorTest(unittest.TestCase):
     def test_pdf_revision_swap_is_rejected(self):
         self.assert_rejected(lambda x, r: r["cases"][1].update(
             sourceRevisionId=str(uuid.uuid4())))
+
+    def test_pdf_v2_content_fingerprint_swap_is_rejected(self):
+        self.assert_rejected(lambda x, r: r["cases"][1].update(
+            contentFingerprintV2="d" * 64))
+
+    def test_xlsx_v2_fingerprint_missing_is_rejected(self):
+        self.assert_rejected(lambda x, r: x["cases"][0].pop(
+            "contentFingerprintV2"))
 
     def test_pdf_fingerprint_swap_is_rejected(self):
         self.assert_rejected(lambda x, r: r["cases"][1].update(

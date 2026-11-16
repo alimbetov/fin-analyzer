@@ -116,7 +116,8 @@ def combine(xlsx, rendered, forms, locales=LOCALES):
             "sourceContextUnchanged", "manifestDigestVerified", "receiptVerified")),
             "XLSX proof not actually passed " + repr(key))
         identity(item.get("sourceRevisionId"), "XLSX revision " + repr(key))
-        string_hash(item.get("snapshotFingerprint"), "XLSX content " + repr(key))
+        string_hash(item.get("snapshotFingerprint"), "XLSX legacy content " + repr(key))
+        string_hash(item.get("contentFingerprintV2"), "XLSX V2 content " + repr(key))
         string_hash(item.get("artifactSha256"), "XLSX artifact " + repr(key))
         source[key] = item
     require(len(source) == expected_per_format, "XLSX coverage missing")
@@ -143,7 +144,8 @@ def combine(xlsx, rendered, forms, locales=LOCALES):
                     "generated", "validated", "valuesEqual")),
                 "render proof incomplete " + repr(key))
         identity(item.get("sourceRevisionId"), "render revision " + repr(key))
-        string_hash(item.get("snapshotFingerprint"), "render content " + repr(key))
+        string_hash(item.get("snapshotFingerprint"), "render legacy content " + repr(key))
+        string_hash(item.get("contentFingerprintV2"), "render V2 content " + repr(key))
         string_hash(item.get("artifactDigest"), "render artifact " + repr(key))
         pages = item.get("pageCount")
         require(1 <= pages <= 120 if fmt == "PDF" and isinstance(pages, int)
@@ -158,7 +160,8 @@ def combine(xlsx, rendered, forms, locales=LOCALES):
         for locale in locales:
             x = source.get((code, locale))
             require(x is not None, "missing XLSX " + code + "/" + locale)
-            pair = (x["sourceRevisionId"], x["snapshotFingerprint"])
+            pair = (x["sourceRevisionId"], x["snapshotFingerprint"],
+                    x["contentFingerprintV2"])
             prior = revision_by_form.setdefault(code, pair)
             require(prior == pair, "mixed source revisions across languages " + code)
             for fmt in FORMATS:
@@ -166,7 +169,8 @@ def combine(xlsx, rendered, forms, locales=LOCALES):
                 require(r is not None, "missing " + fmt + " " + code + "/" + locale)
                 revision = r["sourceRevisionId"]
                 fp = r["snapshotFingerprint"]
-                require((revision, fp) == pair,
+                fp_v2 = r["contentFingerprintV2"]
+                require((revision, fp, fp_v2) == pair,
                         "cross-format source revision/fingerprint drift "
                         + repr((code, locale, fmt)))
                 if fmt != "XLSX":
@@ -176,6 +180,7 @@ def combine(xlsx, rendered, forms, locales=LOCALES):
                 merged.append({
                     "formCode": code, "displayLocale": locale, "format": fmt,
                     "sourceRevisionId": revision, "snapshotFingerprint": fp,
+                    "contentFingerprintV2": fp_v2,
                     "sourceStatus": "CONFIRMED_UNQUALIFIED_DRAFT",
                     "rowCount": x["rowCount"], "fieldCount": x["fieldCount"],
                     "artifactDigest": (x["artifactSha256"] if fmt == "XLSX"

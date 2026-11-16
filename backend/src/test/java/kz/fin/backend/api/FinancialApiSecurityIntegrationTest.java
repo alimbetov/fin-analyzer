@@ -260,6 +260,9 @@ class FinancialApiSecurityIntegrationTest {
                 .andExpect(header().exists("X-FIN-Issued-Template"))
                 .andExpect(header().exists("X-FIN-Export-ID"))
                 .andReturn().getResponse();
+        String contentFpV2 = response.getHeader("X-FIN-Content-Fingerprint-V2");
+        assertNotNull(contentFpV2);
+        assertTrue(contentFpV2.matches("[a-f0-9]{64}"));
         UUID issuedId = UUID.fromString(response.getHeader("X-FIN-Issued-Template"));
         UUID exportId = UUID.fromString(response.getHeader("X-FIN-Export-ID"));
         byte[] bytes = response.getContentAsByteArray();
@@ -329,6 +332,7 @@ class FinancialApiSecurityIntegrationTest {
                     .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                     .andExpect(header().string("X-FIN-Source-Revision",
                             confirmed.revisionId().toString()))
+                    .andExpect(header().string("X-FIN-Content-Fingerprint-V2", contentFpV2))
                     .andExpect(header().string("X-FIN-Source-State",
                             "CONFIRMED_UNQUALIFIED_DRAFT"))
                     .andReturn().getResponse();

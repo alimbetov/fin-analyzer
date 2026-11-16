@@ -59,7 +59,8 @@ public final class FinancialReportHtmlRenderer {
     }
 
     public record Rendered(UUID sourceRevisionId, String displayLocale,
-                           String html, String sha256) {
+                           String html, String sha256,
+                           String contentFingerprintV2) {
         public Rendered { Objects.requireNonNull(html); }
         public byte[] utf8() { return html.getBytes(StandardCharsets.UTF_8); }
     }
@@ -106,6 +107,7 @@ public final class FinancialReportHtmlRenderer {
             passport(html, "Original document SHA-256", source.documentSha256());
         passport(html, "Schema fingerprint", source.schemaFingerprint());
         passport(html, "Normalized fingerprint", source.normalizedFingerprint());
+        passport(html, "Content fingerprint V2", source.contentFingerprintV2());
         passport(html, "Source input locale", source.sourceInputLocale());
         passport(html, "Display locale", view.displayLocale());
         passport(html, "Generated at UTC", view.generatedAt().toString());
@@ -148,7 +150,8 @@ public final class FinancialReportHtmlRenderer {
         byte[] bytes = html.toString().getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_HTML_BYTES) throw new IllegalArgumentException("FIN_HTML_SIZE_BUDGET");
         return new Rendered(source.sourceRevisionId(), view.displayLocale(),
-                html.toString(), HexFormat.of().formatHex(digest(bytes)));
+                html.toString(), HexFormat.of().formatHex(digest(bytes)),
+                source.contentFingerprintV2());
     }
 
     private static void passport(StringBuilder out, String label, String value) {

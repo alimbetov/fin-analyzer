@@ -53,7 +53,8 @@ public final class FinancialReportPdfRenderer {
     }
 
     public record Rendered(UUID sourceRevisionId, String displayLocale,
-                           int pageCount, String sha256, byte[] bytes) {
+                           int pageCount, String sha256, byte[] bytes,
+                           String contentFingerprintV2) {
         public Rendered { bytes = bytes.clone(); }
         @Override public byte[] bytes() { return bytes.clone(); }
     }
@@ -119,7 +120,8 @@ public final class FinancialReportPdfRenderer {
             byte[] bytes = out.toByteArray();
             return new Rendered(snapshot.sourceRevisionId(), view.displayLocale(),
                     document.getNumberOfPages(),
-                    HexFormat.of().formatHex(hash(bytes)), bytes);
+                    HexFormat.of().formatHex(hash(bytes)), bytes,
+                    snapshot.contentFingerprintV2());
         } catch (IOException | IllegalStateException e) {
             throw new IllegalArgumentException("FIN_PDF_RENDER_FAILED", e);
         }
@@ -250,6 +252,7 @@ public final class FinancialReportPdfRenderer {
             passport("Source revision", source.sourceRevisionId().toString()
                     + " / " + source.revisionNumber());
             passport("Source document", source.sourceDraftId().toString());
+            passport("Content fingerprint V2", source.contentFingerprintV2());
             passport("Generated at UTC", view.generatedAt().toString());
             passport("Translations", view.provisionalLabels() + " PROVISIONAL / "
                     + view.missingLabels() + " MISSING / 0 APPROVED");

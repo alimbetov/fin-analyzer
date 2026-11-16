@@ -86,6 +86,11 @@ public class FinancialReportSnapshotService {
             }
             rows = List.copyOf(safe);
         }
+
+        /** Stable order-sensitive identity for report consumers. */
+        public String contentFingerprintV2() {
+            return FinancialReportContentIdentity.digest(this);
+        }
     }
 
     private record Stored(String formCode, String basis, String periodType, String period,

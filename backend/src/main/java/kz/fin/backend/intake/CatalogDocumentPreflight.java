@@ -1,6 +1,9 @@
 package kz.fin.backend.intake;
 
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
@@ -75,13 +78,36 @@ public final class CatalogDocumentPreflight {
         return new IllegalArgumentException("CATALOG_DOCUMENT_INVALID_OR_UNSUPPORTED");
     }
 
-    private static void verifyPdf(byte[] bytes) {
+    private static void verifyPdf(byte[] bytes) throws IOException {
         String header = new String(bytes, 0, Math.min(bytes.length, 8),
                 StandardCharsets.US_ASCII);
         String tail = new String(bytes, Math.max(0, bytes.length - 128),
                 Math.min(128, bytes.length), StandardCharsets.US_ASCII);
         if (!header.matches("%PDF-1\\.[0-7].*") || !tail.contains("%%EOF")) {
             throw invalid();
+        }
+        // A PDF header/EOF pair is NOT proof of a valid document. Parse
+        // actual page trees and reject actionable/interactive PDF structures.
+        // No scripts, external URLs or document actions may be executed by
+        // this offline preflight. This is still not malware/issuer verification.
+        try (PDDocument document = Loader.loadPDF(bytes)) {
+            if (document.isEncrypted() || document.getDocumentCatalog() == null ||
+                    document.getNumberOfPages() < 1 ||
+                    document.getNumberOfPages() > 200) {
+                throw invalid();
+            }
+            var catalog = document.getDocumentCatalog().getCOSObject();
+            for (COSName disallowed : new COSName[] {
+                    COSName.OPEN_ACTION, COSName.AA, COSName.NAMES,
+                    COSName.ACRO_FORM, COSName.COLLECTION }) {
+                if (catalog.containsKey(disallowed)) throw invalid();
+            }
+            for (var page : document.getPages()) {
+                if (!page.getAnnotations().isEmpty() ||
+                        page.getCOSObject().containsKey(COSName.AA)) {
+                    throw invalid();
+                }
+            }
         }
     }
 

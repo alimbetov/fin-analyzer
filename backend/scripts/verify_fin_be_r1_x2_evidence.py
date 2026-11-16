@@ -110,6 +110,9 @@ def main():
         for flag in ("issuedPopulated", "strictV2Parsed", "valuesEqual",
                      "sourceContextUnchanged", "manifestDigestVerified"):
             require(case.get(flag) is True, f"{code}/{language}: {flag}")
+        require(isinstance(case.get("contentFingerprintV2"), str)
+                and HASH.fullmatch(case["contentFingerprintV2"]),
+                "missing V2 order-sensitive source identity")
         require(isinstance(case.get("artifactSha256"), str)
                 and HASH.fullmatch(case["artifactSha256"]),
                 "missing artifact SHA-256")
