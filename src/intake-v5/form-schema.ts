@@ -109,15 +109,19 @@ export function normalizeUserDecimal(value:string,locale:ActiveLocale):string {
   return normalizeDecimal(trimmed);
 }
 
-export function validateF02(context: EntryContext, rows: readonly EntryRow[]): ValidatedEntry {
+export function validateF02(context: EntryContext, rows: readonly EntryRow[], sourceKind: "MANUAL" | "XLSX" = "MANUAL"): ValidatedEntry {
   const findings: EntryFinding[] = [];
   if (!/^[\p{L}\p{N}_-]{1,50}$/u.test(context.projectCode))
     findings.push({ code: "PROJECT_CODE_REQUIRED" });
   if (context.formCode !== "F02" || ![1, 1000, 1000000].includes(context.amountScale)
       || context.reportCurrency !== "KZT" || context.accountingCurrency !== "KZT")
     findings.push({ code: "V5_PILOT_CONTEXT_NOT_SUPPORTED" });
-  if (!/^[0-9]{4}\.(0[1-9]|1[0-2])$/.test(context.periodCode))
+  const parts = /^(\d{4})\.(0[1-9]|1[0-2])$/.exec(context.periodCode);
+  const selectedYear = parts ? Number(parts[1]) : 0;
+  if (!parts || selectedYear < 1900 || selectedYear > 9998)
     findings.push({ code: "INVALID_MONTH" });
+  if (!ACTIVE_LOCALES.includes(context.locale))
+    findings.push({code: "TRANSLATION_NOT_READY"});
   const byCode = new Map<string, EntryRow>();
   for (const row of rows) {
     const known = PILOT_F02_SCHEMA.fields.some(field => field.code === row.fieldCode && field.rowId === row.rowId);
@@ -138,7 +142,13 @@ export function validateF02(context: EntryContext, rows: readonly EntryRow[]): V
       return { rowId: field.rowId, fieldCode: field.code, rawValue: raw };
     }
   });
-  return { context, rows: normalized, findings, valid: findings.length === 0 };
+  const localizedFindings = sourceKind === "XLSX"
+    ? findings.map(finding => {
+        const index = PILOT_F02_SCHEMA.fields.findIndex(f => f.code === finding.fieldCode);
+        return index < 0 ? finding : {...finding, sourceCell: "FIN_Data!D" + (index + 3)};
+      })
+    : findings;
+  return { context, rows: normalized, findings: localizedFindings, valid: findings.length === 0 };
 }
 
 /** Decimal-string formatter; does not convert the financial amount to a JS Number. */
