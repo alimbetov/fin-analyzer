@@ -1,14 +1,14 @@
 import {useRef,useState,type ChangeEvent} from "react";
 import {
   CAPTURE_CATALOG,CAPTURE_LOCALES,MAX_CATALOG_ROWS,
-  getCaptureForm,validateCatalogCapture,type CatalogCaptureContext,
+  getCaptureForm,validateCatalogCapture,validateCatalogContext,type CatalogCaptureContext,
   type CatalogPreview,type CatalogRow,type CaptureLocale
 } from "./catalog-schema";
 import {generateTypedCatalogExcel,parseTypedCatalogExcel} from "./catalog-excel";
 import {formatExactDecimal} from "../intake-v5/form-schema";
 import {SPECIALIZED_CANDIDATES,validateSpecializedCandidate} from "./specialized-contracts";
 import {fieldPresentation} from "./field-presentation-r6";
-import {inspectLocalEvidence,type EvidenceDraft} from "./evidence-contract-r6";
+import {inspectLocalEvidence,MAX_EVIDENCE_BYTES,type EvidenceDraft} from "./evidence-contract-r6";
 import type {PeriodType,ValueCoverage} from "../intake-v5/reporting-period";
 
 const LOCALIZED={
@@ -100,11 +100,12 @@ export function CatalogIntakeStudio(){
   const fields=candidate?.fields??form.fields;
   const labels=LOCALIZED[context.locale];
   const typed=form.captureMode==="TYPED_DRAFT"||!!candidate;
-  function resetPreview(){generation.current++;setPreview(null);setError("");setMessage("");}
+  function resetPreview(){generation.current++;setBusy(false);setPreview(null);setError("");setMessage("");}
   function changeContext(partial:Partial<CatalogCaptureContext>){
     resetPreview();
     setContext(old=>({...old,...partial}));
-    if(partial.formCode!==undefined){setRows([freshRow()]);setEvidenceDraft(null);}
+    setEvidenceDraft(null);
+    if(partial.formCode!==undefined)setRows([freshRow()]);
   }
   function changeRow(index:number,next:CatalogRow){
     resetPreview();setRows(previous=>previous.map((r,i)=>i===index?next:r));
@@ -144,21 +145,31 @@ export function CatalogIntakeStudio(){
   async function inspectEvidence(e:ChangeEvent<HTMLInputElement>){
     const file=e.target.files?.[0];e.target.value="";
     if(!file)return;
+    // Do not read an oversized document into memory before checking its size.
+    if(file.size===0||file.size>MAX_EVIDENCE_BYTES){
+      setError("EVIDENCE_SIZE_REJECTED");return;
+    }
+    const request=++generation.current;
+    const expectedForm=context.formCode;
     setError("");setEvidenceDraft(null);setBusy(true);
     try{
-      const evidence=await inspectLocalEvidence(context.formCode,file.name,
+      const evidence=await inspectLocalEvidence(expectedForm,file.name,
         new Uint8Array(await file.arrayBuffer()));
-      setEvidenceDraft(evidence);
-    }catch(e){setError(e instanceof Error?e.message:"EVIDENCE_LOCAL_INVALID");}
-    finally{setBusy(false);}
+      if(generation.current===request)setEvidenceDraft(evidence);
+    }catch(e){
+      if(generation.current===request)
+        setError(e instanceof Error?e.message:"EVIDENCE_LOCAL_INVALID");
+    }finally{if(generation.current===request)setBusy(false);}
   }
   function validateManual(){
     setError("");setMessage("");
     try{
       const found=candidate?validateSpecializedCandidate(form.code,rows,context.locale):null;
+      const coordinateFindings=validateCatalogContext(context);
       setPreview(found?{
         status:"UNQUALIFIED_DRAFT",publishable:false,context,
-        rows:found.rows,findings:found.findings,valid:found.acceptedAsUnqualifiedDraft
+        rows:found.rows,findings:[...coordinateFindings,...found.findings],
+        valid:coordinateFindings.length===0&&found.acceptedAsUnqualifiedDraft
       }:validateCatalogCapture(context,rows));
       setPreviewSource("MANUAL");
     }
