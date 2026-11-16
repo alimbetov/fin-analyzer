@@ -60,7 +60,7 @@ export function evaluateCandidate({formCode,values,dataSpace="SYNTHETIC",currenc
  const required=REQUIRED[formCode];
  for(const key of required)if(!Object.hasOwn(values,key)||values[key]===null||values[key]===undefined)
    throw new Error("MISSING_EVIDENCE:"+key);
- const computed={};const limitations=[];
+ for(const key of required)decimal(values[key]); // Validate even operands not yet qualified for arithmetic.\n const computed={};const limitations=[];
  const put=(key,v)=>{computed[key]=format(v);};
  const identity=(target,expected,code)=>{
    const diff=target-expected;put(code+"Difference",diff);
