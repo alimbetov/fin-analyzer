@@ -168,8 +168,8 @@ export async function parseF02ExcelV5(source: ArrayBuffer, expected: EntryContex
   sheet.eachRow(row=>{
     if(row.number>PILOT_F02_SCHEMA.fields.length+2)
       throw new Error("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
-    row.eachCell({includeEmpty:false},cell=>{
-      if(cell.col>8)throw new Error("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
+    row.eachCell({includeEmpty:false},(_cell,columnNumber)=>{
+      if(columnNumber>8)throw new Error("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
     });
   });
   if(sheet.actualColumnCount>8 || sheet.actualRowCount>PILOT_F02_SCHEMA.fields.length+2)
