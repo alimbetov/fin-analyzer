@@ -73,7 +73,17 @@ public final class CatA31MethodReviewRegistry {
                 key.formVersion(),key.reportingBasis());
         if(reviews.isEmpty())return new Result(ReviewStatus.NOT_REVIEWED,null,
                 key.methodCode(),key.methodVersion(),null);
-        // Conflicting independent decisions for the same method variant need\n        // manual adjudication, never implicit approval of the earlier one.\n        if(reviews.stream().anyMatch(x->!"APPROVED".equals(x.decision())\n                && !"REJECTED".equals(x.decision())))\n            return new Result(ReviewStatus.AMBIGUOUS,null,\n                    key.methodCode(),key.methodVersion(),null);\n        if(reviews.stream().anyMatch(x->"APPROVED".equals(x.decision()))\n                && reviews.stream().anyMatch(x->"REJECTED".equals(x.decision())))\n            return new Result(ReviewStatus.AMBIGUOUS,null,\n                    key.methodCode(),key.methodVersion(),null);\n        List<Review> approved=reviews.stream().filter(x->"APPROVED".equals(x.decision())).toList();
+        // Conflicting independent decisions for the same method variant need
+        // manual adjudication, never implicit approval of the earlier one.
+        if(reviews.stream().anyMatch(x->!"APPROVED".equals(x.decision())
+                && !"REJECTED".equals(x.decision())))
+            return new Result(ReviewStatus.AMBIGUOUS,null,
+                    key.methodCode(),key.methodVersion(),null);
+        if(reviews.stream().anyMatch(x->"APPROVED".equals(x.decision()))
+                && reviews.stream().anyMatch(x->"REJECTED".equals(x.decision())))
+            return new Result(ReviewStatus.AMBIGUOUS,null,
+                    key.methodCode(),key.methodVersion(),null);
+        List<Review> approved=reviews.stream().filter(x->"APPROVED".equals(x.decision())).toList();
         if(approved.isEmpty())return new Result(ReviewStatus.REJECTED,null,
                 key.methodCode(),key.methodVersion(),null);
         if(approved.size()!=1)return new Result(ReviewStatus.AMBIGUOUS,null,
@@ -83,7 +93,8 @@ public final class CatA31MethodReviewRegistry {
                 key.methodCode(),key.methodVersion(),r.evidence());
         // Signed reference is relevant to the current server time and must
         // not be confused with the expiry of the underlying source facts.
-        Instant now=jdbc.queryForObject("SELECT CURRENT_TIMESTAMP",\n                (rs,i)->rs.getTimestamp(1).toInstant());
+        Instant now=jdbc.queryForObject("SELECT CURRENT_TIMESTAMP",
+                (rs,i)->rs.getTimestamp(1).toInstant());
         if(now==null || now.isBefore(r.starts()) || !now.isBefore(r.ends()))
             return new Result(ReviewStatus.NOT_EFFECTIVE,r.id(),
                     key.methodCode(),key.methodVersion(),r.evidence());
