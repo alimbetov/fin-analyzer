@@ -82,7 +82,8 @@ public final class CompositeCoreReportPublisher {
                         JsonNode result=json.readTree(task.result());
                         method.put("result",result);
                         if(result.hasNonNull("qualification"))
-                            method.put("qualification",result.get("qualification").asText());
+                            method.put("declaredVariantQualification",
+                                    result.get("qualification").asText());
                         if(SyntheticBusinessDiagnosticAdapter.CODE.equals(task.code())) {
                             String assessment=result.path("assessmentId").asText();
                             if(!assessment.isBlank()) {
