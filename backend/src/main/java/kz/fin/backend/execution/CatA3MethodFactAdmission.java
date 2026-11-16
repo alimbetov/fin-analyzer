@@ -92,7 +92,7 @@ public final class CatA3MethodFactAdmission {
             return new Decision(Status.SOURCE_NOT_PUBLISHED_OR_CHANGED,methodCode,
                     formCode,revision.factSetRevisionId().toString());
         if(!Objects.equals(p.dataSpace(),revision.dataSpace()) ||
-                !Set.of("MANAGEMENT","SEPARATE","CONSOLIDATED").contains(p.reportingBasis()))
+                (p.reportingBasis()==null || !Set.of("MANAGEMENT","SEPARATE","CONSOLIDATED").contains(p.reportingBasis())))
             return new Decision(Status.SOURCE_SCOPE_MISMATCH,methodCode,
                     formCode,revision.factSetRevisionId().toString());
         // Published != complete source population. This is an intermediate
