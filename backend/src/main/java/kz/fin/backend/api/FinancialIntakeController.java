@@ -2,12 +2,18 @@ package kz.fin.backend.api;
 
 import kz.fin.backend.persistence.ReviewedFinancialIntakeService;
 import kz.fin.backend.persistence.TrustedFinancialFormMapper;
+import kz.fin.backend.persistence.PilotXlsxTemplateService;
 import kz.fin.backend.security.FinanceAccessPolicy;
 import kz.fin.backend.security.FinanceAccessPolicy.Permission;
 import kz.fin.backend.domain.EconomicKernel;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
 
 import java.util.*;
 
@@ -22,10 +28,12 @@ import java.util.*;
 public class FinancialIntakeController {
     private final FinanceAccessPolicy access;
     private final ReviewedFinancialIntakeService workflow;
+    private final PilotXlsxTemplateService xlsx;
 
     public FinancialIntakeController(FinanceAccessPolicy access,
-                                     ReviewedFinancialIntakeService workflow){
-        this.access=access;this.workflow=workflow;
+                                     ReviewedFinancialIntakeService workflow,
+                                     PilotXlsxTemplateService xlsx){
+        this.access=access;this.workflow=workflow;this.xlsx=xlsx;
     }
     public record SubmitBody(UUID economicEntityId,UUID businessScopeId,String formCode,
                              String reportingBasis,String currencyCode,int amountScale,
@@ -47,6 +55,58 @@ public class FinancialIntakeController {
                         body.formCode(),body.reportingBasis(),body.currencyCode(),
                         body.amountScale(),body.cells()));
     }
+    @GetMapping(value="/templates/{formCode}",
+                produces="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> template(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID organizationId,@PathVariable String formCode,
+            @RequestParam UUID economicEntityId,@RequestParam UUID businessScopeId,
+            @RequestParam(defaultValue="MANAGEMENT") String reportingBasis,
+            @RequestParam(defaultValue="KZT") String currencyCode,
+            @RequestParam(defaultValue="1") int amountScale) {
+        access.require(jwt,organizationId,Permission.FIN_SUBMIT);
+        byte[] file=xlsx.template(new PilotXlsxTemplateService.Context(
+                organizationId,economicEntityId,businessScopeId,formCode,
+                reportingBasis,currencyCode,amountScale));
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"FIN-"+formCode+"-FIN-PILOT-V1.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(file);
+    }
+
+    @PostMapping(value="/submissions/xlsx",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ReviewedFinancialIntakeService.Submitted submitXlsx(
+            @AuthenticationPrincipal Jwt jwt,@PathVariable UUID organizationId,
+            @RequestParam UUID economicEntityId,@RequestParam UUID businessScopeId,
+            @RequestParam String formCode,@RequestParam(defaultValue="MANAGEMENT") String reportingBasis,
+            @RequestParam(defaultValue="KZT") String currencyCode,
+            @RequestParam(defaultValue="1") int amountScale,
+            @RequestPart("file") MultipartFile file) throws IOException {
+        access.require(jwt,organizationId,Permission.FIN_SUBMIT);
+        if(file==null || file.isEmpty() || file.getSize()>2_000_000)
+            throw new IllegalArgumentException("XLSX_SIZE_LIMIT");
+        if(file.getOriginalFilename()==null ||
+                !file.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".xlsx"))
+            throw new IllegalArgumentException("XLSX_EXTENSION_REQUIRED");
+        return workflow.submitXlsx(access.subject(jwt),
+                new PilotXlsxTemplateService.Context(organizationId,economicEntityId,
+                        businessScopeId,formCode,reportingBasis,currencyCode,amountScale),
+                file.getBytes());
+    }
+
+    @GetMapping(value="/submissions/{submissionId}/original",
+                produces="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> original(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID organizationId,@PathVariable UUID submissionId) {
+        access.require(jwt,organizationId,Permission.FIN_READ);
+        byte[] bytes=workflow.readRawXlsx(organizationId,submissionId);
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"FIN-reviewed-original-"+submissionId+".xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
     @GetMapping("/submissions/{submissionId}")
     public ReviewedFinancialIntakeService.SubmissionInfo read(
             @AuthenticationPrincipal Jwt jwt,@PathVariable UUID organizationId,
