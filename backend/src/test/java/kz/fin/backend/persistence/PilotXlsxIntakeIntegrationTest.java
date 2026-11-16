@@ -55,6 +55,72 @@ class PilotXlsxIntakeIntegrationTest {
             }
         });
     }
+    private static PilotXlsxTemplateService.Context liquidityContext(){
+        var old=context("F01");
+        return new PilotXlsxTemplateService.Context(
+                old.organizationId(),old.entityId(),old.businessScopeId(),
+                "F01","MANAGEMENT","KZT",1,"FIN-LIQUIDITY-V1");
+    }
+    private static byte[] completeLiquidityF01(byte[] template){
+        return edit(template,workbook->{
+            Sheet data=workbook.getSheet("FIN_Data");
+            double[] amounts={1000,600,400,100,80,400,200};
+            for(int i=1;i<=amounts.length;i++){
+                data.getRow(i).getCell(2).setCellValue("2026-10");
+                data.getRow(i).getCell(3).setCellValue(amounts[i-1]);
+            }
+        });
+    }
+
+    @Test void versionedF01LiquidityXlsxHasSevenFieldsAndIndependentReview() {
+        var c=liquidityContext();
+        byte[] raw=completeLiquidityF01(xlsx.template(c));
+        var cells=xlsx.parse(c,raw);
+        assertEquals(7,cells.size());
+        assertEquals("currentAssets",cells.get(5).sourceField());
+        assertEquals("currentLiabilities",cells.get(6).sourceField());
+        var source=intake.submitXlsx("source-author",c,raw);
+        var info=intake.read(c.organizationId(),source.id());
+        assertEquals("FIN-LIQUIDITY-V1",info.formVersion());
+        assertEquals("PENDING",info.reviewStatus());
+        assertArrayEquals(raw,intake.readRawXlsx(c.organizationId(),source.id()));
+        assertThrows(IllegalArgumentException.class,
+            ()->intake.review("source-author",c.organizationId(),source.id(),
+                    true,"Self review not allowed"));
+        var reviewed=intake.review("independent-reviewer",c.organizationId(),
+                source.id(),true,"Reconciled F01 current balances");
+        assertEquals(7,reviewed.mappedFacts());
+        var published=intake.publishReviewedActual(
+                new ReviewedFinancialIntakeService.PublishRequest(
+                    c.organizationId(),c.entityId(),c.businessScopeId(),
+                    EconomicKernel.ReportingBasis.MANAGEMENT,List.of(source.id()),null));
+        assertEquals(7L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_fact.fact_selection
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,c.organizationId(),published.revisionId()));
+
+        var legacy=new PilotXlsxTemplateService.Context(c.organizationId(),
+            c.entityId(),c.businessScopeId(),"F01","MANAGEMENT","KZT",1);
+        assertThrows(IllegalArgumentException.class,()->xlsx.parse(legacy,raw));
+        assertThrows(IllegalArgumentException.class,
+            ()->new PilotXlsxTemplateService.Context(c.organizationId(),
+                c.entityId(),c.businessScopeId(),"F02","MANAGEMENT","KZT",1,
+                "FIN-LIQUIDITY-V1"));
+    }
+
+    @Test void f01LiquidityXlsxMissingCurrentLiabilitiesCannotBeApproved(){
+        var c=liquidityContext();
+        var incomplete=edit(completeLiquidityF01(xlsx.template(c)),book->
+            book.getSheet("FIN_Data").getRow(7).getCell(3).setBlank());
+        var parsed=xlsx.parse(c,incomplete);
+        assertEquals(6,parsed.size());
+        assertThrows(IllegalArgumentException.class,
+            ()->intake.submitXlsx("source-author",c,incomplete));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_intake.submission WHERE organization_id=?
+            """,Long.class,c.organizationId()));
+    }
+
     @Test void allFiveLegacyPilotFormsExportImportInSchemaOrderWithoutPublishing(){
         Map<String,double[]> examples=new LinkedHashMap<>();
         examples.put("F01",new double[]{100,40,60,10,5});
