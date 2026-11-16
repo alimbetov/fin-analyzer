@@ -74,7 +74,7 @@ public final class CatA3MethodFactAdmission {
         if(revision.organizationId()==null || revision.economicEntityId()==null ||
                 revision.businessScopeId()==null || revision.factSetRevisionId()==null ||
                 revision.snapshotHash()==null || revision.snapshotHash().isBlank() ||
-                !Set.of("ACTUAL","SYNTHETIC").contains(revision.dataSpace()))
+                (revision.dataSpace()==null || !Set.of("ACTUAL","SYNTHETIC").contains(revision.dataSpace())))
             return new Decision(Status.INPUT_INVALID,methodCode,formCode,null);
         List<Publication> publications=jdbc.query("""
                 SELECT snapshot_hash,data_space,reporting_basis
