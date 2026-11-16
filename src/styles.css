@@ -213,3 +213,44 @@ footer { text-align: center; color: #536c87; font-size: 11px; margin: 28px 0; }
 @media (max-width: 1050px) { .graph-controls { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 750px) { .graph-rule-list,.graph-study-list { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .graph-stats { grid-template-columns: repeat(2,minmax(0,1fr)); } .graph-controls { grid-template-columns: 1fr; } }
+
+
+/* FIN V5 pilot: deliberately scoped to avoid changing legacy balance/sector editors. */
+.fin-v5-studio { font-family: Inter, system-ui, -apple-system, "Segoe UI", "Noto Sans", "Microsoft YaHei", sans-serif; }
+.fin-v5-note { font-size: 12px; line-height: 1.7; color: #a5bfd8; }
+.fin-v5-controls { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.fin-v5-controls label { display:flex; flex-direction:column; gap:8px; color:#bfd0e8; font-size:12px; font-weight:600; }
+.fin-v5-controls input,.fin-v5-controls select {
+  min-height:43px; min-width:0; border:1px solid #435e7e; border-radius:9px;
+  padding:9px 10px; background:#142a44; color:#f0f7ff; font:inherit;
+}
+.fin-v5-scroll { max-width:100%; overflow:auto; border:1px solid #3e5470; border-radius:12px; }
+.fin-v5-table { min-width:740px; width:100%; border-collapse:separate; border-spacing:0; }
+.fin-v5-table caption { text-align:left; padding:12px 15px; color:#c0d3e9; font-size:12px; }
+.fin-v5-table thead th { position:sticky; top:0; z-index:1; background:#254767; color:#eff7ff;
+  padding:13px 12px; border-bottom:2px solid #497495; text-align:center; vertical-align:middle;
+  font-size:12px; line-height:1.45; white-space:normal; }
+.fin-v5-table tbody td,.fin-v5-table tbody th { padding:13px 12px; border-bottom:1px solid #314a64;
+  vertical-align:middle; font-size:13px; line-height:1.5; }
+.fin-v5-table tbody tr:nth-child(2n) { background:#172b41; }
+.fin-v5-table tbody tr:hover { background:#213c57; }
+.fin-v5-table .fin-v5-text { text-align:center; vertical-align:middle; overflow-wrap:anywhere; }
+.fin-v5-table .fin-v5-code { color:#96b5d8; font-size:11px; font-family:ui-monospace, monospace; }
+.fin-v5-table .fin-v5-number { text-align:right; vertical-align:middle; white-space:nowrap; font-variant-numeric:tabular-nums; min-width:180px; }
+.fin-v5-table .fin-v5-number input {
+  display:block; width:100%; min-width:145px; padding:11px 12px; border-radius:7px;
+  border:1px solid #487fa8; background:#254c73; color:#fff; font:inherit; text-align:right;
+  font-variant-numeric:tabular-nums; }
+.fin-v5-table .fin-v5-number input:focus { outline:2px solid #8ac7ff; outline-offset:2px; }
+.fin-v5-actions { margin-top:16px; }
+.fin-v5-upload { display:inline-flex; align-items:center; gap:10px; padding:11px 14px;
+  border:1px solid #3a5777; border-radius:8px; font-size:12px; color:#cddff3; cursor:pointer; }
+.fin-v5-upload input { max-width:220px; color:#a8c9e8; }
+.fin-v5-preview { margin-top:25px; padding:16px; border:1px solid #356286; border-radius:13px; background:#132740; }
+.fin-v5-preview-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; }
+.fin-v5-preview h3 { font-size:17px; margin:0; }
+.fin-v5-ok { color:#9de4bf; font-weight:700; }
+.fin-v5-error { color:#ffc2ce; font-weight:700; line-height:1.6; }
+.fin-v5-issues { color:#ffbdc8; padding-left:22px; font-size:12px; }
+@media (max-width:1100px) { .fin-v5-controls { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:600px) { .fin-v5-controls { grid-template-columns:1fr; } }
