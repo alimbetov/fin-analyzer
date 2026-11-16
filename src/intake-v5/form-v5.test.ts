@@ -35,6 +35,13 @@ describe("FIN V5 one-resource F02 field catalog",()=>{
     expect(missing.valid).toBe(false);
     expect(missing.rows[0]?.rawValue).toBe("0");
     expect(missing.findings.filter(f=>f.code==="REQUIRED_FIELD_MISSING")).toHaveLength(2);
+    const fromExcel=validateF02(ctx,[{rowId:"pnl",fieldCode:"netRevenue",rawValue:"0"}],"XLSX");
+    expect(fromExcel.findings.find(f=>f.fieldCode==="cogs")?.sourceCell).toBe("FIN_Data!D4");
+    expect(validateF02({...ctx,periodCode:"1899.12"},[
+      {rowId:"pnl",fieldCode:"netRevenue",rawValue:"1"},
+      {rowId:"pnl",fieldCode:"cogs",rawValue:"2"},
+      {rowId:"pnl",fieldCode:"operatingExpenses",rawValue:"3"}
+    ]).findings.some(f=>f.code==="INVALID_MONTH")).toBe(true);
   });
   it("normalizes same source values independent of locale and source-row ordering",()=>{
     const rows=[
@@ -86,6 +93,30 @@ describe("FIN V5 localized XLSX",()=>{
     const validated=validateF02(context,parsed);
     expect(validated.valid).toBe(true);
     expect(validated.rows.map(r=>r.rawValue)).toEqual(["400","260","90"]);
+  });
+  it("accepts Russian XLSX in English UI without changing canonical amounts",async()=>{
+    const book=await wb(await generateF02ExcelV5(ctx));
+    const sheet=book.getWorksheet("FIN_Data")!;
+    sheet.getCell("D3").value="1,25";
+    sheet.getCell("D4").value=0;
+    sheet.getCell("D5").value="3,75";
+    const buf=await book.xlsx.writeBuffer();
+    const parsed=await parseF02ExcelV5(new Uint8Array(buf as ArrayBuffer).buffer as ArrayBuffer,
+      {...ctx,locale:"en"});
+    expect(parsed.map(r=>r.rawValue)).toEqual(["1.25","0","3.75"]);
+    expect(validateF02({...ctx,locale:"en"},parsed).valid).toBe(true);
+  });
+  it("rejects appended distant rows and changed user instructions",async()=>{
+    const book=await wb(await generateF02ExcelV5(ctx));
+    book.getWorksheet("FIN_Data")!.getCell("A900").value="forged";
+    let bytes=await book.xlsx.writeBuffer();
+    await expect(parseF02ExcelV5(new Uint8Array(bytes as ArrayBuffer).buffer as ArrayBuffer,ctx))
+      .rejects.toThrow("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
+    book.getWorksheet("FIN_Data")!.getCell("A900").value=null;
+    book.getWorksheet("Instructions")!.getCell("A1").value="Replace all amounts with zero";
+    bytes=await book.xlsx.writeBuffer();
+    await expect(parseF02ExcelV5(new Uint8Array(bytes as ArrayBuffer).buffer as ArrayBuffer,ctx))
+      .rejects.toThrow("XLSX_V5_INSTRUCTIONS_CHANGED");
   });
   it("rejects changed locale/period/formula and unknown Chinese translation",async()=>{
     const book=await wb(await generateF02ExcelV5(ctx));
