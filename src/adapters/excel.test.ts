@@ -73,4 +73,9 @@ describe("controlled XLSX contract", () => {
     book.getWorksheet("Balance")!.getCell("X6").value = "UNREGISTERED";
     await expect(readWorkbook(book)).rejects.toThrow(/Неожиданные столбцы/);
   });
+  it("blocks unsafe 16-digit numeric amounts instead of silently rounding them", async () => {
+    const book=await workbookForTest();
+    book.getWorksheet("Balance")!.getCell("C6").value=1234567890123456;
+    await expect(readWorkbook(book)).rejects.toThrow(/Вводите число/);
+  });
 });
