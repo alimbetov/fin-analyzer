@@ -95,6 +95,7 @@ jobs:
             kz.fin.backend.execution.SingleExecutorGraphTest \
             kz.fin.backend.execution.MethodologyCatalogContractTest \
             kz.fin.backend.execution.QualifiedRevenueSingleExecutorIntegrationTest \
+            kz.fin.backend.execution.QualifiedRevenueStructureIntegrationTest \
             kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest \
             kz.fin.backend.persistence.TrustedFinancialFormMapperIntegrationTest \
             kz.fin.backend.diagnostics.R4ProofAndDecisionTest \
@@ -131,6 +132,7 @@ jobs:
               "kz.fin.backend.execution.SingleExecutorGraphTest",
               "kz.fin.backend.execution.MethodologyCatalogContractTest",
               "kz.fin.backend.execution.QualifiedRevenueSingleExecutorIntegrationTest",
+              "kz.fin.backend.execution.QualifiedRevenueStructureIntegrationTest",
               "kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest",
               "kz.fin.backend.persistence.TrustedFinancialFormMapperIntegrationTest",
               "kz.fin.backend.diagnostics.R4ProofAndDecisionTest",
