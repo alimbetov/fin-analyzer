@@ -247,9 +247,21 @@ public class TrustedCrossFormDiagnosticService {
 
     @Transactional(isolation=Isolation.REPEATABLE_READ)
     public Receipt assessAndPublish(UUID authorizedOrg,UUID publishedRevision,YearMonth month){
-        Report report=assessInternal(authorizedOrg,publishedRevision,month);
-        String definitionHash=definitionHash();
-        JsonNode snapshot=toSnapshot(report);
+        Report report=assessInternal(authorizedOrg,publishedRevision,month,false);
+        return persist(authorizedOrg,publishedRevision,month,report,RULE_SET_CODE,RULE_SET_VERSION);
+    }
+    @Transactional(isolation=Isolation.REPEATABLE_READ)
+    public Receipt assessAndPublishProvisionalActual(
+            UUID authorizedOrg,UUID publishedRevision,YearMonth month){
+        if(!actualPreviewEnabled)throw new IllegalArgumentException("FIN_ACTUAL_DIAGNOSTIC_S2_HOLD");
+        Report report=assessInternal(authorizedOrg,publishedRevision,month,true);
+        return persist(authorizedOrg,publishedRevision,month,report,
+                PROVISIONAL_RULE_CODE,PROVISIONAL_RULE_VERSION);
+    }
+    private Receipt persist(UUID authorizedOrg,UUID publishedRevision,YearMonth month,
+                            Report report,String ruleCode,String ruleVersion){
+        String definitionHash=definitionHash(ruleCode,ruleVersion);
+        JsonNode snapshot=toSnapshot(report,ruleCode,ruleVersion);
         UUID proposedId=UUID.randomUUID();
         int inserted=jdbc.update("""
             INSERT INTO fin_diag.assessment_run(
@@ -260,7 +272,7 @@ public class TrustedCrossFormDiagnosticService {
             ON CONFLICT (organization_id,fact_set_revision_id,evaluation_month,
                          rule_set_code,rule_set_version) DO NOTHING
             """,proposedId,authorizedOrg,publishedRevision,month.atDay(1),
-                RULE_SET_CODE,RULE_SET_VERSION,CrossFormDiagnosticEngine.METHOD_VERSION,
+                ruleCode,ruleVersion,CrossFormDiagnosticEngine.METHOD_VERSION,
                 definitionHash,"0".repeat(64),snapshot.toString(),"0".repeat(64));
         UUID id=proposedId;
         if(inserted==0){
@@ -270,7 +282,7 @@ public class TrustedCrossFormDiagnosticService {
                 AND evaluation_month=? AND rule_set_code=? AND rule_set_version=?
                 """,(rs,i)->new Existing(rs.getObject(1,UUID.class),rs.getString(2),
                     readJson(rs.getString(3))),authorizedOrg,publishedRevision,
-                    month.atDay(1),RULE_SET_CODE,RULE_SET_VERSION);
+                    month.atDay(1),ruleCode,ruleVersion);
             if(found.size()!=1 || !found.getFirst().hash().equals(definitionHash)
                     || !found.getFirst().snapshot().equals(snapshot))
                 throw new IllegalArgumentException("CROSS_FORM_VERSION_OR_RESULT_DRIFT");
@@ -286,6 +298,14 @@ public class TrustedCrossFormDiagnosticService {
 
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public Stored loadPublished(UUID authorizedOrg,UUID assessmentId){
+        return load(authorizedOrg,assessmentId,RULE_SET_CODE);
+    }
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public Stored loadProvisionalActual(UUID authorizedOrg,UUID assessmentId){
+        if(!actualPreviewEnabled)throw new IllegalArgumentException("FIN_ACTUAL_DIAGNOSTIC_S2_HOLD");
+        return load(authorizedOrg,assessmentId,PROVISIONAL_RULE_CODE);
+    }
+    private Stored load(UUID authorizedOrg,UUID assessmentId,String ruleCode){
         Objects.requireNonNull(authorizedOrg);Objects.requireNonNull(assessmentId);
         List<Stored> result=jdbc.query("""
             SELECT a.id,a.organization_id,a.fact_set_revision_id,a.evaluation_month,
@@ -312,14 +332,14 @@ public class TrustedCrossFormDiagnosticService {
                 return new Stored(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                         revision,YearMonth.from(rs.getObject(4,LocalDate.class)),
                         freshness,rs.getString(5),rs.getString(6),readJson(rs.getString(7)));
-            },authorizedOrg,assessmentId,RULE_SET_CODE);
+            },authorizedOrg,assessmentId,ruleCode);
         if(result.size()!=1)throw new IllegalArgumentException("CROSS_FORM_NOT_FOUND_OR_FORBIDDEN");
         return result.getFirst();
     }
-    private static String definitionHash(){
+    private static String definitionHash(String ruleCode,String ruleVersion){
         try{
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
-            feed(digest,RULE_SET_CODE);feed(digest,RULE_SET_VERSION);
+            feed(digest,ruleCode);feed(digest,ruleVersion);
             feed(digest,CrossFormDiagnosticEngine.METHOD_VERSION);
             feed(digest,CrossFormDiagnosticEngine.RELATIONSHIPS.definitionHash());
             for(Rule rule:CrossFormDiagnosticEngine.RULES){
@@ -342,10 +362,10 @@ public class TrustedCrossFormDiagnosticService {
             throw new IllegalArgumentException("CROSS_FORM_INVALID_JSON",e);
         }
     }
-    private JsonNode toSnapshot(Report report){
+    private JsonNode toSnapshot(Report report,String ruleCode,String ruleVersion){
         ObjectNode root=mapper.createObjectNode();
         root.put("methodVersion",report.methodVersion());
-        root.put("ruleSetCode",RULE_SET_CODE);root.put("ruleSetVersion",RULE_SET_VERSION);
+        root.put("ruleSetCode",ruleCode);root.put("ruleSetVersion",ruleVersion);
         root.put("organizationId",report.scope().organizationId().toString());
         root.put("entityId",report.scope().entityId().toString());
         root.put("businessScopeId",report.scope().businessScopeId().toString());
