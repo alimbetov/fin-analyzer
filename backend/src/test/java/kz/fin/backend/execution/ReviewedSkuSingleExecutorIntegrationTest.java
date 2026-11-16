@@ -172,6 +172,15 @@ class ReviewedSkuSingleExecutorIntegrationTest {
                 ()->review(s,"sku-source-author")); // four-eyes
         review(s,"independent-sku-reviewer");
         assertTrue(loader.load(revision(f)).isPresent());
+        assertTrue(loader.load(new MethodTaskAdapter.TrustedRevision(
+                UUID.randomUUID(),f.entity(),f.scope(),f.revision(),
+                f.snapshotHash(),"ACTUAL")).isEmpty());
+        assertTrue(loader.load(new MethodTaskAdapter.TrustedRevision(
+                f.organization(),f.entity(),f.scope(),f.revision(),
+                "0".repeat(64),"ACTUAL")).isEmpty());
+        assertTrue(loader.load(new MethodTaskAdapter.TrustedRevision(
+                f.organization(),f.entity(),f.scope(),f.revision(),
+                f.snapshotHash(),"SYNTHETIC")).isEmpty());
 
         toTerminal(f);
         var pareto=result(f,QualifiedSkuParetoAdapter.CODE);
@@ -277,6 +286,22 @@ class ReviewedSkuSingleExecutorIntegrationTest {
         line(s,"sale-d","D","SALE",null,"250");
         assertThrows(DataAccessException.class,
                 ()->review(s,"independent-sku-reviewer"));
+
+        Fixture other=publishedF02();
+        Source withCancellation=source(other,7,"1000",false);
+        standardSales(withCancellation);
+        line(withCancellation,"sale-e","E","SALE",null,"100");
+        line(withCancellation,"cancel-e","E","CANCELLATION","sale-e","100");
+        // A second partial refund of a fully cancelled invoice is forbidden.
+        // Change the manifest to eight lines in a fresh published revision.
+        Fixture last=publishedF02();
+        Source conflicting=source(last,8,"990",false);
+        standardSales(conflicting);
+        line(conflicting,"sale-e","E","SALE",null,"100");
+        line(conflicting,"cancel-e","E","CANCELLATION","sale-e","100");
+        line(conflicting,"return-e","E","RETURN","sale-e","10");
+        assertThrows(DataAccessException.class,
+                ()->review(conflicting,"independent-sku-reviewer"));
     }
 
     @Test void fullCancellationDoesNotInflateSkuGrossOrNetConcentration() throws Exception {
