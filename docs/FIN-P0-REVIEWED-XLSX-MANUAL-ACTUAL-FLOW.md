@@ -11,7 +11,7 @@
 3. User can download a server-issued `FIN-PILOT-V1` XLSX for F01, F02, F03, DF-CSH-01 or DF-CSH-02, fill its literal source rows, and upload **that exact original**. Alternatively, enter cells manually in React.
 4. Server verifies the Excel version/structure/context, rejects formulas and bad input, sets the source digest based on original bytes, and saves an immutable submission and its cells; or creates an explicitly labeled `MANUAL` evidence manifest fingerprint. Neither is preapproved.
 5. A **different** Keycloak subject with `FIN_REVIEW` loads the submission and approves or rejects with reason. PostgreSQL enforces no self-review and immutable decisions. Approval creates source lineage, approved source version, immutable `FactAssertion` rows and independently sealed source population controls in the same database transaction.
-6. A subject with `FIN_PUBLISH` chooses reviewed source revision IDs. Backend checks tenant, entity, scope, basis, approval, count and currency; publishes an immutable `ACTUAL FactSetRevision` and atomically updates `current_fact_set` with optimistic locking.
+6. A subject with `FIN_PUBLISH` chooses reviewed source revision IDs. Backend checks tenant, entity, scope, basis, approval, count and currency; publishes an immutable `ACTUAL FactSetRevision` and atomically updates `current_fact_set` with optimistic locking. **The candidate is a complete replacement snapshot:** for a subsequent publication, every previously published metric/period/source-row/field coordinate must still exist. Silent removal of an approved financial cell is rejected; authorized explicit withdrawal/restatement is a separate future gate.
 7. **Default:** ACTUAL diagnostic endpoint is **disabled** (`FIN_ACTUAL_PREVIEW_ENABLED=false`). In controlled review environments, an authorized `FIN_ANALYZE` subject can request `ACTUAL` arithmetic preview. The engine requires exact independently reviewed source populations and source metadata for **every selected relation input**. Results are stamped `ACTUAL_PREVIEW_UNQUALIFIED_NO_CAUSAL_CLAIMS` and `ACTUAL_PROVISIONAL_METHOD_S2_HOLD`.
 8. Each preview is an immutable diagnostic snapshot with source revisions, form code, row/field/fact IDs, values, missing evidence and registry hash. React shows a read-only explanation. The result is not a certified financial conclusion.
 
@@ -113,7 +113,7 @@ Review: `{"approved":true,"reason":"Reconciled to source evidence"}`. Only a sep
 ## Acceptance evidence
 
 Mandatory real PostgreSQL tests in `FIN CI`:
-- `ReviewedFinancialIntakeIntegrationTest`: two-person manual intake, ACTUAL publication, self-approval, foreign organization, incomplete F01, immutable review, optimistic locking, rejection.
+- `ReviewedFinancialIntakeIntegrationTest`: two-person manual intake, ACTUAL publication, self-approval, foreign organization, incomplete F01, immutable review, optimistic locking, rejection, and prevention of silent losses in subsequent fact-set revisions.
 - `PilotXlsxIntakeIntegrationTest`: raw-byte roundtrip and SHA, stored original immutability, formula tampering, wrong workbook metadata, incomplete source.
 - `FinancialApiSecurityIntegrationTest`: signed-claim-shaped MockMvc JWT principal, separate permissions for submit/review/publish, cross-org denial. **Mock JWT tests do not establish real Keycloak live connectivity.**
 - `FinancialApiDisabledIntegrationTest`: all API operations denied by default without OIDC configuration, including under a mock JWT.
