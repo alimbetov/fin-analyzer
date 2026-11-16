@@ -209,6 +209,7 @@ public final class SingleExecutorScheduler {
                SET task_status='COMPUTED',result_json=CAST(? AS jsonb),
                    result_error=NULL,lease_until=NULL,updated_at=now()
              WHERE id=? AND fencing_token=? AND task_status='RUNNING'
+              AND lease_until>now()
             """,json,task.taskId(),task.token());
         if(updated==0) return; // Late/stale worker: its output is discarded.
         refreshRunStates();
@@ -226,6 +227,7 @@ public final class SingleExecutorScheduler {
               next_attempt_at=now()+interval '1 second'*LEAST(60,(2 ^ LEAST(attempt,6))::integer),
               updated_at=now()
             WHERE id=? AND fencing_token=? AND task_status='RUNNING'
+              AND lease_until>now()
             """,error,task.taskId(),task.token());
         refreshRunStates();
     }
