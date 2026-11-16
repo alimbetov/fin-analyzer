@@ -84,6 +84,7 @@ describe("FIN V5 localized XLSX",()=>{
     expect(sheet.getCell("B3").value).toBe("netRevenue");
     expect(sheet.getCell("C3").value).toBe(PILOT_F02_SCHEMA.fields[0]?.labels[locale]);
     expect(sheet.getCell("D3").value).toBe(null);
+    expect(sheet.getCell("D3").numFmt).toContain("############");
     sheet.getCell("D3").value=400;
     sheet.getCell("D4").value=260;
     sheet.getCell("D5").value=90;
