@@ -178,10 +178,15 @@ class TrustedBusinessDiagnosticIntegrationTest {
         assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
             UPDATE fin_exec.core_report_snapshot SET snapshot='{}'::jsonb WHERE id=?
             """,reportId));
-        assertEquals(false,coreReports.publishReady() &&
-            jdbc.queryForObject("""
-                SELECT count(*) FROM fin_exec.core_report_snapshot WHERE id=?
-                """,Long.class,reportId)==0L);
+        coreReports.publishReady();
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.core_report_snapshot
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,fixture.org(),fixture.revision()));
+        assertEquals(reportId,jdbc.queryForObject("""
+            SELECT id FROM fin_exec.core_report_snapshot
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,UUID.class,fixture.org(),fixture.revision()));
     }
 
     @Test void actualFinancialRevisionNeverExecutesSyntheticDiagnosticPilot() {
