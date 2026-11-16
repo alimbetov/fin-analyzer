@@ -1,3 +1,5 @@
+> **SUPERSEDED FOR CURRENT IMPLEMENTATION SCOPE — 2026-11-16.** Ближайшая разработка FIN теперь посвящена **только загрузке форм через React и Excel, единому словарю, учётным периодам WEEK/MONTH/QUARTER/HALF_YEAR/YEAR/AS_OF и учётной валюте проекта**. Новые работы Keycloak/ABAC, bearer-token и пользовательский выбор стратегии анализа **отложены**. Актуальное ТЗ: [FIN-P0-FORM-IMPORT-UX-PERIOD-CURRENCY-SPEC-V3.md](FIN-P0-FORM-IMPORT-UX-PERIOD-CURRENCY-SPEC-V3.md). Исторические требования V2 ниже оставлены как архив решений, **не** как активная задача. Существующую backend защиту нельзя обходить или отключать в production.
+
 # FIN — ТЗ P0-SMOKE / Form Dictionary & Project-Bound Intake V2
 
 **Статус:** PROPOSED — только спецификация, реализация не начата.  
