@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import ExcelJS from "exceljs";
 import {
   PILOT_F02_SCHEMA, ACTIVE_LOCALES, requireActiveLocale, normalizeDecimal,
-  formatExactDecimal, validateF02, type EntryContext
+  formatExactDecimal, normalizeUserDecimal, validateF02, type EntryContext
 } from "./form-schema";
 import { resolvePeriod } from "./reporting-period";
 import { generateF02ExcelV5, parseF02ExcelV5, headers } from "./excel-v5";
@@ -26,6 +26,10 @@ describe("FIN V5 one-resource F02 field catalog",()=>{
   it("does not turn missing into zero and keeps exact decimal strings",()=>{
     expect(normalizeDecimal("0001.2300")).toBe("1.23");
     expect(normalizeDecimal("-0.00")).toBe("0");
+    expect(normalizeUserDecimal("1,25","ru")).toBe("1.25");
+    expect(normalizeUserDecimal("1,25","kk")).toBe("1.25");
+    expect(()=>normalizeUserDecimal("1,25","en")).toThrow("INVALID_DECIMAL");
+    expect(()=>normalizeUserDecimal("1 000,25","ru")).toThrow("INVALID_DECIMAL");
     expect(formatExactDecimal("12345678901234567890.1234","ru")).toContain("1234");
     const missing=validateF02(ctx,[{rowId:"pnl",fieldCode:"netRevenue",rawValue:"0"}]);
     expect(missing.valid).toBe(false);
