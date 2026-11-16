@@ -128,6 +128,15 @@ public final class QualifiedCurrentRatioAdapter implements MethodTaskAdapter {
             JOIN fin_fact.approved_source_intake i
                  ON i.organization_id=s.organization_id
                  AND i.source_revision_id=s.source_revision_id
+            JOIN fin_fact.source_population_control pop
+                 ON pop.organization_id=a.organization_id
+                 AND pop.source_revision_id=a.source_revision_id
+                 AND pop.metric_code=a.metric_code
+                 AND pop.time_start=a.start_inclusive
+                 AND pop.time_end=a.end_exclusive
+                 AND pop.expected_rows=1
+                 AND pop.expected_total=a.numeric_value
+                 AND pop.source_document_hash=i.source_document_hash
             JOIN fin_fact.pilot_field_mapping mapping
                  ON mapping.form_code=s.form_code
                  AND mapping.form_version=s.form_version
