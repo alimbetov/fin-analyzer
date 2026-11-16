@@ -11,7 +11,7 @@ import static org.mockito.Mockito.mock;
 /** A registered adapter must remain OFF until explicitly enabled and accepted. */
 class QualifiedSkuConcentrationFeatureGateTest {
     private static ReviewedSkuPopulationLoader emptyReader() {
-        return mock(ReviewedSkuPopulationLoader.class);
+        return new ReviewedSkuPopulationLoader(mock(org.springframework.jdbc.core.JdbcTemplate.class));
     }
 
     @Test void bothMethodsDefaultToFailClosedAutoEligibility() {
