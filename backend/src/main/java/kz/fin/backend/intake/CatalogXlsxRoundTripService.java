@@ -45,6 +45,8 @@ import java.util.zip.ZipInputStream;
 @Service
 public class CatalogXlsxRoundTripService {
     public static final String FORMAT = "FIN-BE-CATALOG-XLSX-V1";
+    public static final String ISSUED_FORMAT = "FIN-BE-CATALOG-XLSX-V2";
+    private static final String ISSUED_KEY = "ISSUED_TEMPLATE_ID";
     public static final int MAX_XLSX_BYTES = 2_000_000;
     private static final int MAX_ZIP_BYTES = 16_000_000;
     private static final String DATA = "FIN_Data";
@@ -159,11 +161,20 @@ public class CatalogXlsxRoundTripService {
     }
 
     public byte[] generate(Context context) {
+        return generate(context, null);
+    }
+
+    byte[] generateIssued(Context context, UUID issuedTemplateId) {
+        return generate(context, Objects.requireNonNull(issuedTemplateId));
+    }
+
+    private byte[] generate(Context context, UUID issuedTemplateId) {
         Objects.requireNonNull(context);
         var columns = fields(context.formCode());
         try (var book = new XSSFWorkbook(); var output = new ByteArrayOutputStream()) {
             var instructions = book.createSheet(INSTRUCTIONS);
-            instructions.createRow(0).createCell(0).setCellValue(FORMAT);
+            instructions.createRow(0).createCell(0).setCellValue(
+                    issuedTemplateId == null ? FORMAT : ISSUED_FORMAT);
             instructions.createRow(1).createCell(0).setCellValue(
                     "UNQUALIFIED DRAFT: an Excel file is not independently reviewed financial evidence.");
             instructions.createRow(2).createCell(0).setCellValue(
@@ -185,10 +196,16 @@ public class CatalogXlsxRoundTripService {
 
             var meta = book.createSheet(META);
             var values = expectedMeta(context);
+            if (issuedTemplateId != null) values[0] = ISSUED_FORMAT;
             for (int i = 0; i < META_KEYS.size(); i++) {
                 Row row = meta.createRow(i);
                 row.createCell(0).setCellValue(META_KEYS.get(i));
                 row.createCell(1).setCellValue(values[i]);
+            }
+            if (issuedTemplateId != null) {
+                Row issuedRow = meta.createRow(META_KEYS.size());
+                issuedRow.createCell(0).setCellValue(ISSUED_KEY);
+                issuedRow.createCell(1).setCellValue(issuedTemplateId.toString());
             }
             book.setSheetVisibility(2, SheetVisibility.VERY_HIDDEN);
             book.write(output);
@@ -202,6 +219,14 @@ public class CatalogXlsxRoundTripService {
     }
 
     public Parsed parse(Context context, byte[] bytes) {
+        return parse(context, bytes, null);
+    }
+
+    Parsed parseIssued(Context context, byte[] bytes, UUID issuedTemplateId) {
+        return parse(context, bytes, Objects.requireNonNull(issuedTemplateId));
+    }
+
+    private Parsed parse(Context context, byte[] bytes, UUID issuedTemplateId) {
         Objects.requireNonNull(context);
         if (bytes == null || bytes.length < 100 || bytes.length > MAX_XLSX_BYTES) {
             throw new IllegalArgumentException("CATALOG_XLSX_SIZE_LIMIT");
@@ -236,15 +261,25 @@ public class CatalogXlsxRoundTripService {
                 }
             }
             var meta = book.getSheet(META);
-            if (meta.getLastRowNum() != META_KEYS.size() - 1) {
+            if (meta.getLastRowNum() != META_KEYS.size() - 1
+                    + (issuedTemplateId == null ? 0 : 1)) {
                 throw new IllegalArgumentException("CATALOG_XLSX_METADATA_MISMATCH");
             }
             var expected = expectedMeta(context);
+            if (issuedTemplateId != null) expected[0] = ISSUED_FORMAT;
             for (int i = 0; i < META_KEYS.size(); i++) {
                 var row = meta.getRow(i);
                 if (row == null || !META_KEYS.get(i).equals(literal(row.getCell(0))) ||
                         !expected[i].equals(literal(row.getCell(1)))) {
                     throw new IllegalArgumentException("CATALOG_XLSX_METADATA_MISMATCH");
+                }
+            }
+            if (issuedTemplateId != null) {
+                Row issuedRow = meta.getRow(META_KEYS.size());
+                if (issuedRow == null ||
+                        !ISSUED_KEY.equals(literal(issuedRow.getCell(0))) ||
+                        !issuedTemplateId.toString().equals(literal(issuedRow.getCell(1)))) {
+                    throw new IllegalArgumentException("CATALOG_XLSX_ISSUED_ID_MISMATCH");
                 }
             }
             var sheet = book.getSheet(DATA);
@@ -334,7 +369,21 @@ public class CatalogXlsxRoundTripService {
      */
     @Transactional
     public Receipt saveDraft(Context context, byte[] workbook, OriginalDocument document) {
-        var parsed = parse(context, workbook);
+        return saveDraftInternal(context, workbook, document, null);
+    }
+
+    @Transactional
+    public Receipt saveIssuedDraft(Context context, byte[] workbook,
+                                   OriginalDocument document, UUID issuedTemplateId) {
+        return saveDraftInternal(context, workbook, document,
+                Objects.requireNonNull(issuedTemplateId));
+    }
+
+    private Receipt saveDraftInternal(Context context, byte[] workbook,
+                                      OriginalDocument document, UUID issuedTemplateId) {
+        var parsed = issuedTemplateId == null
+                ? parse(context, workbook)
+                : parseIssued(context, workbook, issuedTemplateId);
         if (parsed.empty()) {
             throw new IllegalArgumentException("CATALOG_XLSX_EMPTY_DRAFT");
         }
@@ -363,15 +412,16 @@ public class CatalogXlsxRoundTripService {
                 id,organization_id,economic_entity_id,business_scope_id,project_code,
                 form_code,capture_mode,reporting_basis,period_type,period_code,coverage,
                 currency,amount_scale,locale,schema_fingerprint,original_xlsx,original_sha,
-                normalized_rows,normalized_sha,document_original,document_sha,document_media_type)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CAST(? AS jsonb),?,?,?,?)
+                normalized_rows,normalized_sha,document_original,document_sha,document_media_type,
+                issued_template_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CAST(? AS jsonb),?,?,?,?,?)
             """, id, context.organizationId(), context.entityId(), context.businessScopeId(),
                 context.projectCode(), context.formCode(), parsed.captureMode(),
                 context.reportingBasis(), context.periodType().name(), context.periodCode(),
                 context.coverage().name(), context.currency(), context.amountScale(), context.locale(),
                 parsed.schemaFingerprint(), workbook, originalSha, rows,
                 parsed.normalizedFingerprint(), evidence ? document.bytes() : null,
-                documentSha, evidence ? document.mediaType() : null);
+                documentSha, evidence ? document.mediaType() : null, issuedTemplateId);
         return new Receipt(id, context.formCode(), parsed.captureMode(),
                 originalSha, parsed.normalizedFingerprint(), documentSha);
     }

@@ -61,6 +61,7 @@ class CatalogXlsxRoundTripIntegrationTest {
 
     @Autowired CatalogXlsxRoundTripService xlsx;
     @Autowired CatalogXlsxRevisionService revisionService;
+    @Autowired CatalogIssuedTemplateService issuedService;
     @Autowired FormDraftRevisionV5Service projectService;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
@@ -85,6 +86,53 @@ class CatalogXlsxRoundTripIntegrationTest {
             case INTEGER -> "0002";
             case TEXT -> "Synthetic evidence only";
             case BOOLEAN -> "false";
+        };
+    }
+
+    /**
+     * Independent value oracle: literals below are reviewed expected type
+     * representations, NOT computed through CatalogCaptureRegistry.canonical().
+     * Schema candidates preserve neutral numeric values because their
+     * preliminary balancing rules are not methodologically qualified.
+     */
+    private static String sample(String code, CatalogCaptureRegistry.Field field, int row) {
+        if (CatalogCaptureRegistry.require(code).captureMode() !=
+                CatalogCaptureRegistry.Mode.TYPED_DRAFT) return value(field);
+        return switch (field.type()) {
+            case MONEY, DECIMAL -> row == 1
+                    ? "12345678901234567890123456.123456789012" : "-105.2300";
+            case INTEGER -> row == 1 ? "0002" : "-3";
+            case DATE -> row == 1 ? "2026-10-31" : "2026-10-01";
+            case BOOLEAN -> row == 1 ? "true" : "false";
+            case PERIOD -> "2026.10";
+            case REF -> "REF001";
+            case CODE -> "CATEGORY_A";
+            case ENUM -> "DRAFT";
+            case TEXT -> "Synthetic evidence only";
+        };
+    }
+
+    private static String independentExpected(String code, CatalogCaptureRegistry.Field field,
+                                             int row) {
+        if (CatalogCaptureRegistry.require(code).captureMode() !=
+                CatalogCaptureRegistry.Mode.TYPED_DRAFT) {
+            return switch (field.type()) {
+                case MONEY, DECIMAL -> "0";
+                case INTEGER -> "2";
+                default -> value(field);
+            };
+        }
+        return switch (field.type()) {
+            case MONEY, DECIMAL -> row == 1
+                    ? "12345678901234567890123456.123456789012" : "-105.23";
+            case INTEGER -> row == 1 ? "2" : "-3";
+            case DATE -> row == 1 ? "2026-10-31" : "2026-10-01";
+            case BOOLEAN -> row == 1 ? "true" : "false";
+            case PERIOD -> "2026.10";
+            case REF -> "REF001";
+            case CODE -> "CATEGORY_A";
+            case ENUM -> "DRAFT";
+            case TEXT -> "Synthetic evidence only";
         };
     }
 
@@ -122,7 +170,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                 row.getCell(0, org.apache.poi.ss.usermodel.Row.MissingCellPolicy.CREATE_NULL_AS_BLANK)
                         .setCellValue("ROW00" + i);
                 for (int col = 0; col < fields.size(); col++) {
-                    row.createCell(col + 1).setCellValue(value(fields.get(col)));
+                    row.createCell(col + 1).setCellValue(sample(code, fields.get(col), i));
                 }
             }
         });
@@ -176,8 +224,8 @@ class CatalogXlsxRoundTripIntegrationTest {
                     for (var row : parsed.rows()) {
                         assertEquals(fields.size(), row.cells().size());
                         for (var field : fields) {
-                            assertEquals(CatalogCaptureRegistry.canonical(
-                                    field.type(), value(field), context.locale()),
+                            int sourceRow = Integer.parseInt(row.rowId().substring(3));
+                            assertEquals(independentExpected(definition.code(), field, sourceRow),
                                     row.cells().get(field.code()),
                                     definition.code() + "/" + row.rowId() + "/" + field.code());
                         }
@@ -220,11 +268,42 @@ class CatalogXlsxRoundTripIntegrationTest {
                             context.organizationId(), context.entityId(),
                             context.businessScopeId(), context.projectCode(),
                             context.currency(), "catalog-author");
+                    // The strict issued V2 path is the one that gets confirmed
+                    // for each of the 166 codes; legacy V1 is read back only.
+                    // The strictly server-issued V2 path is independently tested
+                    // for every one of the 166 codes. The V1 compatibility path
+                    // above remains for old test fixtures and legacy clients.
+                    var issued = issuedService.issue(project.id(), context);
+                    assertEquals(context.formCode(), issued.formCode());
+                    assertEquals(context.periodCode(), issued.periodCode());
+                    var issuedPopulated = filled(definition.code(), issued.workbook());
+                    assertThrows(IllegalArgumentException.class,
+                            () -> xlsx.parse(context, issuedPopulated));
+                    var issuedPreview = issuedService.preview(context.organizationId(),
+                            project.id(), issued.templateId(), issuedPopulated);
+                    assertEquals(parsed.normalizedFingerprint(),
+                            issuedPreview.parsed().normalizedFingerprint());
+                    var issuedSaved = issuedService.upload(context.organizationId(),
+                            project.id(), issued.templateId(), issuedPopulated, original);
+                    assertEquals(issued.templateId(), jdbc.queryForObject("""
+                            SELECT issued_template_id FROM fin_intake.catalog_xlsx_draft
+                            WHERE id=?
+                            """, UUID.class, issuedSaved.id()));
+                    assertArrayEquals(issuedPopulated, jdbc.queryForObject("""
+                            SELECT original_xlsx FROM fin_intake.catalog_xlsx_draft
+                            WHERE id=?
+                            """, byte[].class, issuedSaved.id()));
+
+                    assertEquals("UNQUALIFIED_DRAFT", jdbc.queryForObject("""
+                            SELECT state FROM fin_intake.catalog_xlsx_draft
+                            WHERE id=?
+                            """, String.class, issuedSaved.id()));
                     var confirmed = revisionService.confirm(
-                            context.organizationId(), project.id(), saved.id(),
-                            parsed.normalizedFingerprint(), 0, "catalog-author", "");
+                            context.organizationId(), project.id(), issuedSaved.id(),
+                            issuedPreview.parsed().normalizedFingerprint(),
+                            0, "catalog-author", "");
                     assertEquals(1, confirmed.revisionNumber());
-                    assertEquals(saved.id(), confirmed.draftId());
+                    assertEquals(issuedSaved.id(), confirmed.draftId());
                     assertEquals(confirmed.revisionId(),
                             revisionService.current(context.organizationId(),
                                     project.id(), confirmed.slotId()).revisionId());
@@ -235,7 +314,8 @@ class CatalogXlsxRoundTripIntegrationTest {
                                     project.id(), confirmed.slotId()).state());
                     assertThrows(IllegalArgumentException.class,
                             () -> revisionService.confirm(context.organizationId(),
-                                    project.id(), saved.id(), parsed.normalizedFingerprint(),
+                                    project.id(), issuedSaved.id(),
+                                    issuedPreview.parsed().normalizedFingerprint(),
                                     0, "catalog-author", "duplicate"));
                     assertTrue(revisionService.history(UUID.randomUUID(),
                             project.id(), confirmed.slotId()).isEmpty());
@@ -246,7 +326,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                             .getRow(10).getCell(1).setCellValue("2026.09"));
                     assertThrows(IllegalArgumentException.class,
                             () -> xlsx.saveDraft(context, tampered, original));
-                    assertEquals(1L, jdbc.queryForObject("""
+                    assertEquals(2L, jdbc.queryForObject("""
                             SELECT count(*) FROM fin_intake.catalog_xlsx_draft
                             WHERE organization_id=? AND form_code=?
                             """, Long.class, context.organizationId(), definition.code()));
@@ -262,6 +342,8 @@ class CatalogXlsxRoundTripIntegrationTest {
                     proof.put("negativeContextRejected", true);
                     proof.put("revisionConfirmed", true);
                     proof.put("documentOriginalPersisted", evidence);
+                    proof.put("issuedManifestVerified", true);
+                    proof.put("independentFieldOracle", true);
                     proof.put("state", "PASSED_UNQUALIFIED_DRAFT");
                     EVIDENCE.put(definition.code(), Map.copyOf(proof));
                 }));
@@ -498,5 +580,77 @@ class CatalogXlsxRoundTripIntegrationTest {
             assertThrows(IllegalArgumentException.class,
                     () -> xlsx.saveDraft(context, pdfWorkbook, bad));
         }
+    }
+
+    @Test void issuedTemplateContextCannotBeBorrowedOrMutated() {
+        var context = context("DF-AST-01");
+        var project = projectService.createProject(context.organizationId(),
+                context.entityId(), context.businessScopeId(),
+                context.projectCode(), context.currency(), "author");
+        var issued = issuedService.issue(project.id(), context);
+        byte[] populated = filled(context.formCode(), issued.workbook());
+        assertThrows(IllegalArgumentException.class,
+                () -> issuedService.upload(UUID.randomUUID(), project.id(),
+                        issued.templateId(), populated, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> issuedService.upload(context.organizationId(), UUID.randomUUID(),
+                        issued.templateId(), populated, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> issuedService.upload(context.organizationId(), project.id(),
+                        UUID.randomUUID(), populated, null));
+        byte[] foreignId = edit(populated, book ->
+                book.getSheet("_FIN_Metadata").getRow(16).getCell(1)
+                        .setCellValue(UUID.randomUUID().toString()));
+        assertThrows(IllegalArgumentException.class,
+                () -> issuedService.upload(context.organizationId(), project.id(),
+                        issued.templateId(), foreignId, null));
+        byte[] foreignPeriod = edit(populated, book ->
+                book.getSheet("_FIN_Metadata").getRow(10).getCell(1)
+                        .setCellValue("2026.09"));
+        assertThrows(IllegalArgumentException.class,
+                () -> issuedService.upload(context.organizationId(), project.id(),
+                        issued.templateId(), foreignPeriod, null));
+        byte[] foreignSchema = edit(populated, book ->
+                book.getSheet("_FIN_Metadata").getRow(3).getCell(1)
+                        .setCellValue("0".repeat(64)));
+        assertThrows(IllegalArgumentException.class,
+                () -> issuedService.upload(context.organizationId(), project.id(),
+                        issued.templateId(), foreignSchema, null));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_draft
+                WHERE organization_id=? AND issued_template_id=?
+                """, Long.class, context.organizationId(), issued.templateId()));
+        assertThrows(DataAccessException.class, () ->
+                jdbc.update("DELETE FROM fin_intake.catalog_xlsx_issued_template WHERE id=?",
+                        issued.templateId()));
+
+        var valid = issuedService.upload(context.organizationId(), project.id(),
+                issued.templateId(), populated, null);
+        assertNotNull(valid.id());
+        assertEquals(1L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_draft
+                WHERE organization_id=? AND issued_template_id=?
+                """, Long.class, context.organizationId(), issued.templateId()));
+    }
+
+    @Test void catalogSlotHeadCannotBypassRevisionChain() {
+        var context = context("DF-AST-01");
+        var project = projectService.createProject(context.organizationId(),
+                context.entityId(), context.businessScopeId(), context.projectCode(),
+                context.currency(), "author");
+        var data = filled(context.formCode(), xlsx.generate(context));
+        var receipt = xlsx.saveDraft(context, data, null);
+        var confirmed = revisionService.confirm(context.organizationId(), project.id(),
+                receipt.id(), receipt.normalizedFingerprint(), 0, "author", "");
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                UPDATE fin_intake.catalog_xlsx_slot SET latest_revision=latest_revision+1
+                WHERE id=?
+                """, confirmed.slotId()));
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                UPDATE fin_intake.catalog_xlsx_slot SET latest_revision=latest_revision+2
+                WHERE id=?
+                """, confirmed.slotId()));
+        assertEquals(1, revisionService.current(context.organizationId(),
+                project.id(), confirmed.slotId()).revisionNumber());
     }
 }

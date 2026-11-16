@@ -19,6 +19,9 @@ specialized_path = backend / "src/main/resources/fin/specialized-schema-candidat
 manifest_path = backend / "target/fin-evidence/fin-be-r1-form-upload-coverage.json"
 report_path = (backend / "target/surefire-reports/"
                "TEST-kz.fin.backend.intake.CatalogXlsxRoundTripIntegrationTest.xml")
+golden_report = (backend / "target/surefire-reports/"
+                 "TEST-kz.fin.backend.intake.CatalogIndependentGoldenTest.xml")
+matrix_path = root / "docs/FIN-BE-R1-166-FORM-EXCEL-COVERAGE.tsv"
 
 
 def require(ok, message):
@@ -59,6 +62,23 @@ def main():
             "evidence count")
     require(sum(n for m, n in source.values() if m != "EVIDENCE_ONLY") == 794,
             "source fields != 794")
+    matrix = read_tsv(matrix_path)
+    require(len(matrix) == 166, "static source capability matrix has != 166 rows")
+    matrix_codes = set()
+    for row in matrix:
+        code = row.get("formCode")
+        require(code in source and code not in matrix_codes,
+                "static matrix duplicate/unknown code " + str(code))
+        matrix_codes.add(code)
+        mode, count = source[code]
+        expected_mode = "SCHEMA_CANDIDATE" if mode == "SCHEMA_NOT_APPROVED" else mode
+        require(row.get("catalogMode") == expected_mode, code + " matrix mode")
+        require(row.get("fieldCount") == str(count if mode != "EVIDENCE_ONLY" else 0),
+                code + " matrix schema field count")
+        require(row.get("testCaseId") == "BE-R1-ALL-" + code, code + " matrix test case")
+        require(row.get("executionState") == "ENGINEERING_CODED_CI_PROOF_REQUIRED",
+                code + " static state is not an auditable runtime verdict")
+    require(matrix_codes == set(source), "static matrix coverage incomplete")
 
     require(report_path.is_file(), "missing JUnit XML")
     suite = ET.parse(report_path).getroot()
@@ -66,7 +86,7 @@ def main():
     failures = int(suite.get("failures", "0"))
     errors = int(suite.get("errors", "0"))
     skipped = int(suite.get("skipped", "0"))
-    require(tests >= 170 and not (failures or errors or skipped),
+    require(tests >= 175 and not (failures or errors or skipped),
             f"JUnit tests={tests}, failures={failures}, errors={errors}, skipped={skipped}")
     names = [case.attrib.get("name") for case in suite.findall(".//testcase")]
     require(len(names) == tests, "JUnit test case enumeration mismatch")
@@ -77,7 +97,7 @@ def main():
         # @TestFactory method name rather than their display names. Require
         # the full 166-case cardinality and an actual factory testcase; the
         # independently generated 166-row proof below verifies exact codes.
-        require(tests >= 173, "per-form dynamic JUnit count is missing")
+        require(tests >= 175, "per-form dynamic JUnit count is missing")
         # The Java @AfterAll asserts exactly 166 genuinely successful per-form
         # executions before writing the JSON; CI cross-checks those 166 exact
         # codes and field counts against the independent catalog below.
@@ -106,15 +126,22 @@ def main():
         require(row.get("testCaseId") == "BE-R1-ALL-" + code, code + " case ID")
         require(row.get("state") == "PASSED_UNQUALIFIED_DRAFT", code + " state")
         for flag in ("generated", "poiOpened", "filledRoundTrip", "postgresPersisted",
-                     "negativeContextRejected", "revisionConfirmed"):
+                     "negativeContextRejected", "revisionConfirmed",
+                     "issuedManifestVerified", "independentFieldOracle"):
             require(row.get(flag) is True, code + " " + flag)
         require(row.get("documentOriginalPersisted") is (mode == "EVIDENCE_ONLY"),
                 code + " original presence")
     require(covered == set(source), "some catalog codes missing")
+    require(golden_report.is_file(), "missing independent golden JUnit XML")
+    golden_suite = ET.parse(golden_report).getroot()
+    require(int(golden_suite.get("tests", "0")) == 36 and all(
+        int(golden_suite.get(attr, "-1")) == 0
+        for attr in ("failures", "errors", "skipped")),
+        "independent golden cases not fully GREEN")
     print("FIN_BE_R1_JAVA_POSTGRES_EVIDENCE_GREEN",
           f"sha={data.get('gitSha')}",
           f"cases={len(covered)} structured=154 original_documents=12 typed_fields=794",
-          f"junit_tests={tests}")
+          f"junit_tests={tests} independent_goldens=36 issued_template_v2=166")
 
 
 if __name__ == "__main__":
