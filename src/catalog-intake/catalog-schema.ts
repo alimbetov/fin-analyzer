@@ -1,5 +1,5 @@
 import catalogText from "../../backend/src/main/resources/fin/form-compatibility.tsv?raw";
-import { normalizeDecimal } from "../intake-v5/form-schema";
+import { normalizeDecimal,normalizeUserDecimal } from "../intake-v5/form-schema";
 import { resolvePeriod, type PeriodType, type ValueCoverage } from "../intake-v5/reporting-period";
 
 /**
@@ -114,12 +114,12 @@ function canonicalInteger(raw:string):string {
   const stripped=(negative?raw.slice(1):raw).replace(/^0+(?=\d)/,"");
   return (negative&&stripped!=="0"?"-":"")+stripped;
 }
-export function normalizeTypedValue(type:FieldType,raw:string):string {
+export function normalizeTypedValue(type:FieldType,raw:string,locale:CaptureLocale="en"):string {
   if(typeof raw!=="string")fail("INVALID_VALUE_TYPE");
   const value=raw.trim();
   if(!value)return "";
   if(type==="MONEY"||type==="DECIMAL"){
-    try {return normalizeDecimal(value);}catch{fail("INVALID_DECIMAL");}
+    try {return normalizeUserDecimal(value,locale);}catch{fail("INVALID_DECIMAL");}
   }
   if(type==="INTEGER")return canonicalInteger(value);
   if(type==="DATE")return canonicalDate(value);
@@ -170,7 +170,7 @@ export function validateCatalogCapture(context:CatalogCaptureContext,
     const values:Record<string,string>={};
     for(const field of form.fields){
       const input=row.cells[field.code]??"";
-      try{values[field.code]=normalizeTypedValue(field.type,input);}
+      try{values[field.code]=normalizeTypedValue(field.type,input,context.locale); }
       catch(e){findings.push({code:e instanceof Error?e.message:"CATALOG_INVALID_VALUE",
         rowId:row.rowId,fieldCode:field.code});values[field.code]=input;}
     }
