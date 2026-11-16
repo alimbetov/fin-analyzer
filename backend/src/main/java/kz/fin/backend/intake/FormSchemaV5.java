@@ -86,7 +86,7 @@ public final class FormSchemaV5 {
     }
     public static Normalized normalizeF02(List<Input> submitted,String sourceLocale){
         requireLocale(sourceLocale);
-        Objects.requireNonNull(submitted);
+        if(submitted==null)throw new IllegalArgumentException("FIN_V5_CELLS_REQUIRED");
         Form form=pilotF02();
         List<String> errors=new ArrayList<>();
         Map<String,Input> byCode=new HashMap<>();
