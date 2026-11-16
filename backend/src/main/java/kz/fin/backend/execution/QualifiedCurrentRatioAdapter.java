@@ -158,6 +158,7 @@ public final class QualifiedCurrentRatioAdapter implements MethodTaskAdapter {
               AND s.form_code='F01' AND s.form_version='FIN-LIQUIDITY-V1'
               AND a.metric_code IN ('CURRENT_ASSETS','CURRENT_LIABILITIES')
               AND a.time_kind='AS_OF' AND a.unit_code='MONEY'
+              AND a.currency_code=i.input_currency
               AND a.dimensions='{}'::jsonb
               AND m.measure_kind='STOCK' AND m.unit_code='MONEY'
               AND m.qualification='QUALIFIED'
