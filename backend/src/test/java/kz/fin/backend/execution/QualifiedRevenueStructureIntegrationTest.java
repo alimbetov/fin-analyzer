@@ -165,6 +165,16 @@ class QualifiedRevenueStructureIntegrationTest {
         assertEquals("CORE_REPORT_NOT_FOUND_OR_FORBIDDEN",
             assertThrows(IllegalArgumentException.class,()->
                 coreReports.load(UUID.randomUUID(),report)).getMessage());
+        assertThrows(org.springframework.dao.DataAccessException.class,()->
+            jdbc.update("""
+                UPDATE fin_exec.core_report_snapshot
+                SET snapshot='{}'::jsonb WHERE id=?
+                """,report));
+        for(int i=0;i<3;i++) coreReports.publishReady();
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.core_report_snapshot
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revision()));
     }
 
     @Test void missingTotalAndReconciliationMismatchAreNotAutoScheduled() {
