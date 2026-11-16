@@ -21,7 +21,7 @@ function fixture(type:FieldType):string{
 function candidateRow(form:SpecializedCandidate):CatalogRow{
   return {rowId:"ROW-001",cells:Object.fromEntries(form.fields.map(f=>[f.code,fixture(f.type)]))};
 }
-function given(code:string,cells:Record<string,string>):CatalogRow[]{
+function given(cells:Record<string,string>):CatalogRow[]{
   return [{rowId:"ROW-001",cells}];
 }
 describe("R6.1 specialized schema proposals: 32 real code-contract validations",()=>{
@@ -63,14 +63,14 @@ describe("R6.1 specialized schema proposals: 32 real code-contract validations",
       expect(validateSpecializedCandidate(form.code,[],"ru").acceptedAsUnqualifiedDraft).toBe(false);
     });
   it("F01 balance identity uses exact 12-decimal values, not JS floating point",()=>{
-    const valid=validateSpecializedCandidate("F01",given("F01",{
+    const valid=validateSpecializedCandidate("F01",given({
       assets:"1000000000000000000.000000000001",
       liabilities:"500000000000000000.000000000001",
       equity:"500000000000000000",asOf:"2026-10-31"
     }),"ru");
     expect(valid.findings).toEqual([]);
     expect(valid.acceptedAsUnqualifiedDraft).toBe(true);
-    const mismatch=validateSpecializedCandidate("F01",given("F01",{
+    const mismatch=validateSpecializedCandidate("F01",given({
       assets:"100.01",liabilities:"60.01",equity:"39.99",asOf:"2026-10-31"
     }),"ru");
     expect(mismatch.findings).toContainEqual(expect.objectContaining({
@@ -86,9 +86,9 @@ describe("R6.1 specialized schema proposals: 32 real code-contract validations",
       ["P01",{assets:"100",liabilities:"40",equity:"60"},"assets"]
     ] as const;
     for(const [code,cells,field] of fixtures){
-      const good=validateSpecializedCandidate(code,given(code,cells),"en");
+      const good=validateSpecializedCandidate(code,given(cells),"en");
       expect(good.findings.filter(f=>f.code==="SPECIALIZED_PROVISIONAL_INVARIANT_MISMATCH")).toEqual([]);
-      const wrong=validateSpecializedCandidate(code,given(code,{...cells,[field]:"999"}),"en");
+      const wrong=validateSpecializedCandidate(code,given({...cells,[field]:"999"}),"en");
       expect(wrong.findings.some(f=>f.code==="SPECIALIZED_PROVISIONAL_INVARIANT_MISMATCH")).toBe(true);
       expect(wrong.publishable).toBe(false);
     }
