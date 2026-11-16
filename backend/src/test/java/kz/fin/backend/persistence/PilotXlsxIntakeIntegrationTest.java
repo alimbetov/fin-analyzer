@@ -110,8 +110,11 @@ class PilotXlsxIntakeIntegrationTest {
 
     @Test void f01LiquidityXlsxMissingCurrentLiabilitiesCannotBeApproved(){
         var c=liquidityContext();
-        var incomplete=edit(completeLiquidityF01(xlsx.template(c)),book->
-            book.getSheet("FIN_Data").getRow(7).getCell(3).setBlank());
+        var incomplete=edit(completeLiquidityF01(xlsx.template(c)),book->{
+            var row=book.getSheet("FIN_Data").getRow(7);
+            row.getCell(2).setBlank();
+            row.getCell(3).setBlank();
+        });
         var parsed=xlsx.parse(c,incomplete);
         assertEquals(6,parsed.size());
         assertThrows(IllegalArgumentException.class,
