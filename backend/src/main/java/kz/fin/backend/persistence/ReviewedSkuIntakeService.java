@@ -23,7 +23,7 @@ import java.util.*;
  * is presented explicitly to the reviewer.
  */
 @Service
-public final class ReviewedSkuIntakeService {
+public class ReviewedSkuIntakeService {
     private static final int MAX_BYTES=2_097_152;
     private static final int MAX_LINES=10_000;
     private static final Set<String> FILE_KEYS=Set.of("period","currency","events");
