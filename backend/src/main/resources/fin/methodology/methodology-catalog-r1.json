@@ -19,11 +19,11 @@
       "code": "FIN-02",
       "group": "FIN",
       "title": "Vertical Analysis",
-      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "implementationStatus": "ONE_VARIANT_WIRED_UNQUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "AutoReportProjection.PercentOf,ShareOfTotal",
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "QualifiedRevenueStructureAdapter → TrustedAutoReportService → AutoIndicatorEngine.shareByDimension",
+      "notes": "FIN-02/REV_CATEGORY_SHARE implemented for a single reconciled approved monthly category population, guarded by QUALIFIED metric contract and synthetic PostgreSQL golden tests. Family is NOT release-qualified; no implicit auto-approval of the 60-family registry."
     },
     {
       "code": "FIN-03",
