@@ -13,6 +13,7 @@ public final class PublishedFactIntegrityAdapter implements MethodTaskAdapter {
     private final JdbcTemplate jdbc;
     public PublishedFactIntegrityAdapter(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     @Override public String methodCode() { return "SYS/VERIFY_PUBLISHED_FACT_SET"; }
+    @Override public boolean autoEligible() { return true; }
 
     @Override public String execute(TrustedRevision revision) {
         var record = jdbc.query("""
