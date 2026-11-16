@@ -70,7 +70,22 @@ public final class FormSchemaV5 {
         if(decimal.signum()==0)return "0";
         return decimal.stripTrailingZeros().toPlainString();
     }
+    /** Source-language parsing agrees with the React F02 normalizer.
+     *  A comma is a decimal separator only for ru/kk, never a thousands separator. */
+    public static String canonicalUserDecimal(String raw,String sourceLocale){
+        requireLocale(sourceLocale);
+        if(raw==null)throw new IllegalArgumentException("INVALID_DECIMAL");
+        String text=raw.trim();
+        if(("ru".equals(sourceLocale)||"kk".equals(sourceLocale))
+          &&text.matches("-?[0-9]{1,26},[0-9]{1,12}"))
+            return canonicalDecimal(text.replace(',','.'));
+        return canonicalDecimal(text);
+    }
     public static Normalized normalizeF02(List<Input> submitted){
+        return normalizeF02(submitted,"en");
+    }
+    public static Normalized normalizeF02(List<Input> submitted,String sourceLocale){
+        requireLocale(sourceLocale);
         Objects.requireNonNull(submitted);
         Form form=pilotF02();
         List<String> errors=new ArrayList<>();
@@ -89,7 +104,7 @@ public final class FormSchemaV5 {
                 if(f.required())errors.add("REQUIRED_FIELD_MISSING:"+f.code());
                 cells.add(new Input(f.rowId(),f.code(),""));
             }else{
-                try{cells.add(new Input(f.rowId(),f.code(),canonicalDecimal(cell.decimalText())));}
+                try{cells.add(new Input(f.rowId(),f.code(),canonicalUserDecimal(cell.decimalText(),sourceLocale)));}
                 catch(IllegalArgumentException e){
                     errors.add("INVALID_DECIMAL:"+f.code());
                     cells.add(new Input(f.rowId(),f.code(),cell.decimalText()));
