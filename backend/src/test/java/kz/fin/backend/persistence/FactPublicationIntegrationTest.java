@@ -280,6 +280,71 @@ class FactPublicationIntegrationTest {
         }
     }
 
+
+    @Test void successfulPublicationCreatesSingleImmutableOutboxEvent() {
+        var f=fixture();
+        var published=publicationService.publish(f.request(null));
+        var rows=jdbc.queryForList("""
+            SELECT event_id,organization_id,fact_set_revision_id,event_type,
+                   snapshot_hash,current_version
+              FROM fin_exec.fact_publication_outbox
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """, f.org(),f.revisionId());
+        assertEquals(1,rows.size());
+        var event=rows.getFirst();
+        assertEquals(f.org(),event.get("organization_id"));
+        assertEquals(f.revisionId(),event.get("fact_set_revision_id"));
+        assertEquals("FACT_SET_PUBLISHED",event.get("event_type"));
+        assertEquals(published.snapshotHash(),event.get("snapshot_hash"));
+        assertEquals(1L,((Number)event.get("current_version")).longValue());
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+                DELETE FROM fin_exec.fact_publication_outbox WHERE event_id=?
+                """,event.get("event_id")));
+    }
+
+    @Test void rejectedPublicationDoesNotAppendOutboxEvent() {
+        var f=fixture();
+        assertThrows(OptimisticLockingFailureException.class,
+            ()->publicationService.publish(f.request(UUID.randomUUID())));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.fact_publication_outbox
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_fact.fact_set_publication
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+    }
+
+    @Test void outboxFailureRollsBackApprovedPublicationAndPointer() {
+        var f=fixture();
+        // A duplicate event prevents outbox append after the DB publication
+        // and current pointer were already written within the same transaction.
+        // The exception MUST roll back both earlier mutations.
+        UUID eventId=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO fin_exec.fact_publication_outbox (
+                event_id, organization_id, economic_entity_id, business_scope_id,
+                fact_set_revision_id, event_type, reporting_basis, data_space,
+                snapshot_hash, current_version)
+            VALUES (?,?,?,?,?,'FACT_SET_PUBLISHED',?,?,?,?)
+            """,eventId,f.org(),f.entity(),f.scope(),f.revisionId(),
+               "MANAGEMENT","ACTUAL",f.factHash(),1L);
+        assertThrows(DataAccessException.class,()->publicationService.publish(f.request(null)));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_fact.fact_set_publication
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_fact.current_fact_set
+             WHERE organization_id=? AND economic_entity_id=? AND business_scope_id=?
+            """,Long.class,f.org(),f.entity(),f.scope()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.fact_publication_outbox
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+    }
+
     private boolean attemptPublish(Fixture candidate,UUID expected,
                                    CountDownLatch ready,CountDownLatch start) {
         ready.countDown();
