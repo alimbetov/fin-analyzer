@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -95,7 +96,7 @@ class FormV5MultiUserRefreshIntegrationTest {
         // B can see organization-scoped latest, but not a private unconfirmed upload.
         mvc.perform(get(current).with(user("bob",org,"FIN_READ")))
             .andExpect(status().isOk())
-            .andExpect(header().string("Cache-Control",org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(header().string("Cache-Control",containsString("no-store")))
             .andExpect(jsonPath("$.latestRevision").value(0))
             .andExpect(jsonPath("$.cells.length()").value(0));
         var initial=postJson(root+"/previews",input("400"),"alice",org,"FIN_SUBMIT");
