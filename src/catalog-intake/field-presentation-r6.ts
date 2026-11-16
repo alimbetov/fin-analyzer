@@ -39,6 +39,8 @@ export function parsePresentationInventory(text:string):readonly PresentationRev
     keys.add(key);
     if(review==="PENDING_TRANSLATION"&&[ru,kk,en,zh].some(Boolean))
       throw new Error("R6_FIELD_TRANSLATION_UNREVIEWED_VALUE");
+    if(review==="PROVISIONAL_NOT_S2"&&![ru,kk,en].some(Boolean))
+      throw new Error("R6_FIELD_TRANSLATION_DRAFT_WITHOUT_LABEL");
     return {formCode:formCode!,fieldCode:fieldCode!,fieldType:fieldType!,
       labels:{ru:ru!,kk:kk!,en:en!,"zh-Hans":zh!},
       reviewStatus:review as PresentationReviewRow["reviewStatus"],
