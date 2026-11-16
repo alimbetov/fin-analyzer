@@ -76,8 +76,11 @@ const REV_LABELS:Record<ActiveLocale,{
 };
 function localDateTime(iso:string,locale:ActiveLocale):string {
   const tag={ru:"ru-RU",kk:"kk-KZ",en:"en-US"}[locale];
-  return new Intl.DateTimeFormat(tag,{dateStyle:"medium",timeStyle:"short",
-    timeZoneName:"short"}).format(new Date(iso));
+  // dateStyle/timeStyle cannot be combined with timeZoneName (ECMA-402).
+  return new Intl.DateTimeFormat(tag,{
+    year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",
+    minute:"2-digit",second:"2-digit",timeZoneName:"short"
+  }).format(new Date(iso));
 }
 
 const ISSUE_LABEL: Record<ActiveLocale, Record<string,string>> = {
