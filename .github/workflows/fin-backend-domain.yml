@@ -45,6 +45,18 @@ jobs:
         run: python3 backend/scripts/verify_fin_be_r1_x2_evidence.py
       - name: Require FIN-BE-R1-X3/X4 real HTML and parsed PDF output proofs
         run: python3 backend/scripts/verify_fin_be_r1_x3_x4_evidence.py
+      - name: Reject forged or mismatched X5 evidence (independent validator tests)
+        run: python3 -m unittest discover -s backend/scripts/tests -p test_fin_be_r1_x5_integrity.py
+      - name: Require 1992 cross-format outputs on one immutable source revision
+        run: python3 backend/scripts/verify_fin_be_r1_x5_integrity.py
+      - name: Archive X5 three-format cross-integrity acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-be-r1-x5-cross-format-integrity-${{ github.job }}
+          path: backend/target/fin-evidence/fin-be-r1-x-export-coverage.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Archive 166x4 HTML/PDF render evidence
         if: always()
         uses: actions/upload-artifact@v4

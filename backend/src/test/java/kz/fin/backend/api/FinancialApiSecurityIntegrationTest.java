@@ -234,6 +234,22 @@ class FinancialApiSecurityIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(parameters))
                 .andExpect(status().isForbidden());
 
+        // Regression: format-by-format independent 'latest' would produce
+        // mismatched revision provenance under concurrent confirmations.
+        // FIN_READ+FIN_SUBMIT is not sufficient without a pinned preview ID.
+        String unpinnedXlsx = parameters.replace(
+                ",\"sourceRevisionId\":\"" + confirmed.revisionId() + "\"", "");
+        mvc.perform(post(endpoint + "/latest.xlsx")
+                .with(user("exporter", org, "FIN_READ", "FIN_SUBMIT"))
+                .contentType(MediaType.APPLICATION_JSON).content(unpinnedXlsx))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("FIN_REPORT_EXACT_REVISION_REQUIRED"));
+        assertEquals(0L, x2Jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_export_receipt
+                WHERE project_id=?
+                """, Long.class, project.id()),
+                "An unpinned request must not issue templates or write export receipts");
+
         var response = mvc.perform(post(endpoint + "/latest.xlsx")
                 .with(user("exporter", org, "FIN_READ", "FIN_SUBMIT"))
                 .contentType(MediaType.APPLICATION_JSON).content(parameters))

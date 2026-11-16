@@ -35,7 +35,8 @@ public class CatalogXlsxRevisionService {
                          String documentSha) {}
 
     private record Prior(UUID id, UUID draftId, UUID parentId,
-                         String fingerprint, String documentSha) {}
+                         String fingerprint, String documentSha,
+                         boolean sameOrderedRows) {}
 
     private record Slot(UUID id, int current) {}
 
@@ -113,16 +114,20 @@ public class CatalogXlsxRevisionService {
         if (slot.current() > 0) {
             var previousRows = jdbc.query("""
                 SELECT r.id,r.draft_id,r.parent_revision_id,r.normalized_sha,
-                       d.document_sha
+                       d.document_sha,
+                       (d.normalized_rows = candidate.normalized_rows) AS same_ordered_rows
                   FROM fin_intake.catalog_xlsx_revision r
                   JOIN fin_intake.catalog_xlsx_draft d
                     ON d.id=r.draft_id AND d.organization_id=r.organization_id
+                  JOIN fin_intake.catalog_xlsx_draft candidate
+                    ON candidate.id=? AND candidate.organization_id=d.organization_id
                  WHERE r.organization_id=? AND r.slot_id=?
                    AND r.revision_number=?
                 """, (rs, i) -> new Prior(
                     rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                    rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5)),
-                    organizationId, slot.id(), slot.current());
+                    rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5),
+                    rs.getBoolean(6)),
+                    draftId, organizationId, slot.id(), slot.current());
             if (previousRows.size() != 1)
                 throw new IllegalStateException("FIN_CATALOG_REVISION_HISTORY_BROKEN");
             Prior prior = previousRows.getFirst();
@@ -130,7 +135,13 @@ public class CatalogXlsxRevisionService {
             // advance the current revision. For evidence-only forms the
             // independently stored original document hash is part of the
             // logical content identity, not merely the Excel register cells.
+            // Legacy normalized_sha deliberately sorts rowIds, so permutations
+            // produce the same SHA. The source's immutable JSONB array keeps
+            // row order: PostgreSQL JSONB array equality is order-sensitive.
+            // Require BOTH equality checks; never silently suppress an
+            // ordered-row revision nor change stored V1 hash semantics.
             if (prior.fingerprint().equals(draft.fingerprint())
+                    && prior.sameOrderedRows()
                     && Objects.equals(prior.documentSha(), draft.documentSha())) {
                 return new Confirmed(prior.id(), slot.id(), prior.draftId(),
                         slot.current(), prior.parentId(), prior.fingerprint());

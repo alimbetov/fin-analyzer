@@ -438,7 +438,10 @@ class CatalogXlsxRoundTripIntegrationTest {
                         assertEquals(exported.workbookSha256(), storedManifestSha);
                         var exportProof = new LinkedHashMap<String, Object>();
                         exportProof.put("formCode", definition.code());
+                        exportProof.put("format", "XLSX");
                         exportProof.put("displayLocale", display);
+                        exportProof.put("snapshotFingerprint", snapshot.normalizedFingerprint());
+                        exportProof.put("sourceInputLocale", snapshot.sourceInputLocale());
                         exportProof.put("mode", definition.captureMode().name());
                         exportProof.put("sourceRevisionId", confirmed.revisionId().toString());
                         exportProof.put("rowCount", snapshot.rows().size());
@@ -453,6 +456,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                         exportProof.put("artifactSha256", exported.workbookSha256());
                         exportProof.put("exportId", exported.exportId().toString());
                         exportProof.put("receiptVerified", true);
+                        exportProof.put("verdict", "PASS");
                         assertNull(X2_EXPORT_EVIDENCE.putIfAbsent(
                                 definition.code() + "|" + display, Map.copyOf(exportProof)));
                     }
@@ -1288,6 +1292,67 @@ class CatalogXlsxRoundTripIntegrationTest {
         assertEquals(first.revisionId(), second.parentRevisionId());
         assertEquals(2, revisionService.history(context.organizationId(),
                 project.id(), first.slotId()).size());
+    }
+
+
+    @Test void changingOnlyRowOrderCreatesANewRevisionWithoutRewritingLegacyFingerprint() {
+        var context = context("DF-AST-01");
+        var project = projectService.createProject(context.organizationId(),
+                context.entityId(), context.businessScopeId(),
+                context.projectCode(), context.currency(), "author");
+        byte[] workbook = filled("DF-AST-01", xlsx.generate(context));
+        var parsed = xlsx.parse(context, workbook);
+        assertEquals(2, parsed.rows().size());
+        var firstDraft = xlsx.saveDraft(context, workbook, null);
+        var first = revisionService.confirm(context.organizationId(), project.id(),
+                firstDraft.id(), firstDraft.normalizedFingerprint(), 0, "author", "");
+
+        byte[] reordered = edit(workbook, book -> {
+            var sheet = book.getSheet("FIN_Data");
+            var a = sheet.getRow(1);
+            var b = sheet.getRow(2);
+            for (int col = 0; col <= CatalogXlsxRoundTripService
+                    .fields(context.formCode()).size(); col++) {
+                var ca = a.getCell(col);
+                var cb = b.getCell(col);
+                String old = ca.getStringCellValue();
+                ca.setCellValue(cb.getStringCellValue());
+                cb.setCellValue(old);
+            }
+        });
+        var reorderedParsed = xlsx.parse(context, reordered);
+        assertEquals(parsed.normalizedFingerprint(),
+                reorderedParsed.normalizedFingerprint(),
+                "Legacy V1 fingerprint sorts rowIds; never rewrite historic hash");
+        assertNotEquals(parsed.rows(), reorderedParsed.rows(),
+                "The financial source's row order really changed");
+
+        var secondDraft = xlsx.saveDraft(context, reordered, null);
+        var second = revisionService.confirm(context.organizationId(), project.id(),
+                secondDraft.id(), secondDraft.normalizedFingerprint(), 1,
+                "author", "Correct source row order");
+        assertEquals(2, second.revisionNumber(),
+                "A reordered source must NOT be suppressed as a duplicate");
+        assertEquals(first.revisionId(), second.parentRevisionId());
+        assertNotEquals(first.revisionId(), second.revisionId());
+        assertEquals(first.normalizedFingerprint(), second.normalizedFingerprint(),
+                "Legacy digest remains backward-compatible while versioned revision changes");
+        var originalSnapshot = reportSnapshotService.load(snapshotQuery(
+                context, project.id(), context.amountScale(), first.revisionId(), null));
+        var reorderedSnapshot = reportSnapshotService.load(snapshotQuery(
+                context, project.id(), context.amountScale(), second.revisionId(), null));
+        assertEquals(parsed.rows(), originalSnapshot.rows());
+        assertEquals(reorderedParsed.rows(), reorderedSnapshot.rows());
+        assertEquals(first.revisionId(), originalSnapshot.sourceRevisionId());
+        assertEquals(second.revisionId(), reorderedSnapshot.sourceRevisionId());
+
+        var replay = xlsx.saveDraft(context, reordered, null);
+        var duplicate = revisionService.confirm(context.organizationId(), project.id(),
+                replay.id(), replay.normalizedFingerprint(), 2, "author", "same order");
+        assertEquals(second.revisionId(), duplicate.revisionId(),
+                "Same ordered content and same evidence must remain idempotent");
+        assertEquals(2, revisionService.history(context.organizationId(),
+                project.id(), second.slotId()).size());
     }
 
     @Test void originalDocumentChecksumParticipatesInDuplicateDetection() {

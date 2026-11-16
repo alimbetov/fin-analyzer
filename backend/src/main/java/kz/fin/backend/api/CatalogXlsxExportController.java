@@ -120,9 +120,10 @@ public class CatalogXlsxExportController {
             @PathVariable String formCode, @RequestBody Request request) {
         access.require(jwt, organizationId, Permission.FIN_READ);
         access.require(jwt, organizationId, Permission.FIN_SUBMIT);
-        if (request == null)
-            throw new IllegalArgumentException("FIN_EXPORT_INVALID_CONTEXT");
-        CatalogReportLocale.requireDisplay(request.displayLocale());
+        // All three downloadable formats must be tied to the exact revision
+        // returned by /preview. "Latest" remains available for discovery in
+        // the read-only preview, never independently during a file download.
+        requirePinnedRead(request);
         var report = xlsx.export(query(organizationId, projectId, formCode, request),
                 request.displayLocale(), access.subject(jwt));
         String filename = "FIN-" + report.formCode() + "-" + report.periodCode()
