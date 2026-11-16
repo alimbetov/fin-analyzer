@@ -71,4 +71,10 @@ describe("IND-R1 controlled sector XLSX", () => {
     await expect(parseSectorTemplate(await asBuffer(book),context))
       .rejects.toThrow(/METADATA_MISMATCH/);
   });
+  it("rejects numeric cells whose Excel precision exceeds 15 significant digits",async()=>{
+    const book=await workbook();
+    book.getWorksheet("Sector")!.getCell("B5").value=0.1234567890123456;
+    await expect(parseSectorTemplate(await asBuffer(book),context))
+      .rejects.toThrow(/FORMULA_OR_INVALID/);
+  });
 });
