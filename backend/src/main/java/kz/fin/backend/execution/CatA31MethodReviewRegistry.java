@@ -73,7 +73,7 @@ public final class CatA31MethodReviewRegistry {
                 key.formVersion(),key.reportingBasis());
         if(reviews.isEmpty())return new Result(ReviewStatus.NOT_REVIEWED,null,
                 key.methodCode(),key.methodVersion(),null);
-        List<Review> approved=reviews.stream().filter(x->"APPROVED".equals(x.decision())).toList();
+        // Conflicting independent decisions for the same method variant need\n        // manual adjudication, never implicit approval of the earlier one.\n        if(reviews.stream().anyMatch(x->!"APPROVED".equals(x.decision())\n                && !"REJECTED".equals(x.decision())))\n            return new Result(ReviewStatus.AMBIGUOUS,null,\n                    key.methodCode(),key.methodVersion(),null);\n        if(reviews.stream().anyMatch(x->"APPROVED".equals(x.decision()))\n                && reviews.stream().anyMatch(x->"REJECTED".equals(x.decision())))\n            return new Result(ReviewStatus.AMBIGUOUS,null,\n                    key.methodCode(),key.methodVersion(),null);\n        List<Review> approved=reviews.stream().filter(x->"APPROVED".equals(x.decision())).toList();
         if(approved.isEmpty())return new Result(ReviewStatus.REJECTED,null,
                 key.methodCode(),key.methodVersion(),null);
         if(approved.size()!=1)return new Result(ReviewStatus.AMBIGUOUS,null,
