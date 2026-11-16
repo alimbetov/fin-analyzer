@@ -7,7 +7,7 @@ import java.util.UUID;
 public interface MethodTaskAdapter {
     String methodCode();
     default List<String> dependsOn() { return List.of(); }
-    default boolean autoEligible() { return true; }
+    default boolean autoEligible() { return false; }
     default boolean applicable(TrustedRevision revision) { return true; }
     String execute(TrustedRevision revision) throws Exception;
 
