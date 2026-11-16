@@ -102,7 +102,9 @@ export async function generateF02ExcelV5(context: EntryContext): Promise<Blob> {
       cell.font={color:{argb:"FF23394E"}};
       if(i===3){
         cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFDCEFFD"}};
-        cell.numFmt="#,##0.00;[Red](#,##0.00);0.00";
+        // Never visually round an entered 12-decimal value to two places.
+        // Display precision must not conceal the exact amount the parser reads.
+        cell.numFmt="#,##0.############;[Red](#,##0.############);0";
         cell.dataValidation={type:"decimal",operator:"between",formulae:[-1e14,1e14]};
       } else {
         cell.fill={type:"pattern",pattern:"solid",
