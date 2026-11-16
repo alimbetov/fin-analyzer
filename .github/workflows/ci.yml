@@ -97,6 +97,7 @@ jobs:
             kz.fin.backend.diagnostics.IndicatorRelationshipRegistryTest \
             kz.fin.backend.security.FinanceAccessPolicyTest \
             kz.fin.backend.api.FinancialApiSecurityIntegrationTest \
+            kz.fin.backend.api.FormV5MultiUserRefreshIntegrationTest \
             kz.fin.backend.api.FinancialApiDisabledIntegrationTest \
             kz.fin.backend.persistence.ReviewedFinancialIntakeIntegrationTest \
             kz.fin.backend.persistence.PilotXlsxIntakeIntegrationTest \
@@ -125,6 +126,7 @@ jobs:
               "kz.fin.backend.diagnostics.IndicatorRelationshipRegistryTest",
               "kz.fin.backend.security.FinanceAccessPolicyTest",
               "kz.fin.backend.api.FinancialApiSecurityIntegrationTest",
+              "kz.fin.backend.api.FormV5MultiUserRefreshIntegrationTest",
               "kz.fin.backend.api.FinancialApiDisabledIntegrationTest",
               "kz.fin.backend.persistence.ReviewedFinancialIntakeIntegrationTest",
               "kz.fin.backend.persistence.PilotXlsxIntakeIntegrationTest",
