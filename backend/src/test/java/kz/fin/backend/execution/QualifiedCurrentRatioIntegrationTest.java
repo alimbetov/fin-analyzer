@@ -23,7 +23,7 @@ import java.time.LocalDate;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(properties={"fin.methods.fin04.enabled=true","fin.execution.enabled=false"})
 @Testcontainers
 class QualifiedCurrentRatioIntegrationTest {
     @Container
