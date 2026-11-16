@@ -1,7 +1,7 @@
-import { useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import {
   PILOT_F02_SCHEMA, type ActiveLocale, type EntryContext, type EntryRow,
-  type ValidatedEntry, formatExactDecimal, validateF02
+  type ValidatedEntry, type EntryFinding, formatExactDecimal, validateF02
 } from "./form-schema";
 import { resolvePeriod } from "./reporting-period";
 import { generateF02ExcelV5, parseF02ExcelV5 } from "./excel-v5";
@@ -37,6 +37,42 @@ const UI: Record<ActiveLocale, {
     missing:"Not entered",valid:"Validated",invalid:"Corrections required",
     local:"Local UI pilot. This is not a server submission, independent approval or published financial data."}
 };
+const ISSUE_LABEL: Record<ActiveLocale, Record<string,string>> = {
+  ru: {
+    REQUIRED_FIELD_MISSING:"Обязательное значение не заполнено",
+    INVALID_DECIMAL:"Некорректное число",
+    INVALID_MONTH:"Некорректный отчётный месяц",
+    PROJECT_CODE_REQUIRED:"Укажите код проекта",
+    UNKNOWN_SOURCE_COORDINATE:"Неизвестный показатель или строка",
+    DUPLICATE_SOURCE_FIELD:"Дублирование показателя",
+    V5_PILOT_CONTEXT_NOT_SUPPORTED:"Не поддерживается контекст пилотной формы",
+    TRANSLATION_NOT_READY:"Перевод недоступен"
+  },
+  kk: {
+    REQUIRED_FIELD_MISSING:"Міндетті мән толтырылмаған",
+    INVALID_DECIMAL:"Сан пішімі қате",
+    INVALID_MONTH:"Есепті ай қате",
+    PROJECT_CODE_REQUIRED:"Жоба кодын көрсетіңіз",
+    UNKNOWN_SOURCE_COORDINATE:"Белгісіз көрсеткіш немесе жол",
+    DUPLICATE_SOURCE_FIELD:"Көрсеткіш қайталанған",
+    V5_PILOT_CONTEXT_NOT_SUPPORTED:"Пилоттық нысанның контекстіне қолдау жоқ",
+    TRANSLATION_NOT_READY:"Аударма қолжетімсіз"
+  },
+  en: {
+    REQUIRED_FIELD_MISSING:"Required value is missing",
+    INVALID_DECIMAL:"Invalid decimal number",
+    INVALID_MONTH:"Invalid reporting month",
+    PROJECT_CODE_REQUIRED:"Enter the project code",
+    UNKNOWN_SOURCE_COORDINATE:"Unknown indicator or row",
+    DUPLICATE_SOURCE_FIELD:"Duplicate indicator",
+    V5_PILOT_CONTEXT_NOT_SUPPORTED:"Unsupported pilot form context",
+    TRANSLATION_NOT_READY:"Translation is not available"
+  }
+};
+function labelFinding(finding:EntryFinding,locale:ActiveLocale):string {
+  const message=ISSUE_LABEL[locale][finding.code]??finding.code;
+  return message+(finding.sourceCell?" · "+finding.sourceCell:"");
+}
 function blankRows(): EntryRow[] {
   return PILOT_F02_SCHEMA.fields.map(f=>({rowId:f.rowId,fieldCode:f.code,rawValue:""}));
 }
@@ -89,7 +125,7 @@ export function FormDataEntryTable({context,rows,onChange}:{
 export function FormPreviewTable({entry}: {entry:ValidatedEntry}) {
   const {context,rows,findings}=entry;
   const labels=UI[context.locale];
-  const problems=new Map(findings.filter(x=>x.fieldCode).map(f=>[f.fieldCode!,f.code]));
+  const problems=new Map(findings.filter(x=>x.fieldCode).map(f=>[f.fieldCode!,f]));
   return <section className="fin-v5-preview" aria-label={labels.preview}>
     <div className="fin-v5-preview-head">
       <h3>{labels.preview} · {PILOT_F02_SCHEMA.titles[context.locale]}</h3>
@@ -114,12 +150,12 @@ export function FormPreviewTable({entry}: {entry:ValidatedEntry}) {
           <td className="fin-v5-code fin-v5-text">{row.fieldCode}</td>
           <td className="fin-v5-number">{row.rawValue && !invalid?
             formatExactDecimal(row.rawValue,context.locale):row.rawValue||"—"}</td>
-          <td className="fin-v5-text">{invalid??(row.rawValue?labels.valid:labels.missing)}</td>
+          <td className="fin-v5-text">{invalid?labelFinding(invalid,context.locale):(row.rawValue?labels.valid:labels.missing)}</td>
         </tr>;
       })}</tbody>
     </table></div>
     {findings.length>0 && <ul aria-label="Validation findings" className="fin-v5-issues">
-      {findings.map((finding,index)=><li key={index}>{finding.fieldCode??"FORM"}: {finding.code}</li>)}
+      {findings.map((finding,index)=><li key={index}>{finding.fieldCode??"FORM"}: {labelFinding(finding,context.locale)} <small>({finding.code})</small></li>)}
     </ul>}
   </section>;
 }
@@ -131,13 +167,18 @@ export function FormIntakeStudioV5() {
   const [preview,setPreview]=useState<ValidatedEntry|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
+  // A workbook is parsed asynchronously. Its result must never be written into
+  // a different project, period, scale or language selected while parsing.
+  const inputGeneration=useRef(0);
   const labels=UI[context.locale];
   const period=/^\d{4}\.(0[1-9]|1[0-2])$/.test(context.periodCode)
     ? resolvePeriod("MONTH",context.periodCode):null;
   function updateContext(partial:Partial<EntryContext>):void {
+    inputGeneration.current++;
     setContext(current=>({...current,...partial}));setPreview(null);setError("");
   }
   function updateRows(next:EntryRow[]):void {
+    inputGeneration.current++;
     setRows(next);setPreview(null);setError("");
   }
   async function downloadTemplate():Promise<void>{
@@ -153,10 +194,16 @@ export function FormIntakeStudioV5() {
     const file=event.currentTarget.files?.[0];event.currentTarget.value="";
     if(!file)return;
     if(!file.name.toLowerCase().endsWith(".xlsx")){setError("XLSX_FILE_REQUIRED");return;}
+    const requestGeneration=++inputGeneration.current;
+    const requestedContext={...context};
     setBusy(true);setError("");
     try{
-      const next=await parseF02ExcelV5(await file.arrayBuffer(),context);
-      setRows(next);setPreview(validateF02(context,next));
+      const next=await parseF02ExcelV5(await file.arrayBuffer(),requestedContext);
+      if(inputGeneration.current!==requestGeneration){
+        setError("XLSX_V5_IMPORT_CONTEXT_CHANGED");
+        return;
+      }
+      setRows(next);setPreview(validateF02(requestedContext,next,"XLSX"));
     }catch(e){setError(e instanceof Error?e.message:"XLSX_IMPORT_ERROR");}
     finally{setBusy(false);}
   }
