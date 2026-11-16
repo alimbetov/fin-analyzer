@@ -89,21 +89,21 @@
       "code": "CON-01",
       "group": "CON",
       "title": "Pareto",
-      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "implementationStatus": "CON01_PURE_ENGINE_GOLDENS_AUTHORED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "ScenarioEconomicsEngine",
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ConcentrationAnalysisEngine (pure calculations, no trusted SKU adapter)",
+      "notes": "Only deterministic reconciliation/ratio/boundary logic and synthetic JUnit tests. No approved SKU source population, no SingleExecutor registration, no production/CORE qualification."
     },
     {
       "code": "CON-02",
       "group": "CON",
       "title": "ABC Classification",
-      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "implementationStatus": "CON02_PURE_ENGINE_GOLDENS_AUTHORED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "ScenarioEconomicsEngine",
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ConcentrationAnalysisEngine (pure calculations, no trusted SKU adapter)",
+      "notes": "Only deterministic reconciliation/ratio/boundary logic and synthetic JUnit tests. No approved SKU source population, no SingleExecutor registration, no production/CORE qualification."
     },
     {
       "code": "CON-03",
