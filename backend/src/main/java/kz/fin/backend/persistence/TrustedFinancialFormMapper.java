@@ -97,7 +97,9 @@ public class TrustedFinancialFormMapper {
         if(approvals.size()!=1)
             throw new IllegalArgumentException("REVIEWED_PILOT_SOURCE_NOT_FOUND_OR_FORBIDDEN");
         Approved approved=approvals.getFirst();
-        if(!approved.version().equals("FIN-PILOT-V1"))
+        if(!("FIN-PILOT-V1".equals(approved.version()) ||
+                ("F01".equals(approved.form()) &&
+                 "FIN-LIQUIDITY-V1".equals(approved.version()))))
             throw new IllegalArgumentException("UNQUALIFIED_PILOT_FORM_VERSION");
         if(cells.size()!=approved.count() || !actualFingerprint.equals(approved.fingerprint()))
             throw new IllegalArgumentException("SOURCE_INTAKE_FINGERPRINT_OR_COUNT_MISMATCH");
