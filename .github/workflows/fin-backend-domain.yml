@@ -12,6 +12,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: FIN-R8 Flyway version preflight
+        run: |
+          node --test scripts/check-flyway-versions.test.mjs
+          node scripts/check-flyway-versions.mjs
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

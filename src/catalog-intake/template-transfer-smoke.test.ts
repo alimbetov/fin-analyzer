@@ -32,8 +32,8 @@ async function save(book:ExcelJS.Workbook):Promise<ArrayBuffer>{
 async function opened(context:CatalogCaptureContext):Promise<ExcelJS.Workbook>{
   const book=new ExcelJS.Workbook();
   const blob=await generateTypedCatalogExcel(context);
-  await book.xlsx.load(new Uint8Array(await blob.arrayBuffer())
-    as unknown as Parameters<typeof book.xlsx.load>[0]);
+  const bytes=new Uint8Array(await blob.arrayBuffer());
+  await book.xlsx.load(bytes as unknown as Parameters<typeof book.xlsx.load>[0]);
   return book;
 }
 

@@ -14,6 +14,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: FIN-R8 Flyway version preflight (including negative tests)
+        run: |
+          node --test scripts/check-flyway-versions.test.mjs
+          node scripts/check-flyway-versions.mjs
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: P0 source-backed delivery contract and negative guards (not S2 or production acceptance)
@@ -104,6 +108,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: FIN-R8 Flyway version preflight
+        run: |
+          node --test scripts/check-flyway-versions.test.mjs
+          node scripts/check-flyway-versions.mjs
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -123,6 +134,7 @@ jobs:
             kz.fin.backend.diagnostics.ExtensionSheetContractSmokeTest \
             kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest \
             kz.fin.backend.persistence.PostgresInvariantTest \
+            kz.fin.backend.persistence.FlywayMigrationRecoveryIntegrationTest \
             kz.fin.backend.persistence.FactPublicationIntegrationTest \
             kz.fin.backend.persistence.TrustedBusinessDiagnosticIntegrationTest \
             kz.fin.backend.execution.ExecutionContractsTest \
@@ -167,6 +179,7 @@ jobs:
               "kz.fin.backend.diagnostics.ExtensionSheetContractSmokeTest",
               "kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest",
               "kz.fin.backend.persistence.PostgresInvariantTest",
+              "kz.fin.backend.persistence.FlywayMigrationRecoveryIntegrationTest",
               "kz.fin.backend.persistence.FactPublicationIntegrationTest",
               "kz.fin.backend.persistence.TrustedBusinessDiagnosticIntegrationTest",
               "kz.fin.backend.execution.ExecutionContractsTest",

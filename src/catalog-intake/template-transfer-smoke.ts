@@ -95,8 +95,8 @@ export async function verifyCatalogTemplateTransfer(
   const expected=sourceFieldFixtures(context);
   const book=new ExcelJS.Workbook();
   const issued=await generateTypedCatalogExcel(context);
-  await book.xlsx.load(new Uint8Array(await issued.arrayBuffer())
-    as unknown as Parameters<typeof book.xlsx.load>[0]);
+  const issuedBytes=new Uint8Array(await issued.arrayBuffer());
+  await book.xlsx.load(issuedBytes as unknown as Parameters<typeof book.xlsx.load>[0]);
   const sheet=book.getWorksheet("FIN_Catalog");
   if(!sheet)throw new Error("SMOKE_TEMPLATE_SHEET_MISSING");
   const fields=Object.keys(expected);
