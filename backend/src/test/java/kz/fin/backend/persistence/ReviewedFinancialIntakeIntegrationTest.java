@@ -143,6 +143,27 @@ class ReviewedFinancialIntakeIntegrationTest {
                 ()->submit(x,"D01",f01(OCT,"100","40","60","10","5")));
     }
 
+    @Test void aReplacementCannotSilentlyLosePreviouslyApprovedMonthsOrCells(){
+        var x=ctx();
+        UUID older=approve(x,"F01",f01(SEP,"900","320","580","100","50"));
+        UUID newer=approve(x,"F02",f02());
+        var first=intake.publishReviewedActual(publishRequest(x,List.of(older,newer),null));
+        assertThrows(IllegalArgumentException.class,()->intake.publishReviewedActual(
+                publishRequest(x,List.of(newer),first.revisionId())));
+        assertEquals(first.revisionId(),jdbc.queryForObject("""
+            SELECT fact_set_revision_id FROM fin_fact.current_fact_set
+            WHERE organization_id=? AND economic_entity_id=? AND business_scope_id=?
+            AND data_space='ACTUAL'
+            """,UUID.class,x.org(),x.entity(),x.scope()));
+        var complete=intake.publishReviewedActual(publishRequest(
+                x,List.of(older,newer),first.revisionId()));
+        assertEquals(2,complete.currentVersion());
+        assertEquals(8L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_fact.fact_selection
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,x.org(),complete.revisionId()));
+    }
+
     @Test void sourceFingerprintIsManualNotFabricatedRawXlsxHash(){
         var x=ctx();var submitted=submit(x,"F02",f02());
         var info=intake.read(x.org(),submitted.id());
