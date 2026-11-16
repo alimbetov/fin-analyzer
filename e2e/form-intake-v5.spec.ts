@@ -118,3 +118,53 @@ test("FIN V5: Excel parsed after a project switch cannot overwrite the new conte
   await expect(studio.getByLabel("Чистая выручка")).toHaveValue("123");
   await expect(studio.getByRole("region",{name:"Предпросмотр данных"})).toHaveCount(0);
 });
+
+
+test("FIN V5: shows upload time, version and immutable session history for corrected F02",async({page})=>{
+  await page.goto("/");
+  const studio=page.locator("#form-intake-v5");
+  await studio.getByLabel("Код проекта (локальный черновик)").fill("FIN-UAT");
+  await studio.getByLabel("Чистая выручка").fill("400");
+  await studio.getByLabel("Себестоимость").fill("260");
+  await studio.getByLabel("Операционные расходы").fill("90");
+  await studio.getByRole("button",{name:"Проверить и показать Preview"}).click();
+  await expect(studio.getByTestId("fin-v5-preview-upload-time")).toContainText("v1");
+  const [v1]=await Promise.all([
+    page.waitForEvent("download"),
+    studio.getByRole("button",{name:"Скачать локальный черновик JSON"}).click()
+  ]);
+  expect(v1.suggestedFilename()).toContain("LOCAL_UNVERIFIED_DRAFT");
+  const history=studio.locator(".fin-v5-revisions");
+  await expect(history).toContainText("История версий");
+  await expect(history).toContainText("v1");
+  await expect(history).toContainText("Время загрузки");
+  await expect(history).toContainText("Время сохранения");
+  await expect(history).toContainText("История только в этой вкладке");
+
+  await studio.getByLabel("Чистая выручка").fill("00400.00");
+  await studio.getByRole("button",{name:"Проверить и показать Preview"}).click();
+  await expect(studio.getByTestId("fin-v5-preview-upload-time")).toContainText("Данные без изменений");
+  await Promise.all([
+    page.waitForEvent("download"),
+    studio.getByRole("button",{name:"Скачать локальный черновик JSON"}).click()
+  ]);
+  await expect(history.locator("tbody tr")).toHaveCount(1);
+
+  await studio.getByLabel("Чистая выручка").fill("450");
+  await studio.getByRole("button",{name:"Проверить и показать Preview"}).click();
+  await expect(studio.getByTestId("fin-v5-preview-upload-time")).toContainText("v2");
+  await expect(studio.getByText("Сравнение с предыдущей версией")).toBeVisible();
+  const reason=studio.getByPlaceholder("Укажите причину корректировки");
+  await expect(reason).toBeVisible();
+  await expect(studio.getByRole("button",{name:"Скачать локальный черновик JSON"})).toBeDisabled();
+  await reason.fill("Исправлена выручка");
+  await Promise.all([
+    page.waitForEvent("download"),
+    studio.getByRole("button",{name:"Скачать локальный черновик JSON"}).click()
+  ]);
+  await expect(history.locator("tbody tr")).toHaveCount(2);
+  await expect(history).toContainText("v2");
+  await expect(history).toContainText("Исправлена выручка");
+  await studio.getByLabel("Код проекта (локальный черновик)").fill("FIN-OTHER");
+  await expect(studio.locator(".fin-v5-revisions")).toHaveCount(0);
+});
