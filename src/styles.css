@@ -267,3 +267,46 @@ footer { text-align: center; color: #536c87; font-size: 11px; margin: 28px 0; }
 .fin-v5-revisions h3 { font-size:17px; margin:0 0 8px; color:#edf5ff; }
 .fin-v5-revisions .fin-v5-table th,
 .fin-v5-revisions .fin-v5-table td { vertical-align:middle; text-align:center; }
+
+
+/* FIN R6 — catalog-wide typed intake (122 evidence-unqualified forms). */
+.fin-catalog-studio {font-family:Inter,system-ui,-apple-system,"Segoe UI","Noto Sans",sans-serif;}
+.fin-catalog-warning {font-size:12px;line-height:1.7;color:#bfd8ed;}
+.fin-catalog-controls {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0;}
+.fin-catalog-controls label {display:flex;flex-direction:column;gap:8px;min-width:0;color:#bdd3e9;font-size:12px;font-weight:600;}
+.fin-catalog-controls input,.fin-catalog-controls select {
+  width:100%;min-width:0;min-height:43px;padding:9px 10px;border:1px solid #466482;
+  border-radius:8px;background:#152a43;color:#f0f7ff;font:inherit;
+}
+.fin-catalog-controls input:focus-visible,.fin-catalog-controls select:focus-visible,
+.fin-catalog-table input:focus-visible {outline:2px solid #96cfff;outline-offset:2px;}
+.fin-catalog-context {color:#93bddb;font-size:12px;line-height:1.6;overflow-wrap:anywhere;}
+.fin-catalog-blocked,.fin-catalog-error {padding:12px 14px;border:1px solid #a87380;border-radius:8px;
+  color:#ffe2e5;background:#422a38;font-size:13px;line-height:1.6;}
+.fin-catalog-table-wrap {width:100%;overflow:auto;border:1px solid #405c76;border-radius:12px;margin:12px 0;}
+.fin-catalog-table {min-width:max(750px,100%);border-collapse:separate;border-spacing:0;font-size:12px;}
+.fin-catalog-table caption {padding:12px 15px;text-align:left;font-weight:600;color:#c3d8ee;}
+.fin-catalog-table thead th {position:sticky;top:0;z-index:1;padding:14px 12px;background:#254767;color:#f0f7ff;
+  text-align:center;vertical-align:middle;border-bottom:2px solid #4b7194;line-height:1.5;}
+.fin-catalog-table thead th small {display:block;color:#a8d1ee;font-size:10px;font-weight:400;}
+.fin-catalog-table tbody tr:nth-child(even){background:#1a3047;}
+.fin-catalog-table tbody tr:hover{background:#213f5c;}
+.fin-catalog-table tbody th,.fin-catalog-table tbody td {padding:9px 12px;border-bottom:1px solid #35506a;
+  vertical-align:middle;text-align:center;line-height:1.55;}
+.fin-catalog-table tbody th input,.fin-catalog-table tbody td input {
+  width:100%;min-width:145px;min-height:43px;background:#244a70;color:#fff;
+  border:1px solid #507da6;border-radius:7px;padding:10px 11px;font:inherit;
+}
+.fin-catalog-table .fin-catalog-number {text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.fin-catalog-table .fin-catalog-number input {text-align:right;font-variant-numeric:tabular-nums;}
+.fin-catalog-table .fin-catalog-text {text-align:center;white-space:normal;overflow-wrap:anywhere;}
+.fin-catalog-table .fin-catalog-text input {text-align:center;}
+.fin-catalog-actions {margin:18px 0;gap:10px;flex-wrap:wrap;}
+.fin-catalog-import {display:inline-flex;align-items:center;gap:8px;border:1px solid #446c8f;border-radius:8px;
+  padding:9px 12px;color:#d5e6f7;cursor:pointer;font-size:12px;}
+.fin-catalog-import input {max-width:220px;font:inherit;color:#d1e5f8;}
+.fin-catalog-preview {padding:17px;margin-top:22px;border:1px solid #436b90;border-radius:12px;background:#132b43;}
+.fin-catalog-preview h3 {font-size:17px;}
+.fin-catalog-errors {font-size:12px;line-height:1.8;color:#ffd3d6;overflow-wrap:anywhere;}
+@media(max-width:1050px){.fin-catalog-controls{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:620px){.fin-catalog-controls{grid-template-columns:1fr;}}
