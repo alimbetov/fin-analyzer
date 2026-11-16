@@ -53,6 +53,13 @@ class QualifiedCurrentRatioIntegrationTest {
     private Fixture seed(String assets,
                          String liabilities,boolean origins,boolean sameDate,
                          boolean sameCurrency,boolean useCurrentFields) {
+        return seed(assets,liabilities,origins,sameDate,sameCurrency,useCurrentFields,false);
+    }
+
+    private Fixture seed(String assets,
+                         String liabilities,boolean origins,boolean sameDate,
+                         boolean sameCurrency,boolean useCurrentFields,
+                         boolean additionalUnqualifiedFact) {
         for(String metric:List.of("CURRENT_ASSETS","CURRENT_LIABILITIES")) {
             jdbc.update("""
                 INSERT INTO fin_calc.metric_contract
@@ -87,6 +94,10 @@ class QualifiedCurrentRatioIntegrationTest {
             useCurrentFields?"CURRENT_LIABILITIES":"LIABILITIES",
             "currentLiabilities","liabilities",liabilities,
             sameDate?AS_OF:AS_OF.minusDays(1),sameCurrency?"KZT":"USD",origins);
+        if(additionalUnqualifiedFact)
+            insertBalance(org,entity,scope,revision,source,"1.0.0",
+                "UNRELATED_F01_TOTAL","notMapped","notMapped",
+                "999",AS_OF,"KZT",false);
         publication.publish(new FactSetPublicationService.Request(
             org,entity,scope,BASIS,AnalysisContext.DataSpace.ACTUAL,revision,null));
         return new Fixture(org,entity,scope,revision);
@@ -195,6 +206,16 @@ class QualifiedCurrentRatioIntegrationTest {
             """,reportId));
         assertThrows(IllegalArgumentException.class,()->
             coreReports.load(UUID.randomUUID(),reportId));
+    }
+
+    @Test void unrelatedUnqualifiedMetricDoesNotPoisonTheQualifiedRatio() throws Exception {
+        var f=seed("400","200",true,true,true,true,true);
+        executeToTerminal(f);
+        assertEquals(1L,scheduled(f));
+        var result=json.readTree(result(f));
+        assertEquals("CALCULATED",result.path("status").asText());
+        assertEquals(0,new BigDecimal("2").compareTo(
+            new BigDecimal(result.path("value").asText())));
     }
 
     @Test void zeroLiabilitiesProducesExplicitNotComputableNotInfinity() throws Exception {
