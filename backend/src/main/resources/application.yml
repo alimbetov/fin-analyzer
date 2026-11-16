@@ -12,3 +12,18 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
+
+fin:
+  security:
+    enabled: ${FIN_SECURITY_ENABLED:false}
+    issuer: ${FIN_OIDC_ISSUER:}
+    jwks-uri: ${FIN_OIDC_JWKS_URI:}
+    audience: ${FIN_OIDC_AUDIENCE:fin-analyzer-api}
+    ui-origin: ${FIN_UI_ORIGIN:}
+  diagnostics:
+    actual-preview-enabled: ${FIN_ACTUAL_PREVIEW_ENABLED:false}
