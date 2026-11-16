@@ -42,6 +42,19 @@ class ConcentrationAnalysisEngineTest {
                 crossing.rows().getLast().cumulativePercent()));
     }
 
+    @Test void tinyDistanceBelowEightyPercentMustNotBeRoundedIntoBClass(){
+        var pop=pareto(List.of(
+            sku("A","79999999999999999"),
+            sku("B","20000000000000001")),
+            amount("100000000000000000"));
+        assertEquals(0,pop.rows().getFirst().cumulativePercent()
+                .compareTo(amount("80.000000000000")));
+        // Display rounds to 80%, but exact cumulative before B is below 80%.
+        var abc=abc(pop,DEFAULT_ABC_POLICY);
+        assertEquals(List.of("A","A"),
+                abc.rows().stream().map(AbcRow::classification).toList());
+    }
+
     @Test void zeroOrUnreconciledOrDuplicatePopulationCannotCompute(){
         assertThrows(IllegalArgumentException.class,
                 ()->pareto(List.of(sku("A","20"),sku("B","80")),amount("90")));
