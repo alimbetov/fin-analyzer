@@ -72,3 +72,43 @@ test("FIN V5: downloaded locale-specific XLSX rows 1/2/3+ round-trip to same pre
   await expect(studio.getByRole("alert")).toContainText("XLSX_V5_VISIBLE_HEADER_CHANGED");
   await expect(preview).toBeVisible();
 });
+
+
+test("FIN V5: Excel parsed after a project switch cannot overwrite the new context",async({page})=>{
+  await page.addInitScript(()=>{
+    const original=File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer=function(){
+      const source=this;
+      return new Promise<ArrayBuffer>((resolve,reject)=>{
+        window.addEventListener("fin-v5-resume",()=>{
+          original.call(source).then(resolve,reject);
+        },{once:true});
+      });
+    };
+  });
+  await page.goto("/");
+  const studio=page.locator("#form-intake-v5");
+  await studio.getByLabel("Код проекта (локальный черновик)").fill("FIN-UAT");
+  await studio.getByLabel("Чистая выручка").fill("123");
+  const [download]=await Promise.all([
+    page.waitForEvent("download"),
+    studio.getByRole("button",{name:"Скачать Excel"}).click()
+  ]);
+  const workbook=new ExcelJS.Workbook();
+  await workbook.xlsx.readFile((await download.path())!);
+  const sheet=workbook.getWorksheet("FIN_Data")!;
+  sheet.getCell("D3").value=400;
+  sheet.getCell("D4").value=260;
+  sheet.getCell("D5").value=90;
+  const buffer=Buffer.from(await workbook.xlsx.writeBuffer());
+  await studio.getByLabel("Загрузить Excel").setInputFiles({
+    name:"pending-import.xlsx",
+    mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer
+  });
+  await studio.getByLabel("Код проекта (локальный черновик)").fill("FIN-OTHER");
+  await page.evaluate(()=>window.dispatchEvent(new Event("fin-v5-resume")));
+  await expect(studio.getByRole("alert")).toContainText("XLSX_V5_IMPORT_CONTEXT_CHANGED");
+  await expect(studio.getByLabel("Чистая выручка")).toHaveValue("123");
+  await expect(studio.getByRole("region",{name:"Предпросмотр данных"})).toHaveCount(0);
+});
