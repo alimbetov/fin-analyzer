@@ -54,6 +54,7 @@ function literal(cell: ExcelJS.Cell): string {
   throw new Error("XLSX_FORMULA_OR_NON_LITERAL_FORBIDDEN");
 }
 function assertContext(context: EntryContext): void {
+  requireActiveLocale(context.locale);
   if (context.formCode !== "F02" || !/^[\p{L}\p{N}_-]{1,50}$/u.test(context.projectCode)
     || !/^\d{4}\.(0[1-9]|1[0-2])$/.test(context.periodCode)
     || context.reportCurrency !== "KZT" || context.accountingCurrency !== "KZT"
