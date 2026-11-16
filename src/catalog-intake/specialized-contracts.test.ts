@@ -19,7 +19,13 @@ function fixture(type:FieldType):string{
   }
 }
 function candidateRow(form:SpecializedCandidate):CatalogRow{
-  return {rowId:"ROW-001",cells:Object.fromEntries(form.fields.map(f=>[f.code,fixture(f.type)]))};
+  const cells=Object.fromEntries(form.fields.map(f=>[f.code,fixture(f.type)]));
+  // Construct independent, internally consistent source values for formulas,
+  // rather than assuming one generic 100 fits every accounting identity.
+  if(["F01","P01"].includes(form.code))cells.assets="200";
+  if(form.code==="F03")cells.closingCash="400";
+  if(form.code==="F04")cells.closingEquity="200";
+  return {rowId:"ROW-001",cells};
 }
 function given(cells:Record<string,string>):CatalogRow[]{
   return [{rowId:"ROW-001",cells}];
