@@ -169,11 +169,11 @@
       "code": "PRO-03",
       "group": "PRO",
       "title": "Contribution Margin",
-      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "implementationStatus": "PURE_ENGINE_GOLDENS_AUTHORED_NO_TRUSTED_ADAPTER",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "ScenarioEconomicsEngine",
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "OperatingFinanceMethodEngine.contributionMargin (pure PRO-03; requires separately qualified VARIABLE_COST taxonomy)",
+      "notes": "Pure Java method and independent synthetic golden/negative JUnit checks authored. Actual economic fact mappings, averaged stock provenance, variable cost/purchases semantics, SingleExecutor integration, React and S2 qualification are NOT delivered."
     },
     {
       "code": "PRO-04",
@@ -209,11 +209,11 @@
       "code": "CASH-01",
       "group": "CASH",
       "title": "Cash Conversion Cycle",
-      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "implementationStatus": "PURE_ENGINE_GOLDENS_AUTHORED_NO_TRUSTED_ADAPTER",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "ScenarioEconomicsEngine",
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "OperatingFinanceMethodEngine.cashConversionCycle (pure CASH-01; requires source-qualified AR_AVG/INVENTORY_AVG/AP_AVG/PURCHASES)",
+      "notes": "Pure Java method and independent synthetic golden/negative JUnit checks authored. Actual economic fact mappings, averaged stock provenance, variable cost/purchases semantics, SingleExecutor integration, React and S2 qualification are NOT delivered."
     },
     {
       "code": "CASH-02",
