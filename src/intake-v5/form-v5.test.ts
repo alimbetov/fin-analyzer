@@ -166,4 +166,8 @@ describe("FIN V5 localized XLSX",()=>{
       expect.objectContaining({code:"REQUIRED_FIELD_MISSING",fieldCode:"operatingExpenses",sourceCell:"FIN_Data!D5"})
     ]));
   });
+  it("fails closed if a caller requests future Chinese template before reviewed translation exists",async()=>{
+    await expect(generateF02ExcelV5({...ctx,locale:"zh-Hans" as "ru"}))
+      .rejects.toThrow("TRANSLATION_NOT_READY");
+  });
 });
