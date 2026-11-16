@@ -27,3 +27,9 @@ fin:
     ui-origin: ${FIN_UI_ORIGIN:}
   diagnostics:
     actual-preview-enabled: ${FIN_ACTUAL_PREVIEW_ENABLED:false}
+
+  execution:
+    # Fail-closed. Only trusted published facts; no ML/financial methods
+    # are implicitly enabled by this flag.
+    enabled: ${FIN_EXECUTION_ENABLED:false}
+    poll-ms: ${FIN_EXECUTION_POLL_MS:10000}
