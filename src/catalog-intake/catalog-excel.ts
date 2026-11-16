@@ -6,11 +6,13 @@ import {
   type CatalogPreview,type CatalogRow,type CatalogField
 } from "./catalog-schema";
 import {resolvePeriod} from "../intake-v5/reporting-period";
+import {fieldPresentation} from "./field-presentation-r6";
 
 /** A machine-coded draft XLSX for the 122 typed-hint entries; NOT an approved source. */
 const MAX_XLSX=2_000_000;
 const MIME="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const SHEET="FIN_Catalog",INFO="Instructions",META="_FIN_Metadata";
+const EXCEL_LAYOUT_VERSION="FIN-CATALOG-XLSX-2";
 const META_KEYS=[
   "CAPTURE_VERSION","FORM_CODE","FORM_KIND","AGGREGATE_ROOT","GRAIN",
   "PROJECT_CODE","SOURCE_LOCALE","PERIOD_TYPE","PERIOD_CODE","COVERAGE",
@@ -42,19 +44,40 @@ function ensureContext(context:CatalogCaptureContext){
 function signature(fields:readonly CatalogField[]):string{
   return fields.map(f=>f.code+":"+f.type).join(";");
 }
-function manifest(context:CatalogCaptureContext):readonly string[]{
+function manifest(context:CatalogCaptureContext,version:string=EXCEL_LAYOUT_VERSION):readonly string[]{
   const form=ensureContext(context);
   return [
-    CATALOG_CAPTURE_VERSION,form.code,form.kind,form.aggregateRoot,form.grain,
+    version,form.code,form.kind,form.aggregateRoot,form.grain,
     context.projectCode,context.locale,context.periodType,context.periodCode,
     context.coverage,context.currency,String(context.amountScale),signature(form.fields)
   ];
 }
-function passport(context:CatalogCaptureContext):string[]{
-  return [CATALOG_CAPTURE_VERSION,context.formCode,context.projectCode,
+function passport(context:CatalogCaptureContext,version:string=EXCEL_LAYOUT_VERSION):string[]{
+  return [version,context.formCode,context.projectCode,
     context.periodCode,context.currency,String(context.amountScale),
     context.locale,context.periodType+"/"+context.coverage];
 }
+const REPORT_LABELS={
+  ru:["Паспорт отчёта","Организация","Форма","Проект","Период","Валюта","Масштаб","Версия шаблона","Язык","Статус"],
+  kk:["Есеп паспорты","Ұйым","Нысан","Жоба","Кезең","Валюта","Масштаб","Үлгі нұсқасы","Тіл","Мәртебе"],
+  en:["Report passport","Organization","Form","Project","Period","Currency","Scale","Template version","Language","Status"]
+} as const;
+const UNBOUND={
+  ru:"Не привязано к организации: локальный черновик",
+  kk:"Ұйымға байланыстырылмаған: жергілікті нобай",
+  en:"Not bound to an organization: local draft"
+} as const;
+function reportPassportRows(
+  context:CatalogCaptureContext,
+  form:ReturnType<typeof getCaptureForm>,
+  locale:CaptureLocale,version:string
+):readonly (readonly [string,string])[]{
+  const values=["UNQUALIFIED_DRAFT",UNBOUND[locale],form.code+" · "+form.aggregateRoot,
+    context.projectCode,context.periodCode+" ("+context.periodType+"/"+context.coverage+")",
+    context.currency,String(context.amountScale),version,locale,"UNQUALIFIED_DRAFT"];
+  return REPORT_LABELS[locale].map((label,i)=>[label,values[i]!] as const);
+}
+
 function literal(cell:ExcelJS.Cell):string{
   if(cell.value===null||cell.value===undefined)return "";
   if(typeof cell.value==="string")return cell.value;
@@ -74,7 +97,20 @@ export async function generateTypedCatalogExcel(context:CatalogCaptureContext):P
   const instructions=book.addWorksheet(INFO);
   const locale=UI[context.locale];
   [locale.intro,locale.warn,locale.edit].forEach(value=>instructions.addRow([value]));
-  instructions.getColumn(1).width=110;
+  instructions.getColumn(1).width=45;
+  instructions.getColumn(2).width=85;
+  const info=reportPassportRows(context,form,context.locale,EXCEL_LAYOUT_VERSION);
+  for(const [i,[label,value]] of info.entries()){
+    const row=i+5;
+    const name=instructions.getCell(row,1),detail=instructions.getCell(row,2);
+    name.value=label;detail.value=value;
+    name.font={bold:true,color:{argb:"FF173550"}};
+    name.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFE8F1F8"}};
+    detail.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF2F8FE"}};
+    name.alignment={vertical:"middle",wrapText:true,horizontal:"left"};
+    detail.alignment={vertical:"middle",wrapText:true,horizontal:"left"};
+    instructions.getRow(row).height=27;
+  }
   const passportCells=passport(context);
   for(let i=0;i<passportCells.length;i++){
     const c=sheet.getCell(1,i+1);
@@ -84,11 +120,15 @@ export async function generateTypedCatalogExcel(context:CatalogCaptureContext):P
     c.alignment={horizontal:"center",vertical:"middle",wrapText:true};
   }
   sheet.getRow(1).height=37;
-  const names=[locale.rowId,...form.fields.map(f=>f.code)];
+  const names=[locale.rowId,...form.fields.map(f=>fieldPresentation(form.code,f,context.locale).label)];
   const types=[locale.types,...form.fields.map(f=>f.type)];
   for(let i=0;i<names.length;i++){
     const c=sheet.getCell(2,i+1);
     c.value=names[i]!;
+    if(i>0){
+      const p=fieldPresentation(form.code,form.fields[i-1]!,context.locale);
+      c.note=`${p.fieldCode} · ${p.unit}\n${p.help}\nRequiredness: pending review · ${p.translationReview}`;
+    }
     c.font={bold:true,color:{argb:"FFFFFFFF"}};
     c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF25476F"}};
     c.alignment={horizontal:"center",vertical:"middle",wrapText:true};
@@ -145,10 +185,14 @@ export async function parseTypedCatalogExcel(
       if(col>2)throw new Error("CATALOG_XLSX_META_CHANGED");
     });
   });
+  const sourceVersion=literal(metadata.getCell(1,2));
+  const legacy=sourceVersion===CATALOG_CAPTURE_VERSION;
+  if(!legacy&&sourceVersion!==EXCEL_LAYOUT_VERSION)
+    throw new Error("CATALOG_XLSX_VERSION_UNSUPPORTED");
   const suppliedLocale=literal(metadata.getCell(7,2)) as CaptureLocale;
   if(!CAPTURE_LOCALES.includes(suppliedLocale))throw new Error("TRANSLATION_NOT_READY");
   const issued={...expected,locale:suppliedLocale};
-  const correct=manifest(issued);
+  const correct=manifest(issued,sourceVersion);
   if(metadata.actualRowCount!==META_KEYS.length)throw new Error("CATALOG_XLSX_META_CHANGED");
   for(let i=0;i<META_KEYS.length;i++)
     if(literal(metadata.getCell(i+1,1))!==META_KEYS[i]||
@@ -156,12 +200,19 @@ export async function parseTypedCatalogExcel(
       throw new Error("CATALOG_XLSX_META_CHANGED:"+META_KEYS[i]);
   const info=book.getWorksheet(INFO)!;
   info.eachRow(row=>{
-    if(row.number>3)throw new Error("CATALOG_XLSX_INSTRUCTIONS_CHANGED");
+    if(row.number>(legacy?3:14))throw new Error("CATALOG_XLSX_INSTRUCTIONS_CHANGED");
     row.eachCell({includeEmpty:false},(_cell,col)=>{
-      if(col>1)throw new Error("CATALOG_XLSX_INSTRUCTIONS_CHANGED");
+      if(col>(legacy?1:2))throw new Error("CATALOG_XLSX_INSTRUCTIONS_CHANGED");
     });
   });
-  if(info.actualRowCount!==3)throw new Error("CATALOG_XLSX_INSTRUCTIONS_CHANGED");
+  if(info.actualRowCount!==(legacy?3:13))throw new Error("CATALOG_XLSX_INSTRUCTIONS_CHANGED");
+  if(!legacy){
+    for(const [i,[label,value]] of reportPassportRows(issued,form,suppliedLocale,sourceVersion).entries()){
+      if(literal(info.getCell(i+5,1))!==label||
+         literal(info.getCell(i+5,2))!==value)
+         throw new Error("CATALOG_XLSX_REPORT_PASSPORT_CHANGED");
+    }
+  }
   for(const [i,line] of [UI[suppliedLocale].intro,UI[suppliedLocale].warn,UI[suppliedLocale].edit].entries())
     if(literal(info.getCell(i+1,1))!==line)throw new Error("CATALOG_XLSX_INSTRUCTIONS_CHANGED");
   const data=book.getWorksheet(SHEET)!;
@@ -172,11 +223,12 @@ export async function parseTypedCatalogExcel(
       if(col>(row.number===1?8:width))throw new Error("CATALOG_XLSX_EXTRA_COLUMN");
     });
   });
-  const expectedPassport=passport(issued);
+  const expectedPassport=passport(issued,sourceVersion);
   for(let i=0;i<expectedPassport.length;i++)
     if(literal(data.getCell(1,i+1))!==expectedPassport[i])
       throw new Error("CATALOG_XLSX_PASSPORT_CHANGED");
-  const headings=[UI[suppliedLocale].rowId,...form.fields.map(f=>f.code)];
+  const headings=[UI[suppliedLocale].rowId,...form.fields.map(f=>
+     legacy?f.code:fieldPresentation(form.code,f,suppliedLocale).label)];
   const types=[UI[suppliedLocale].types,...form.fields.map(f=>f.type)];
   for(let i=0;i<headings.length;i++){
     if(literal(data.getCell(2,i+1))!==headings[i]||
