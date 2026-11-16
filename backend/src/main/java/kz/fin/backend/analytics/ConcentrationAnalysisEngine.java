@@ -95,11 +95,18 @@ public final class ConcentrationAnalysisEngine {
                 sortedPareto.rows().isEmpty())
             throw new IllegalArgumentException("CON_PARETO_VERSION_UNQUALIFIED");
         var classified=new ArrayList<AbcRow>();
+        BigDecimal precedingAmount=BigDecimal.ZERO;
         for(var row:sortedPareto.rows()) {
-            String bucket=row.precedingPercent().compareTo(policy.aLimitPercent())<0?"A":
-                    row.precedingPercent().compareTo(policy.bLimitPercent())<0?"B":"C";
+            // Compare exact amounts, not a rounded displayed percentage:
+            // 79.9999999999999% must NOT round up to the 80% boundary.
+            BigDecimal precedingBasisPoints=precedingAmount.multiply(HUNDRED);
+            BigDecimal aBoundary=sortedPareto.reconciledTotal().multiply(policy.aLimitPercent());
+            BigDecimal bBoundary=sortedPareto.reconciledTotal().multiply(policy.bLimitPercent());
+            String bucket=precedingBasisPoints.compareTo(aBoundary)<0?"A":
+                    precedingBasisPoints.compareTo(bBoundary)<0?"B":"C";
             classified.add(new AbcRow(row.skuCode(),bucket,
                     row.sharePercent(),row.cumulativePercent()));
+            precedingAmount=precedingAmount.add(row.amount());
         }
         return new AbcResult(policy.policyVersion(),classified);
     }
