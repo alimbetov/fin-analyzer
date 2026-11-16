@@ -5,6 +5,10 @@ import {
 } from "./form-schema";
 import { resolvePeriod } from "./reporting-period";
 import { generateF02ExcelV5, parseF02ExcelV5 } from "./excel-v5";
+import {
+  planLocalRevisionV5,commitLocalRevisionV5,localReportIdentity,
+  type LocalDraftRevisionV5
+} from "./local-revision-v5";
 
 const UI: Record<ActiveLocale, {
   title:string;sub:string;project:string;language:string;period:string;scale:string;
@@ -40,6 +44,42 @@ const UI: Record<ActiveLocale, {
     missing:"Not entered",valid:"Validated",invalid:"Corrections required",
     local:"Local UI pilot. This is not a server submission, independent approval or published financial data."}
 };
+const REV_LABELS:Record<ActiveLocale,{
+  history:string;version:string;uploaded:string;saved:string;source:string;
+  reason:string;reasonPlaceholder:string;compare:string;before:string;after:string;
+  noChanges:string;changed:string;newRevision:string;sessionOnly:string;
+}> = {
+  ru: {
+    history:"История версий (текущая сессия)",version:"Версия",
+    uploaded:"Время загрузки",saved:"Время сохранения",source:"Источник",
+    reason:"Причина исправления",reasonPlaceholder:"Укажите причину корректировки",
+    compare:"Сравнение с предыдущей версией",before:"Было",after:"Стало",
+    noChanges:"Данные без изменений",changed:"Обнаружены изменения",
+    newRevision:"Новая версия",sessionOnly:"История только в этой вкладке, без серверного сохранения."
+  },
+  kk: {
+    history:"Нұсқалар тарихы (ағымдағы сеанс)",version:"Нұсқа",
+    uploaded:"Жүктеу уақыты",saved:"Сақтау уақыты",source:"Дереккөзі",
+    reason:"Түзету себебі",reasonPlaceholder:"Есепті түзету себебін көрсетіңіз",
+    compare:"Алдыңғы нұсқамен салыстыру",before:"Бұрын",after:"Қазір",
+    noChanges:"Деректер өзгермеді",changed:"Өзгерістер анықталды",
+    newRevision:"Жаңа нұсқа",sessionOnly:"Тарих тек осы қойындыда, серверде сақталмаған."
+  },
+  en: {
+    history:"Version history (current session)",version:"Version",
+    uploaded:"Uploaded at",saved:"Saved at",source:"Source",
+    reason:"Correction reason",reasonPlaceholder:"Explain the correction",
+    compare:"Comparison with previous revision",before:"Before",after:"After",
+    noChanges:"No changes in values",changed:"Changes detected",
+    newRevision:"New revision",sessionOnly:"History is only in this tab, not saved on the server."
+  }
+};
+function localDateTime(iso:string,locale:ActiveLocale):string {
+  const tag={ru:"ru-RU",kk:"kk-KZ",en:"en-US"}[locale];
+  return new Intl.DateTimeFormat(tag,{dateStyle:"medium",timeStyle:"short",
+    timeZoneName:"short"}).format(new Date(iso));
+}
+
 const ISSUE_LABEL: Record<ActiveLocale, Record<string,string>> = {
   ru: {
     REQUIRED_FIELD_MISSING:"Обязательное значение не заполнено",
@@ -170,19 +210,29 @@ export function FormIntakeStudioV5() {
   const [preview,setPreview]=useState<ValidatedEntry|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
+  const [localHistory,setLocalHistory]=useState<LocalDraftRevisionV5[]>([]);
+  const [sourceKind,setSourceKind]=useState<"MANUAL"|"XLSX">("MANUAL");
+  const [previewUploadedAt,setPreviewUploadedAt]=useState<string|null>(null);
+  const [changeReason,setChangeReason]=useState("");
+  const [localMessage,setLocalMessage]=useState("");
   // A workbook is parsed asynchronously. Its result must never be written into
   // a different project, period, scale or language selected while parsing.
   const inputGeneration=useRef(0);
   const labels=UI[context.locale];
+  const revisionLabels=REV_LABELS[context.locale];
+  const revisionPlan=preview?.valid?planLocalRevisionV5(localHistory,preview):null;
+  const matchingHistory=localHistory.filter(r=>r.identity===localReportIdentity(context))
+    .sort((a,b)=>b.revisionNumber-a.revisionNumber);
   const period=/^\d{4}\.(0[1-9]|1[0-2])$/.test(context.periodCode)
     ? resolvePeriod("MONTH",context.periodCode):null;
   function updateContext(partial:Partial<EntryContext>):void {
     inputGeneration.current++;
-    setContext(current=>({...current,...partial}));setPreview(null);setError("");
+    setContext(current=>({...current,...partial}));
+    setPreview(null);setPreviewUploadedAt(null);setError("");setLocalMessage("");
   }
   function updateRows(next:EntryRow[]):void {
     inputGeneration.current++;
-    setRows(next);setPreview(null);setError("");
+    setRows(next);setPreview(null);setPreviewUploadedAt(null);setError("");setLocalMessage("");
   }
   async function downloadTemplate():Promise<void>{
     setBusy(true);setError("");
@@ -209,15 +259,26 @@ export function FormIntakeStudioV5() {
       // Parsing only prepares a preview: never overwrite unsaved editor values
       // until the user explicitly chooses to apply the imported rows.
       setPreview(validateF02(requestedContext,next,"XLSX"));
+      setPreviewUploadedAt(new Date().toISOString());
+      setSourceKind("XLSX");setChangeReason("");setLocalMessage("");
     }catch(e){setError(e instanceof Error?e.message:"XLSX_IMPORT_ERROR");}
     finally{setBusy(false);}
   }
   function saveLocalDraft():void{
-    if(!preview?.valid)return;
-    download(new Blob([JSON.stringify({
-      schema:"fin.v5.local-draft/1",status:"LOCAL_UNVERIFIED_DRAFT",
-      formVersion:PILOT_F02_SCHEMA.version,context:preview.context,rows:preview.rows
-    },null,2)],{type:"application/json"}),"FIN_F02_LOCAL_UNVERIFIED_DRAFT.json");
+    if(!preview?.valid || !previewUploadedAt)return;
+    try{
+      const result=commitLocalRevisionV5(localHistory,preview,previewUploadedAt,
+        sourceKind,changeReason,new Date().toISOString());
+      setLocalHistory(result.history);
+      setLocalMessage(result.result==="DUPLICATE"
+        ?revisionLabels.noChanges+" · v"+result.revision.revisionNumber
+        :revisionLabels.newRevision+" · v"+result.revision.revisionNumber);
+      download(new Blob([JSON.stringify({
+        schema:"fin.v5.local-draft/2",status:"LOCAL_UNVERIFIED_DRAFT",
+        persistence:"BROWSER_TAB_ONLY",formVersion:PILOT_F02_SCHEMA.version,
+        context:preview.context,revision:result.revision,rows:result.revision.rows
+      },null,2)],{type:"application/json"}),"FIN_F02_LOCAL_UNVERIFIED_DRAFT.json");
+    }catch(e){setError(e instanceof Error?e.message:"LOCAL_REVISION_SAVE_FAILED");}
   }
   return <section className="panel fin-v5-studio" id="form-intake-v5">
     <div className="panel-heading"><div>
@@ -254,17 +315,75 @@ export function FormIntakeStudioV5() {
         <input aria-label={labels.upload} type="file" accept=".xlsx"
           disabled={busy} onChange={e=>void uploadFile(e)}/></label>
       <button type="button" className="button primary" disabled={busy}
-        onClick={()=>{setPreview(validateF02(context,rows));setError("");}}>{labels.check}</button>
+        onClick={()=>{
+          setPreview(validateF02(context,rows));
+          setPreviewUploadedAt(new Date().toISOString());
+          setSourceKind("MANUAL");setChangeReason("");setLocalMessage("");setError("");
+        }}>{labels.check}</button>
     </div>
     {error && <p role="alert" className="fin-v5-error">{error}</p>}
     {preview && <>
       <FormPreviewTable entry={preview}/>
+      {previewUploadedAt && <p className="fin-v5-note" data-testid="fin-v5-preview-upload-time">
+        {revisionLabels.uploaded}: {localDateTime(previewUploadedAt,context.locale)}
+        {" · "}{revisionLabels.source}: {sourceKind}
+        {" · "}{revisionLabels.version}: v{revisionPlan?.nextRevision??"—"}
+        {" · "}{revisionPlan?.status==="DUPLICATE"?revisionLabels.noChanges:
+          revisionPlan?.status==="CHANGED"?revisionLabels.changed:revisionLabels.newRevision}
+      </p>}
+      {revisionPlan?.previous && <div className="fin-v5-scroll">
+        <table className="fin-v5-table fin-preview-table">
+          <caption>{revisionLabels.compare}</caption>
+          <thead><tr><th scope="col">{labels.indicator}</th>
+            <th scope="col">{revisionLabels.before}</th>
+            <th scope="col">{revisionLabels.after}</th>
+            <th scope="col">{labels.status}</th></tr></thead>
+          <tbody>{revisionPlan.changes.map(change=><tr key={change.fieldCode}>
+            <th scope="row" className="fin-v5-text">
+              {PILOT_F02_SCHEMA.fields.find(f=>f.code===change.fieldCode)?.labels[context.locale]??change.fieldCode}
+            </th>
+            <td className="fin-v5-number">{change.previous===null?"—":formatExactDecimal(change.previous,context.locale)}</td>
+            <td className="fin-v5-number">{formatExactDecimal(change.current,context.locale)}</td>
+            <td className="fin-v5-text">{change.changed?revisionLabels.changed:revisionLabels.noChanges}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+      {revisionPlan?.status==="CHANGED" && <label className="fin-v5-revision-reason">
+        {revisionLabels.reason}
+        <input value={changeReason} maxLength={1000}
+          onChange={e=>setChangeReason(e.target.value)}
+          placeholder={revisionLabels.reasonPlaceholder} />
+      </label>}
+      {revisionPlan?.status==="MONEY_CONTEXT_MISMATCH" &&
+        <p role="alert" className="fin-v5-error">LOCAL_V5_MONEY_CONTEXT_MISMATCH</p>}
       <div className="action-row fin-v5-actions">
         <button type="button" className="button secondary"
           onClick={()=>updateRows(preview.rows.map(row=>({...row})))}>{labels.apply}</button>
-        <button type="button" className="button secondary" disabled={!preview.valid}
+        <button type="button" className="button secondary"
+          disabled={!preview.valid || revisionPlan?.status==="MONEY_CONTEXT_MISMATCH" ||
+            (revisionPlan?.status==="CHANGED" && !changeReason.trim())}
           onClick={saveLocalDraft}>{labels.save}</button>
       </div>
     </>}
+    {localMessage && <p role="status" className="fin-v5-ok">{localMessage}</p>}
+    {matchingHistory.length>0 && <div className="fin-v5-revisions">
+      <h3>{revisionLabels.history} · F02 · {context.periodCode}</h3>
+      <p className="fin-v5-note">{revisionLabels.sessionOnly}</p>
+      <div className="fin-v5-scroll"><table className="fin-v5-table fin-preview-table">
+        <caption>{revisionLabels.history}</caption>
+        <thead><tr><th scope="col">{revisionLabels.version}</th>
+          <th scope="col">{revisionLabels.uploaded}</th>
+          <th scope="col">{revisionLabels.saved}</th>
+          <th scope="col">{revisionLabels.source}</th>
+          <th scope="col">{revisionLabels.reason}</th></tr></thead>
+        <tbody>{matchingHistory.map(item=><tr key={item.revisionNumber}>
+          <td className="fin-v5-text">v{item.revisionNumber}</td>
+          <td className="fin-v5-text" title={item.uploadedAt}>{localDateTime(item.uploadedAt,context.locale)}</td>
+          <td className="fin-v5-text" title={item.savedAt}>{localDateTime(item.savedAt,context.locale)}</td>
+          <td className="fin-v5-text">{item.sourceKind}</td>
+          <td className="fin-v5-text">{item.changeReason||"—"}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </div>}
   </section>;
 }
