@@ -127,6 +127,16 @@ jobs:
         run: python3 backend/scripts/verify_fin_be_r1_evidence.py
       - name: Require FIN-BE-R1-X0 four-language catalog runtime proofs
         run: python3 backend/scripts/verify_fin_be_r1_x0_evidence.py
+      - name: Require FIN-BE-R1-X2 populated server-issued XLSX/PostgreSQL proofs
+        run: python3 backend/scripts/verify_fin_be_r1_x2_evidence.py
+      - name: Archive FIN-BE-R1-X2 populated Excel export evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-be-r1-x2-populated-xlsx-evidence-${{ github.job }}
+          path: backend/target/fin-evidence/fin-be-r1-x2-xlsx-export-coverage.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Archive FIN-BE-R1-X0 measured locale coverage
         if: always()
         uses: actions/upload-artifact@v4
