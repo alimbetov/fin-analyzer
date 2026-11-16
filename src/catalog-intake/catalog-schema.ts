@@ -138,11 +138,8 @@ export function normalizeTypedValue(type:FieldType,raw:string,locale:CaptureLoca
   // Field values are not identities. No implicit transliteration or classification.
   return value.normalize("NFC");
 }
-export function validateCatalogCapture(context:CatalogCaptureContext,
-                                      rows:readonly CatalogRow[]):CatalogPreview {
-  const form=getCaptureForm(context.formCode);
-  if(form.captureMode!=="TYPED_DRAFT")
-    fail("CATALOG_SCHEMA_NOT_QUALIFIED:"+form.code);
+/** Same reporting/project/money gate for all editable draft families. */
+export function validateCatalogContext(context:CatalogCaptureContext):CatalogFinding[] {
   const findings:CatalogFinding[]=[];
   if(!CAPTURE_LOCALES.includes(context.locale))findings.push({code:"TRANSLATION_NOT_READY"});
   if(!/^[\p{L}\p{N}_-]{1,50}$/u.test(context.projectCode))
@@ -151,6 +148,15 @@ export function validateCatalogCapture(context:CatalogCaptureContext,
     findings.push({code:"MONEY_CONTEXT_UNSUPPORTED"});
   try{resolvePeriod(context.periodType,context.periodCode,context.coverage);}
   catch{findings.push({code:"INVALID_REPORTING_PERIOD"});}
+  return findings;
+}
+
+export function validateCatalogCapture(context:CatalogCaptureContext,
+                                      rows:readonly CatalogRow[]):CatalogPreview {
+  const form=getCaptureForm(context.formCode);
+  if(form.captureMode!=="TYPED_DRAFT")
+    fail("CATALOG_SCHEMA_NOT_QUALIFIED:"+form.code);
+  const findings:CatalogFinding[]=validateCatalogContext(context);
   if(!Array.isArray(rows)||rows.length<1||rows.length>MAX_CATALOG_ROWS)
     findings.push({code:"CATALOG_ROW_COUNT_INVALID"});
   const seen=new Set<string>();
