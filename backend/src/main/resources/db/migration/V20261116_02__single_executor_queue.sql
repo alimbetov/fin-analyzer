@@ -8,7 +8,7 @@ CREATE TABLE fin_exec.analysis_run (
     snapshot_hash CHAR(64) NOT NULL,
     profile_code VARCHAR(96) NOT NULL,
     run_status VARCHAR(24) NOT NULL DEFAULT 'QUEUED'
-      CHECK (run_status IN ('QUEUED','RUNNING','COMPLETED','PARTIAL','FAILED')),
+      CHECK (run_status IN ('QUEUED','PLANNING','RUNNING','COMPLETED','PARTIAL','FAILED','CANCELLED')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at TIMESTAMPTZ,
     CONSTRAINT fk_exec_run_factset FOREIGN KEY (fact_set_revision_id,organization_id)
@@ -21,7 +21,9 @@ CREATE TABLE fin_exec.analysis_task (
     run_id UUID NOT NULL REFERENCES fin_exec.analysis_run(id),
     method_code VARCHAR(128) NOT NULL,
     task_status VARCHAR(24) NOT NULL DEFAULT 'PENDING'
-      CHECK (task_status IN ('PENDING','READY','RUNNING','COMPUTED','BLOCKED','FAILED_FINAL')),
+      CHECK (task_status IN ('PENDING','READY','RUNNING','COMPUTED',
+                            'SKIPPED_NOT_APPLICABLE','BLOCKED_MISSING','BLOCKED_CONFLICT',
+                            'DISABLED_POLICY','FAILED_RETRYABLE','FAILED_FINAL')),
     attempt INT NOT NULL DEFAULT 0 CHECK (attempt >= 0),
     fencing_token BIGINT NOT NULL DEFAULT 0,
     lease_until TIMESTAMPTZ,
