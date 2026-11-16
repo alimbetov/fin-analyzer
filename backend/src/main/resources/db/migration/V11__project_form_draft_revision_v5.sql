@@ -105,8 +105,8 @@ CREATE TABLE fin_intake.draft_revision_v5 (
     REFERENCES fin_intake.form_slot_v5(id,organization_id),
   CONSTRAINT fk_fin_v5_draft_preview FOREIGN KEY(preview_id,slot_id)
     REFERENCES fin_intake.preview_v5(id,slot_id),
-  CONSTRAINT fk_fin_v5_draft_parent FOREIGN KEY(parent_revision_id)
-    REFERENCES fin_intake.draft_revision_v5(id),
+  CONSTRAINT fk_fin_v5_draft_parent FOREIGN KEY(parent_revision_id,slot_id)
+    REFERENCES fin_intake.draft_revision_v5(id,slot_id),
   CONSTRAINT uq_fin_v5_draft_slot_number UNIQUE(slot_id,revision_number),
   CONSTRAINT uq_fin_v5_draft_id_slot UNIQUE(id,slot_id),
   CONSTRAINT ck_fin_v5_reason_for_changes CHECK(revision_number=1 OR length(btrim(change_reason))>0)
