@@ -11,6 +11,7 @@ import { generateBalanceTemplate, parseBalanceTemplate } from "./adapters/excel"
 import { SectorStudio } from "./sector/SectorStudio";
 import { RelationshipStudio } from "./diagnostics/RelationshipStudio";
 import { TrustedFinanceWorkspace } from "./diagnostics/TrustedFinanceWorkspace";
+import { FormIntakeStudioV5 } from "./intake-v5/FormIntakeStudioV5";
 import { createSectorState, type SectorState } from "./sector/state";
 
 function downloadFile(blob: Blob, filename: string): void {
@@ -330,6 +331,7 @@ export default function App() {
 
         <RelationshipStudio />
 
+        <FormIntakeStudioV5 />
         <TrustedFinanceWorkspace />
 
         <section className="panel project-panel" id="project">
