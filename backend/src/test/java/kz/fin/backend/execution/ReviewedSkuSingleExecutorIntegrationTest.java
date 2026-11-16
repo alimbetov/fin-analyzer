@@ -45,6 +45,7 @@ class ReviewedSkuSingleExecutorIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ReviewedFinancialIntakeService intake;
     @Autowired ReviewedSkuPopulationLoader loader;
+    @Autowired kz.fin.backend.persistence.ReviewedSkuIntakeService skuIntake;
     @Autowired SingleExecutorScheduler scheduler;
     @Autowired CompositeCoreReportPublisher coreReports;
     @Autowired ObjectMapper json;
@@ -177,6 +178,88 @@ class ReviewedSkuSingleExecutorIntegrationTest {
             WHERE r.organization_id=? AND r.fact_set_revision_id=?
               AND t.method_code=?
             """,Long.class,f.organization(),f.revision(),method);
+    }
+
+    private static byte[] jsonSkuFile() {
+        return """
+        {
+          "period":"2026-02",
+          "currency":"KZT",
+          "events":[
+            {"sourceLineRef":"sale-a","skuCode":"A","eventKind":"SALE",
+             "saleDate":"2026-02-12","currency":"KZT","grossAmount":"500"},
+            {"sourceLineRef":"sale-b","skuCode":"B","eventKind":"SALE",
+             "saleDate":"2026-02-12","currency":"KZT","grossAmount":"300"},
+            {"sourceLineRef":"sale-c","skuCode":"C","eventKind":"SALE",
+             "saleDate":"2026-02-12","currency":"KZT","grossAmount":"200"},
+            {"sourceLineRef":"return-c","skuCode":"C","eventKind":"RETURN",
+             "originalSaleRef":"sale-c","saleDate":"2026-02-13",
+             "currency":"KZT","grossAmount":"50"},
+            {"sourceLineRef":"sale-d","skuCode":"D","eventKind":"SALE",
+             "saleDate":"2026-02-12","currency":"KZT","grossAmount":"50"}
+          ]
+        }
+        """.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    @Test void secureRawSkuUploadIsHashedStoredAndSeparatelyReviewed() throws Exception {
+        Fixture f=publishedF02();
+        byte[] file=jsonSkuFile();
+        var receipt=skuIntake.submit("uploader-a",
+                new kz.fin.backend.persistence.ReviewedSkuIntakeService.Upload(
+                    f.organization(),f.entity(),f.scope(),f.revision(),"TEST_ERP",file));
+        assertEquals("PENDING",receipt.status());
+        assertEquals(5,receipt.lineCount());
+        assertEquals("1000",receipt.netSales());
+        assertEquals(sha256(file),receipt.documentHash());
+        assertArrayEquals(file,skuIntake.readOriginal(f.organization(),receipt.populationId()));
+        assertThrows(IllegalArgumentException.class,()->skuIntake.readOriginal(
+                UUID.randomUUID(),receipt.populationId()));
+        assertEquals("PENDING",skuIntake.read(f.organization(),receipt.populationId()).state());
+        assertThrows(IllegalArgumentException.class,()->skuIntake.review(
+                "uploader-a",f.organization(),receipt.populationId(),true,"Self-review"));
+        var review=skuIntake.review("independent-b",
+                f.organization(),receipt.populationId(),true,"Verified invoices");
+        assertEquals("APPROVED",review.decision());
+        assertFalse(review.supplementalAnalysisQueued());
+        assertEquals("APPROVED",
+                skuIntake.read(f.organization(),receipt.populationId()).state());
+        assertTrue(loader.load(revision(f)).isPresent());
+        toTerminal(f);
+        assertEquals("CALCULATED",result(f,QualifiedSkuParetoAdapter.CODE).path("status").asText());
+        assertThrows(IllegalArgumentException.class,()->skuIntake.read(
+                UUID.randomUUID(),receipt.populationId()));
+    }
+
+    @Test void invalidOrDuplicatedUploadedLinesAreRejectedBeforeReview() {
+        Fixture f=publishedF02();
+        byte[] valid=jsonSkuFile();
+        String jsonText=new String(valid,java.nio.charset.StandardCharsets.UTF_8);
+        var request=new kz.fin.backend.persistence.ReviewedSkuIntakeService.Upload(
+                f.organization(),f.entity(),f.scope(),f.revision(),"TEST_ERP",valid);
+        assertThrows(IllegalArgumentException.class,()->skuIntake.submit("uploader-a",
+                new kz.fin.backend.persistence.ReviewedSkuIntakeService.Upload(
+                    UUID.randomUUID(),f.entity(),f.scope(),f.revision(),"TEST_ERP",valid)));
+        String duplicate=jsonText.replace("\"return-c\"",
+                "\"sale-a\"");
+        assertThrows(IllegalArgumentException.class,()->skuIntake.submit("uploader-a",
+                new kz.fin.backend.persistence.ReviewedSkuIntakeService.Upload(
+                    f.organization(),f.entity(),f.scope(),f.revision(),"TEST_ERP",
+                    duplicate.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        String wrongMonth=jsonText.replace("\"2026-02-13\"",
+                "\"2026-03-13\"");
+        assertThrows(IllegalArgumentException.class,()->skuIntake.submit("uploader-a",
+                new kz.fin.backend.persistence.ReviewedSkuIntakeService.Upload(
+                    f.organization(),f.entity(),f.scope(),f.revision(),"TEST_ERP",
+                    wrongMonth.getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        assertThrows(IllegalArgumentException.class,()->skuIntake.submit("uploader-a",
+                new kz.fin.backend.persistence.ReviewedSkuIntakeService.Upload(
+                    f.organization(),f.entity(),f.scope(),f.revision(),"TEST_ERP",
+                    "[]".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_con.sku_population_submission
+            WHERE organization_id=?
+            """,Long.class,f.organization()));
     }
 
     @Test void completeApprovedSkuEvidenceRunsParetoThenAbcIntoImmutableCore() throws Exception {
