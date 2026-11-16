@@ -17,7 +17,7 @@ import java.util.UUID;
  * a production execution permit.
  */
 @Service
-public final class CatA31MethodReviewRegistry {
+public class CatA31MethodReviewRegistry {
     public enum ReviewStatus {
         NOT_REVIEWED, REJECTED, APPROVED, REVOKED, NOT_EFFECTIVE, AMBIGUOUS
     }
