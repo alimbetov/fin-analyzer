@@ -129,7 +129,8 @@ class ReviewedFinancialIntakeIntegrationTest {
             (BigDecimal)facts.get(1).get("numeric_value")));
         assertEquals("currentLiabilities",facts.get(1).get("source_field"));
         assertEquals("FIN-LIQUIDITY-V1",facts.get(1).get("form_version"));
-        assertEquals(OCT.atEndOfMonth(),facts.get(0).get("start_inclusive"));
+        assertEquals(OCT.atEndOfMonth().toString(),
+            facts.get(0).get("start_inclusive").toString());
         assertThrows(IllegalArgumentException.class,
             ()->intake.read(UUID.randomUUID(),submitted.id()));
     }
