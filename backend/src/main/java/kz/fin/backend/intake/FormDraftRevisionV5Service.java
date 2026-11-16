@@ -52,6 +52,13 @@ public class FormDraftRevisionV5Service {
     public record UploadHistory(UUID previewId,Instant uploadedAt,String uploadedBy,
                                 String sourceKind,String inputLocale,String fingerprint,
                                 Integer resultingRevision) {}
+    public record RevisionDetail(UUID id,int revisionNumber,String formCode,String periodCode,
+                                 String fingerprint,List<FormSchemaV5.Input> cells,
+                                 String sourceKind,String inputLocale,String uploadedBy,
+                                 Instant uploadedAt,String savedBy,Instant savedAt,
+                                 String changeReason) {
+        public RevisionDetail { cells=List.copyOf(cells); }
+    }
 
     private record Context(UUID id,UUID org,String projectCode,String currency){}
     private record Slot(UUID id,UUID projectId,int currentRevision,String currency,int scale){}
@@ -311,6 +318,34 @@ public class FormDraftRevisionV5Service {
                  rs.getString(7),rs.getTimestamp(8).toInstant(),rs.getString(9),
                  rs.getTimestamp(10).toInstant(),rs.getString(11),rs.getString(12)),
           organizationId,projectId,periodCode);
+    }
+
+    /** Earlier revisions remain readable after a later correction, with exact source values. */
+    @Transactional(readOnly=true)
+    public RevisionDetail readRevision(UUID organizationId,UUID projectId,
+                                       String periodCode,int revisionNumber) {
+        requireProject(organizationId,projectId);
+        ReportingPeriodV5.resolve(ReportingPeriodV5.Type.MONTH,periodCode,
+                ReportingPeriodV5.Coverage.PERIOD_ONLY);
+        if(revisionNumber<1)throw new IllegalArgumentException("FIN_V5_REVISION_NOT_FOUND");
+        var rows=jdbc.query("""
+          SELECT d.id,d.revision_number,s.form_code,s.period_code,d.normalized_fingerprint,
+                 d.cells::text,p.source_kind,p.input_locale,d.uploaded_by,d.uploaded_at,
+                 d.saved_by,d.saved_at,d.change_reason
+          FROM fin_intake.form_slot_v5 s
+          JOIN fin_intake.draft_revision_v5 d ON d.slot_id=s.id
+          JOIN fin_intake.preview_v5 p ON p.id=d.preview_id
+          WHERE s.organization_id=? AND s.project_id=? AND s.form_code='F02'
+            AND s.period_type='MONTH' AND s.period_code=?
+            AND d.revision_number=?
+          """,(rs,n)->new RevisionDetail((UUID)rs.getObject(1),rs.getInt(2),
+                  rs.getString(3),rs.getString(4),rs.getString(5),
+                  decode(rs.getString(6)),rs.getString(7),rs.getString(8),
+                  rs.getString(9),rs.getTimestamp(10).toInstant(),
+                  rs.getString(11),rs.getTimestamp(12).toInstant(),rs.getString(13)),
+          organizationId,projectId,periodCode,revisionNumber);
+        if(rows.size()!=1)throw new IllegalArgumentException("FIN_V5_REVISION_NOT_FOUND");
+        return rows.getFirst();
     }
 
     /** Every validated submission is retained even when duplicate/no-change. */
