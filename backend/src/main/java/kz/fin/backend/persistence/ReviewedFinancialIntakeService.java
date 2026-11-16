@@ -334,6 +334,47 @@ public class ReviewedFinancialIntakeService {
             allFactIds.addAll(ids);
         }
         if(currencies.size()!=1)throw new IllegalArgumentException("INTAKE_MULTI_CURRENCY_FACTSET");
+
+        // A candidate revision is a complete replacement snapshot, NOT a delta.
+        // Forbid silently losing a previously published form/period/row/field.
+        // Legitimate removal requires a separately reviewed restatement policy.
+        if(request.expectedCurrentRevisionId()!=null){
+            Set<String> previous=new HashSet<>(jdbc.query("""
+                SELECT a.metric_code || '|' || a.start_inclusive::text || '|' ||
+                       a.end_exclusive::text || '|' || o.source_row_id || '|' || o.source_field
+                FROM fin_fact.fact_selection sel
+                JOIN fin_fact.fact_assertion a ON a.id=sel.fact_assertion_id
+                     AND a.organization_id=sel.organization_id
+                JOIN fin_fact.fact_origin o ON o.fact_assertion_id=a.id
+                     AND o.organization_id=a.organization_id
+                JOIN fin_fact.fact_set_publication p
+                     ON p.fact_set_revision_id=sel.fact_set_revision_id
+                     AND p.organization_id=sel.organization_id
+                WHERE sel.organization_id=? AND sel.fact_set_revision_id=?
+                  AND p.economic_entity_id=? AND p.business_scope_id=?
+                  AND p.reporting_basis=? AND p.data_space='ACTUAL'
+                """,(rs,n)->rs.getString(1),request.organizationId(),
+                    request.expectedCurrentRevisionId(),request.economicEntityId(),
+                    request.businessScopeId(),request.reportingBasis().name()));
+            if(previous.isEmpty())
+                throw new IllegalArgumentException("INTAKE_PREVIOUS_ACTUAL_SNAPSHOT_NOT_FOUND");
+            Set<String> replacementCoordinates=new HashSet<>();
+            for(UUID id:allFactIds){
+                String coordinate=jdbc.queryForObject("""
+                    SELECT a.metric_code || '|' || a.start_inclusive::text || '|' ||
+                           a.end_exclusive::text || '|' || o.source_row_id || '|' || o.source_field
+                    FROM fin_fact.fact_assertion a
+                    JOIN fin_fact.fact_origin o ON o.fact_assertion_id=a.id
+                         AND o.organization_id=a.organization_id
+                    WHERE a.organization_id=? AND a.id=?
+                    """,String.class,request.organizationId(),id);
+                if(coordinate==null)
+                    throw new IllegalArgumentException("INTAKE_UNVERIFIED_SOURCE_COORDINATES");
+                replacementCoordinates.add(coordinate);
+            }
+            if(!replacementCoordinates.containsAll(previous))
+                throw new IllegalArgumentException("INTAKE_RESTATEMENT_CANNOT_DROP_PRIOR_FACTS");
+        }
         UUID revision=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO fin_fact.fact_set_revision(id,organization_id,parent_revision_id,status,approved_at)
