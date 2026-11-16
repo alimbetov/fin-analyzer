@@ -24,7 +24,7 @@ interface SourceCell {
   sourceRowId:string;sourceField:string;period:string;enteredAmount:string;
 }
 interface SubmissionInfo {
-  id:string;formCode:string;reviewStatus:string;submittedBy:string;
+  id:string;formCode:string;formVersion:string;reviewStatus:string;submittedBy:string;
   reviewBy:string|null;reviewReason:string|null;
   sourceKind:string;sourceDocumentHash:string;cells:SourceCell[];
 }
