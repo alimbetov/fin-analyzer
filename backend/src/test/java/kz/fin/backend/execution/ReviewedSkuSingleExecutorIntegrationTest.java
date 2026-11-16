@@ -297,13 +297,7 @@ class ReviewedSkuSingleExecutorIntegrationTest {
         assertThrows(DataAccessException.class,
                 ()->review(s,"independent-sku-reviewer"));
 
-        Fixture other=publishedF02();
-        Source withCancellation=source(other,7,"1000",false);
-        standardSales(withCancellation);
-        line(withCancellation,"sale-e","E","SALE",null,"100");
-        line(withCancellation,"cancel-e","E","CANCELLATION","sale-e","100");
-        // A second partial refund of a fully cancelled invoice is forbidden.
-        // Change the manifest to eight lines in a fresh published revision.
+        // A partial refund of a fully cancelled invoice is forbidden.
         Fixture last=publishedF02();
         Source conflicting=source(last,8,"990",false);
         standardSales(conflicting);
