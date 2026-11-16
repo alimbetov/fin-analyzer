@@ -11,6 +11,12 @@ import java.util.Map;
 
 @RestControllerAdvice(basePackages="kz.fin.backend.api")
 public class FinancialApiErrors {
+    @ExceptionHandler(kz.fin.backend.intake.FormDraftRevisionV5Service.RevisionConflictException.class)
+    ResponseEntity<Map<String,String>> revisionConflict(
+        kz.fin.backend.intake.FormDraftRevisionV5Service.RevisionConflictException e){
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code","FIN_V5_REVISION_CONFLICT"));
+    }
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Map<String,String>> invalid(IllegalArgumentException e){
         String message=e.getMessage()==null?"INVALID_FINANCIAL_REQUEST":e.getMessage();
