@@ -255,6 +255,10 @@ public class TrustedAutoReportService {
             feed(hash,"PERCENT_OF");
             feedKey(hash,a.numerator());feedKey(hash,a.denominator());
             feedPeriod(hash,a.period());feed(hash,a.method().name());
+        }else if(op instanceof AutoReportProjection.RatioOf a){
+            feed(hash,"RATIO_OF");
+            feedKey(hash,a.numerator());feedKey(hash,a.denominator());
+            feedPeriod(hash,a.period());feed(hash,a.method().name());
         }else if(op instanceof AutoReportProjection.ShareOfTotal a){
             feed(hash,"SHARE_OF_TOTAL");
             feedKey(hash,a.member());feed(hash,a.dimension());
@@ -319,6 +323,8 @@ public class TrustedAutoReportService {
         if(op instanceof AutoReportProjection.Compare a) return List.of(a.key());
         if(op instanceof AutoReportProjection.MovingAverage a) return List.of(a.key());
         if(op instanceof AutoReportProjection.PercentOf a)
+            return List.of(a.numerator(),a.denominator());
+        if(op instanceof AutoReportProjection.RatioOf a)
             return List.of(a.numerator(),a.denominator());
         if(op instanceof AutoReportProjection.ShareOfTotal a) return List.of(a.member());
         throw new IllegalArgumentException("UNKNOWN_REPORT_OPERATION");
