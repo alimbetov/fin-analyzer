@@ -218,6 +218,68 @@ public class CatalogXlsxRoundTripService {
         }
     }
 
+    /**
+     * X2: create an ACTUALLY POPULATED server-issued V2 workbook.
+     * Keep V1 and existing empty issued templates unchanged.
+     * Metadata is never rewritten for the user's display language.
+     */
+    byte[] generatePopulatedIssued(Context context, UUID issuedTemplateId,
+                                   List<CatalogCaptureRegistry.EntryRow> sourceRows,
+                                   List<String> instructions) {
+        Objects.requireNonNull(context);
+        Objects.requireNonNull(issuedTemplateId);
+        if (sourceRows == null || sourceRows.isEmpty()
+                || sourceRows.size() > CatalogCaptureRegistry.MAX_ROWS
+                || instructions == null || instructions.size() > 60
+                || instructions.stream().anyMatch(s -> s == null || s.length() > 5000))
+            throw new IllegalArgumentException("FIN_EXPORT_XLSX_INVALID_DATA");
+
+        // This starts with the exact V2 contract already checked by parseIssued.
+        byte[] template = generateIssued(context, issuedTemplateId);
+        var fields = fields(context.formCode());
+        var seen = new HashSet<String>();
+        try (var book = new XSSFWorkbook(new ByteArrayInputStream(template));
+             var output = new ByteArrayOutputStream()) {
+            var data = book.getSheet(DATA);
+            Row placeholder = data.getRow(1);
+            if (placeholder != null) data.removeRow(placeholder);
+            var textStyle = book.createCellStyle();
+            textStyle.setDataFormat(book.createDataFormat().getFormat("@"));
+            for (int rowIndex = 0; rowIndex < sourceRows.size(); rowIndex++) {
+                var source = sourceRows.get(rowIndex);
+                if (source == null || source.rowId() == null
+                        || !source.rowId().matches("[A-Za-z0-9_-]{1,60}")
+                        || !seen.add(source.rowId()) || source.cells() == null
+                        || source.cells().size() != fields.size())
+                    throw new IllegalArgumentException("FIN_EXPORT_XLSX_INVALID_SOURCE_ROW");
+                Row row = data.createRow(rowIndex + 1);
+                var identity = row.createCell(0, CellType.STRING);
+                identity.setCellStyle(textStyle);
+                identity.setCellValue(source.rowId());
+                for (int col = 0; col < fields.size(); col++) {
+                    String value = source.cells().get(fields.get(col).code());
+                    if (value == null || value.length() > 32767)
+                        throw new IllegalArgumentException("FIN_EXPORT_XLSX_INVALID_SOURCE_CELL");
+                    var cell = row.createCell(col + 1, CellType.STRING);
+                    cell.setCellStyle(textStyle);
+                    cell.setCellValue(value);
+                }
+            }
+
+            var info = book.getSheet(INSTRUCTIONS);
+            for (int i = 0; i < instructions.size(); i++) {
+                info.createRow(i + 4).createCell(0, CellType.STRING)
+                        .setCellValue(instructions.get(i));
+            }
+            book.write(output);
+            if (output.size() > MAX_XLSX_BYTES)
+                throw new IllegalArgumentException("CATALOG_XLSX_SIZE_LIMIT");
+            return output.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException("FIN_EXPORT_XLSX_GENERATION_FAILED", e);
+        }
+    }
+
     public Parsed parse(Context context, byte[] bytes) {
         return parse(context, bytes, null);
     }

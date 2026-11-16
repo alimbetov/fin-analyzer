@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -67,6 +68,41 @@ public class CatalogIssuedTemplateService {
                 context.locale(), CatalogXlsxRoundTripService.ISSUED_FORMAT, fp, rawHash);
         return new Issued(id, projectId, context.formCode(), context.periodCode(), fp,
                 rawHash, bytes);
+    }
+
+    /**
+     * X2: register the complete populated workbook, not a blank template.
+     * The original_template_sha in the manifest must hash these actual bytes.
+     * This transaction never inserts a catalog draft or confirms a revision.
+     */
+    @Transactional
+    public Issued issuePopulated(UUID projectId, CatalogXlsxRoundTripService.Context context,
+                                 List<CatalogCaptureRegistry.EntryRow> rows,
+                                 List<String> reportInstructions) {
+        Objects.requireNonNull(projectId);
+        Objects.requireNonNull(context);
+        requireProjectMatches(projectId, context);
+        UUID id = UUID.randomUUID();
+        byte[] bytes = xlsx.generatePopulatedIssued(context, id, rows, reportInstructions);
+        var parsed = xlsx.parseIssued(context, bytes, id);
+        if (!parsed.rows().equals(rows) || parsed.rows().size() != rows.size())
+            throw new IllegalStateException("FIN_EXPORT_XLSX_ROUNDTRIP_MISMATCH");
+        String fp = CatalogXlsxRoundTripService.schemaFingerprint(context.formCode());
+        String rawHash = sha256(bytes);
+        jdbc.update("""
+            INSERT INTO fin_intake.catalog_xlsx_issued_template (
+                id,organization_id,project_id,economic_entity_id,business_scope_id,
+                project_code,form_code,reporting_basis,period_type,period_code,
+                coverage,currency,amount_scale,input_locale,format_version,
+                schema_fingerprint,original_template_sha)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, id, context.organizationId(), projectId, context.entityId(),
+                context.businessScopeId(), context.projectCode(), context.formCode(),
+                context.reportingBasis(), context.periodType().name(), context.periodCode(),
+                context.coverage().name(), context.currency(), context.amountScale(),
+                context.locale(), CatalogXlsxRoundTripService.ISSUED_FORMAT, fp, rawHash);
+        return new Issued(id, projectId, context.formCode(), context.periodCode(),
+                fp, rawHash, bytes);
     }
 
     /** Returns the exact normalization to be persisted, without writing a draft. */
