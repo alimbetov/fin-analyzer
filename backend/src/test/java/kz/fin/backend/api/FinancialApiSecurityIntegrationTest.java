@@ -3,6 +3,8 @@ package kz.fin.backend.api;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -324,8 +326,8 @@ class FinancialApiSecurityIntegrationTest {
                         .contains(confirmed.revisionId().toString()));
             } else {
                 assertEquals("application/pdf", responseRead.getContentType());
-                try (var parsed = org.apache.pdfbox.Loader.loadPDF(output)) {
-                    var extracted = new org.apache.pdfbox.text.PDFTextStripper().getText(parsed);
+                try (var parsed = Loader.loadPDF(output)) {
+                    var extracted = new PDFTextStripper().getText(parsed);
                     assertTrue(extracted.contains(confirmed.revisionId().toString()));
                     assertTrue(extracted.replaceAll("\\s+", "")
                             .contains("12345678901234567890123456.123456789012"));
