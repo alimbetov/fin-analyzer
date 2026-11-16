@@ -1,7 +1,7 @@
 import { useEffect,useMemo,useRef,useState } from "react";
 import type { User } from "oidc-client-ts";
 import { configuredFinOidc,finUserManager,finApi,loadFinUser,
-  tokenOrganizationHints,type FinOidcConfig } from "./fin-oidc";
+  tokenOrganizationHints } from "./fin-oidc";
 
 const FIELDS:Record<string,readonly string[]>={
   F01:["assets","liabilities","equity","cash","receivables"],
