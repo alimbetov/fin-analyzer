@@ -45,7 +45,13 @@ public final class SingleExecutorScheduler {
 
     /** At most one event and one compute task; no DB transaction during execution. */
     public boolean tick() {
-        boolean planned=Boolean.TRUE.equals(transactions.execute(status->planOne()));
+        boolean planned;
+        try {
+            planned=Boolean.TRUE.equals(transactions.execute(status->planOne()));
+        } catch (PlanningFailure error) {
+            transactions.executeWithoutResult(status->recordPlanningFailure(error.eventId()));
+            planned=true; // failure was durably accounted for; other events may proceed
+        }
         Task task=transactions.execute(status->claimOne());
         if(task==null) return planned;
         var adapter=adapters.get(task.methodCode());
@@ -66,7 +72,9 @@ public final class SingleExecutorScheduler {
             SELECT o.event_id,o.organization_id,o.economic_entity_id,
                    o.business_scope_id,o.fact_set_revision_id,o.snapshot_hash,o.data_space
             FROM fin_exec.fact_publication_outbox o
+            LEFT JOIN fin_exec.outbox_planning_failure pf ON pf.event_id=o.event_id
             WHERE NOT EXISTS (SELECT 1 FROM fin_exec.outbox_delivery d WHERE d.event_id=o.event_id)
+              AND (pf.event_id IS NULL OR (NOT pf.dead_letter AND pf.next_retry_at<=now()))
             ORDER BY o.created_at,o.event_id
             LIMIT 1 FOR UPDATE OF o SKIP LOCKED
             """,(rs,i)->new Event(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
@@ -74,6 +82,7 @@ public final class SingleExecutorScheduler {
             rs.getObject(5,UUID.class),rs.getString(6),rs.getString(7)));
         if(pending.isEmpty()) return false;
         var event=pending.getFirst();
+        try {
         var revision=event.trustedRevision();
         var methods=adapters.values().stream().filter(MethodTaskAdapter::autoEligible)
                 .filter(a->a.applicable(revision))
@@ -113,6 +122,29 @@ public final class SingleExecutorScheduler {
             WHERE id=?
             """,runId);
         return true;
+        } catch (RuntimeException e) {
+            // Roll back any partially inserted plan before recording retry state.
+            throw new PlanningFailure(event.eventId(),e);
+        }
+    }
+
+    private void recordPlanningFailure(UUID eventId) {
+        jdbc.update("""
+            INSERT INTO fin_exec.outbox_planning_failure
+                (event_id,attempt_count,next_retry_at,dead_letter,last_error_code)
+            VALUES (?,1,now()+interval '10 seconds',false,'PLANNING_FAILED')
+            ON CONFLICT(event_id) DO UPDATE SET
+                attempt_count=fin_exec.outbox_planning_failure.attempt_count+1,
+                next_retry_at=now()+interval '10 seconds',
+                dead_letter=(fin_exec.outbox_planning_failure.attempt_count+1>=5),
+                updated_at=now()
+            """,eventId);
+    }
+
+    private static final class PlanningFailure extends RuntimeException {
+        private final UUID eventId;
+        PlanningFailure(UUID eventId,Throwable cause) {super(cause);this.eventId=eventId;}
+        UUID eventId() {return eventId;}
     }
 
     private Task claimOne() {
