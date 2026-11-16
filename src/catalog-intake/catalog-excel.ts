@@ -7,6 +7,7 @@ import {
 } from "./catalog-schema";
 import {resolvePeriod} from "../intake-v5/reporting-period";
 import {fieldPresentation} from "./field-presentation-r6";
+import {SPECIALIZED_CANDIDATES,validateSpecializedCandidate} from "./specialized-contracts";
 
 /** A machine-coded draft XLSX for the 122 typed-hint entries; NOT an approved source. */
 const MAX_XLSX=2_000_000;
@@ -31,8 +32,11 @@ const UI={
 } as const;
 
 function ensureContext(context:CatalogCaptureContext){
-  const form=getCaptureForm(context.formCode);
-  if(form.captureMode!=="TYPED_DRAFT")throw new Error("CATALOG_SCHEMA_NOT_QUALIFIED:"+context.formCode);
+  const canonical=getCaptureForm(context.formCode);
+  const candidate=SPECIALIZED_CANDIDATES.find(f=>f.code===context.formCode);
+  if(canonical.captureMode!=="TYPED_DRAFT"&&!candidate)
+    throw new Error("CATALOG_SCHEMA_NOT_QUALIFIED:"+context.formCode);
+  const form=candidate?{...canonical,fields:candidate.fields}:canonical;
   if(!CAPTURE_LOCALES.includes(context.locale))throw new Error("TRANSLATION_NOT_READY");
   if(!/^[\p{L}\p{N}_-]{1,50}$/u.test(context.projectCode)||
      context.currency!=="KZT"||![1,1000,1000000].includes(context.amountScale))
@@ -187,6 +191,8 @@ export async function parseTypedCatalogExcel(
   });
   const sourceVersion=literal(metadata.getCell(1,2));
   const legacy=sourceVersion===CATALOG_CAPTURE_VERSION;
+  if(legacy&&getCaptureForm(expected.formCode).captureMode!=="TYPED_DRAFT")
+    throw new Error("CATALOG_XLSX_LEGACY_CANDIDATE_UNSUPPORTED");
   if(!legacy&&sourceVersion!==EXCEL_LAYOUT_VERSION)
     throw new Error("CATALOG_XLSX_VERSION_UNSUPPORTED");
   const suppliedLocale=literal(metadata.getCell(7,2)) as CaptureLocale;
@@ -251,7 +257,14 @@ export async function parseTypedCatalogExcel(
   }
   // UI language is a display preference. Decode the source values using the
   // workbook's own locale, so comma decimals in Russian books remain exact.
-  const preview=validateCatalogCapture(issued,rows);
+  const candidate=SPECIALIZED_CANDIDATES.find(f=>f.code===form.code);
+  const sourcePreview=candidate?validateSpecializedCandidate(form.code,rows,issued.locale):null;
+  const preview=sourcePreview?{
+    status:"UNQUALIFIED_DRAFT" as const,publishable:false as const,
+    context:issued,rows:sourcePreview.rows,
+    findings:sourcePreview.findings,
+    valid:sourcePreview.acceptedAsUnqualifiedDraft
+  }:validateCatalogCapture(issued,rows);
   const findings=preview.findings.map(f=>{
     const rowIndex=rows.findIndex(r=>r.rowId===f.rowId);
     const colIndex=form.fields.findIndex(field=>field.code===f.fieldCode);
