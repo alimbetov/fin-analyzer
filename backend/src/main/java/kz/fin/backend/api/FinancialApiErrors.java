@@ -20,6 +20,14 @@ public class FinancialApiErrors {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Map<String,String>> invalid(IllegalArgumentException e){
         String message=e.getMessage()==null?"INVALID_FINANCIAL_REQUEST":e.getMessage();
+        if(message.equals("FIN_EXPORT_AMBIGUOUS_CONTEXT") ||
+           message.equals("FIN_EXPORT_REVISION_CHANGED") ||
+           message.equals("FIN_EXPORT_SCHEMA_INCOMPATIBLE"))
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("code",message));
+        if(message.equals("FIN_EXPORT_REVISION_NOT_FOUND"))
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("code","NOT_FOUND_OR_FORBIDDEN"));
         if(message.equals("INTAKE_NOT_FOUND_OR_FORBIDDEN") ||
            message.equals("FIN_V5_PROJECT_NOT_FOUND") ||
            message.equals("FIN_V5_PREVIEW_NOT_FOUND") ||
