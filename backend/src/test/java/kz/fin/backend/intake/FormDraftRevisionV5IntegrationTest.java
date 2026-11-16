@@ -33,9 +33,9 @@ class FormDraftRevisionV5IntegrationTest {
 
     private record Scope(UUID org,UUID entity,UUID scope) {
         static Scope fresh(){return new Scope(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID());}
-        FormDraftRevisionV5Service.Project project(String code) {
-            return ledger.createProject(org,entity,scope,code,"KZT","author");
-        }
+    }
+    private FormDraftRevisionV5Service.Project project(Scope scope,String code) {
+        return ledger.createProject(scope.org(),scope.entity(),scope.scope(),code,"KZT","author");
     }
     private static List<FormSchemaV5.Input> f02(String net,String cogs,String expenses){
         return List.of(
@@ -55,7 +55,7 @@ class FormDraftRevisionV5IntegrationTest {
     }
 
     @Test void versionHistoryStoresUploadAndSaveTimesAndNoChangeIsNotNewRevision(){
-        var scope=Scope.fresh();var p=scope.project("FIN_UAT");
+        var scope=Scope.fresh();var p=project(scope,"FIN_UAT");
         var first=preview(scope,p.id(),"ru","400.00");
         assertEquals("NEW",first.verdict());
         assertEquals(0,first.expectedRevision());
@@ -84,7 +84,7 @@ class FormDraftRevisionV5IntegrationTest {
     }
 
     @Test void differentValuesShowTypedDiffRequireReasonAndAppendImmutableChain(){
-        var scope=Scope.fresh();var p=scope.project("FIN_CORRECTED");
+        var scope=Scope.fresh();var p=project(scope,"FIN_CORRECTED");
         var first=preview(scope,p.id(),"ru","400");
         var r1=confirm(scope,first,"");
         var revised=preview(scope,p.id(),"kk","420,00");
@@ -121,7 +121,7 @@ class FormDraftRevisionV5IntegrationTest {
     }
 
     @Test void staleRevisionCannotBeConfirmedAndProjectTenantMustMatch(){
-        var x=Scope.fresh();var p=x.project("FIN_LOCK");
+        var x=Scope.fresh();var p=project(x,"FIN_LOCK");
         var original=preview(x,p.id(),"en","400");
         confirm(x,original,"");
         var stale=preview(x,p.id(),"en","401");
@@ -143,7 +143,7 @@ class FormDraftRevisionV5IntegrationTest {
     }
 
     @Test void periodScaleAndSourceIdentityArePinnedAcrossRepeats(){
-        var scope=Scope.fresh();var p=scope.project("FIN_CONTEXT");
+        var scope=Scope.fresh();var p=project(scope,"FIN_CONTEXT");
         preview(scope,p.id(),"ru","400");
         assertThrows(IllegalArgumentException.class,
             ()->ledger.previewManual(scope.org,p.id(),"2026.10","ru",1000,
