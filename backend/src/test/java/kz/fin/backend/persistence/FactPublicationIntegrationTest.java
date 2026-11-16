@@ -557,6 +557,55 @@ class FactPublicationIntegrationTest {
             """,String.class,task).contains("\"attempt\": 2"));
     }
 
+
+    @Test void concurrentPollersCreateOneRunAndOneResult() throws Exception {
+        var f=fixture();
+        publish(f);
+        var workerA=new kz.fin.backend.execution.SingleExecutorScheduler(
+            jdbc,txManager,List.of(integrityAdapter),false);
+        var workerB=new kz.fin.backend.execution.SingleExecutorScheduler(
+            jdbc,txManager,List.of(integrityAdapter),false);
+        ExecutorService pool=Executors.newFixedThreadPool(2);
+        CountDownLatch ready=new CountDownLatch(2), start=new CountDownLatch(1);
+        try {
+            var first=pool.submit(()->{
+                ready.countDown();
+                if(!start.await(10,TimeUnit.SECONDS)) throw new IllegalStateException("timeout");
+                return workerA.tick();
+            });
+            var second=pool.submit(()->{
+                ready.countDown();
+                if(!start.await(10,TimeUnit.SECONDS)) throw new IllegalStateException("timeout");
+                return workerB.tick();
+            });
+            assertTrue(ready.await(10,TimeUnit.SECONDS));
+            start.countDown();
+            first.get(20,TimeUnit.SECONDS);
+            second.get(20,TimeUnit.SECONDS);
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
+        for(int i=0;i<150;i++) {
+            Long completed=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.analysis_run
+                WHERE organization_id=? AND fact_set_revision_id=? AND run_status='COMPLETED'
+                """,Long.class,f.org(),f.revisionId());
+            if(completed==1L) break;
+            workerA.tick();
+        }
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_task t
+            JOIN fin_exec.analysis_run r ON r.id=t.run_id
+            WHERE r.organization_id=? AND r.fact_set_revision_id=?
+              AND t.task_status='COMPUTED'
+            """,Long.class,f.org(),f.revisionId()));
+    }
+
     private boolean attemptPublish(Fixture candidate,UUID expected,
                                    CountDownLatch ready,CountDownLatch start) {
         ready.countDown();
