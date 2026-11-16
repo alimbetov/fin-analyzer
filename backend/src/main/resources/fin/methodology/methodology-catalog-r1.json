@@ -39,11 +39,11 @@
       "code": "FIN-04",
       "group": "FIN",
       "title": "Financial Ratios",
-      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "implementationStatus": "ONE_VARIANT_WIRED_UNQUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "AutoIndicatorEngine,ThreeStatementModel",
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "QualifiedCurrentRatioAdapter → TrustedAutoReportService → AutoIndicatorEngine.ratioOf",
+      "notes": "Only CURRENT_ASSETS/CURRENT_LIABILITIES from reviewed F01 FIN-LIQUIDITY-V1, sealed source population and QUALIFIED STOCK contracts. Total assets/liabilities rejected. Family not release-qualified, production automatic execution gated globally."
     },
     {
       "code": "FIN-05",
