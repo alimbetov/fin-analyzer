@@ -381,6 +381,13 @@ class CatalogXlsxRoundTripIntegrationTest {
                                     .contains(confirmed.revisionId().toString()));
                             assertTrue(report.getSheet("Instructions").getRow(10)
                                     .getCell(0).getStringCellValue().contains(display));
+                            if ("zh-Hans".equals(display)) {
+                                assertTrue(report.getSheet("Instructions").getRow(4)
+                                        .getCell(0).getStringCellValue().contains("目录数据"));
+                                if ("DF-AST-01".equals(definition.code()))
+                                    assertTrue(report.getSheet("Instructions").getRow(11)
+                                            .getCell(0).getStringCellValue().contains("资产标识"));
+                            }
                             var data = report.getSheet("FIN_Data");
                             assertEquals(snapshot.rows().size(), data.getLastRowNum());
                             for (int line = 0; line < snapshot.rows().size(); line++) {
