@@ -29,11 +29,11 @@
       "code": "FIN-03",
       "group": "FIN",
       "title": "Trend Analysis",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.ANNUAL_REVENUE_TREND",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "FIN-04",
@@ -79,11 +79,11 @@
       "code": "FIN-08",
       "group": "FIN",
       "title": "Cash Flow Analysis",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.CASH_FLOW_RECONCILIATION",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "CON-01",
@@ -179,11 +179,11 @@
       "code": "PRO-04",
       "group": "PRO",
       "title": "Unit Economics",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.UNIT_PRODUCTION_COST (partial economics, not full unit economics)",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "PRO-05",
@@ -199,11 +199,11 @@
       "code": "PRO-06",
       "group": "PRO",
       "title": "Standard Cost Variance",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.STANDARD_ACTUAL_VARIANCE",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "CASH-01",
@@ -229,11 +229,11 @@
       "code": "CASH-03",
       "group": "CASH",
       "title": "13-week Cash Forecast",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.WEEKLY_CASH_FORECAST_ROLLFORWARD (13-week qualification pending)",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "CASH-04",
@@ -269,11 +269,11 @@
       "code": "BUD-01",
       "group": "BUD",
       "title": "Budget vs Actual",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.BUDGET_ACTUAL_VARIANCE",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "BUD-02",
@@ -329,11 +329,11 @@
       "code": "INV-01",
       "group": "INV",
       "title": "NPV/XNPV",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.DATED_PROJECT_NPV; InvestmentValuation.calculate (dated/annual variants need separate review)",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "INV-02",
@@ -349,11 +349,11 @@
       "code": "INV-03",
       "group": "INV",
       "title": "DCF",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "InvestmentValuation.calculate (FCFF/FCFE rate-basis validation)",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "INV-04",
@@ -379,11 +379,11 @@
       "code": "INV-06",
       "group": "INV",
       "title": "Scenarios",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "DecisionScenarioEngine.compare (scenario prototype, not full investment scenario engine)",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "INV-07",
@@ -399,11 +399,11 @@
       "code": "INV-08",
       "group": "INV",
       "title": "DSCR/Debt Capacity",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.DSCR_PILOT",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "OPS-01",
@@ -459,11 +459,11 @@
       "code": "OPS-06",
       "group": "OPS",
       "title": "Yield/Scrap",
-      "implementationStatus": "NOT_YET_AUDITED",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": null,
-      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+      "candidateImplementation": "ScenarioEconomicsEngine.WIP_ROLLFORWARD (not verified yield/scrap; only partial data-model candidate)",
+      "notes": "A source-level calculation candidate exists, but actual input mapping, business semantics, variants, tests and automatic wiring are not established; no qualification."
     },
     {
       "code": "QLT-01",
