@@ -70,6 +70,47 @@ class FinancialApiSecurityIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(payload()))
                 .andExpect(status().isForbidden());
     }
+    @Test void skuUploadReviewAndOriginalDownloadDemandSeparateOrgScopedJwtGrants()
+            throws Exception {
+        String skuPath="/api/v1/financial/organizations/"+org+"/sku-populations";
+        var fixture=new org.springframework.mock.web.MockMultipartFile(
+                "file","sku-ledger.json","application/json",
+                "{\"period\":\"2026-02\",\"currency\":\"KZT\",\"events\":[]}"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mvc.perform(multipart(skuPath).file(fixture)
+                .param("economicEntityId",entity.toString())
+                .param("businessScopeId",scope.toString())
+                .param("factSetRevisionId",UUID.randomUUID().toString())
+                .param("sourceSystem","TEST_ERP"))
+            .andExpect(status().isUnauthorized());
+        mvc.perform(multipart(skuPath).file(fixture)
+                .with(user("unrelated",UUID.randomUUID(),"FIN_SUBMIT"))
+                .param("economicEntityId",entity.toString())
+                .param("businessScopeId",scope.toString())
+                .param("factSetRevisionId",UUID.randomUUID().toString())
+                .param("sourceSystem","TEST_ERP"))
+            .andExpect(status().isForbidden());
+        mvc.perform(multipart(skuPath).file(fixture)
+                .with(user("viewer",org,"FIN_READ"))
+                .param("economicEntityId",entity.toString())
+                .param("businessScopeId",scope.toString())
+                .param("factSetRevisionId",UUID.randomUUID().toString())
+                .param("sourceSystem","TEST_ERP"))
+            .andExpect(status().isForbidden());
+        UUID population=UUID.randomUUID();
+        mvc.perform(post(skuPath+"/"+population+"/review")
+                .with(user("author",org,"FIN_SUBMIT"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"approved\":true,\"reason\":\"unauthorized\"}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(get(skuPath+"/"+population+"/original")
+                .with(user("reviewer",org,"FIN_REVIEW")))
+            .andExpect(status().isForbidden());
+        mvc.perform(get(skuPath+"/"+population+"/original")
+                .with(user("viewer",UUID.randomUUID(),"FIN_READ")))
+            .andExpect(status().isForbidden());
+    }
+
     @Test void onlyDistinctReviewerCanApproveAndPublisherNeedsSeparateRole() throws Exception {
         String content=mvc.perform(post(endpoint()).with(user("author",org,"FIN_SUBMIT"))
                         .contentType(MediaType.APPLICATION_JSON).content(payload()))
