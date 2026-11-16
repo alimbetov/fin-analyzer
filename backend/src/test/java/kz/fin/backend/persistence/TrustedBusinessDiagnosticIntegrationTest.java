@@ -215,6 +215,51 @@ class TrustedBusinessDiagnosticIntegrationTest {
             """,Long.class,fixture.org(),fixture.revision()));
     }
 
+
+    @Test void failedExecutionCannotMasqueradeAsReadyCoreReport() {
+        Fixture f=seed(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),null,
+                AnalysisContext.DataSpace.SYNTHETIC,"150",true,true,"KZT",false);
+        publish(f,null);
+        UUID eventId=jdbc.queryForObject("""
+            SELECT event_id FROM fin_exec.fact_publication_outbox
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,UUID.class,f.org(),f.revision());
+        String hash=jdbc.queryForObject("""
+            SELECT snapshot_hash FROM fin_fact.fact_set_publication
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,String.class,f.org(),f.revision());
+        UUID run=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO fin_exec.analysis_run
+              (id,event_id,organization_id,fact_set_revision_id,snapshot_hash,
+               profile_code,run_status)
+            VALUES (?,?,?,?,?,'CORE_FAILURE_FIXTURE','FAILED')
+            """,run,eventId,f.org(),f.revision(),hash);
+        for(int i=0;i<100;i++) {
+            coreReports.publishReady();
+            Long found=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.core_report_snapshot WHERE run_id=?
+                """,Long.class,run);
+            if(found==1L)break;
+        }
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.core_report_snapshot
+            WHERE run_id=? AND core_readiness='BLOCKED'
+            """,Long.class,run));
+        UUID reportId=jdbc.queryForObject("""
+            SELECT id FROM fin_exec.core_report_snapshot WHERE run_id=?
+            """,UUID.class,run);
+        var report=coreReports.load(f.org(),reportId);
+        assertEquals("FAILED",report.path("executionStatus").asText());
+        assertEquals("BLOCKED",report.path("coreReadiness").asText());
+        assertEquals(0,report.path("computedTaskCount").asInt(-1));
+        assertEquals("NOT_REQUESTED",report.path("mlReadiness").asText());
+        assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_exec.core_report_snapshot SET core_readiness='PARTIAL'
+            WHERE id=?
+            """,reportId));
+    }
+
     @Test void evaluatesVerifiedThirteenMonthHistoryAndPersistsExplanations(){
         Fixture f=seed(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),null,
                 AnalysisContext.DataSpace.SYNTHETIC,"150",true,true,"KZT",false);
