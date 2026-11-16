@@ -17,7 +17,7 @@ public final class AutoReportProjection {
 
     public enum ComparisonMode { ABSOLUTE, PERCENT }
 
-    public sealed interface Operation permits Aggregate, Compare, MovingAverage, PercentOf, ShareOfTotal {}
+    public sealed interface Operation permits Aggregate, Compare, MovingAverage, PercentOf, RatioOf, ShareOfTotal {}
 
     public record Aggregate(SeriesKey key, EconomicKernel.TemporalReference period,
                             Aggregation method) implements Operation {}
@@ -31,6 +31,11 @@ public final class AutoReportProjection {
 
     public record PercentOf(SeriesKey numerator, SeriesKey denominator,
                             EconomicKernel.TemporalReference period, Aggregation method)
+            implements Operation {}
+
+    /** Dimensionless quotient, not percentage, for matched as-of stocks. */
+    public record RatioOf(SeriesKey numerator,SeriesKey denominator,
+                          EconomicKernel.TemporalReference period,Aggregation method)
             implements Operation {}
 
     public record ShareOfTotal(SeriesKey member, String dimension, Set<String> allMembers,
@@ -83,6 +88,7 @@ public final class AutoReportProjection {
         if(op instanceof Compare a) return Objects.requireNonNull(a.key());
         if(op instanceof MovingAverage a) return Objects.requireNonNull(a.key());
         if(op instanceof PercentOf a) return Objects.requireNonNull(a.numerator());
+        if(op instanceof RatioOf a) return Objects.requireNonNull(a.numerator());
         if(op instanceof ShareOfTotal a) return Objects.requireNonNull(a.member());
         throw new IllegalArgumentException("UNKNOWN_OPERATION");
     }
@@ -139,6 +145,11 @@ public final class AutoReportProjection {
                         calculate(inputs,a.numerator(),a.period(),a.method()),
                         calculate(inputs,a.denominator(),a.period(),a.method()));
                 unit="PCT";currency=null;
+            } else if(op instanceof RatioOf a) {
+                value=AutoIndicatorEngine.ratioOf(
+                        calculate(inputs,a.numerator(),a.period(),a.method()),
+                        calculate(inputs,a.denominator(),a.period(),a.method()));
+                unit="RATIO";currency=null;
             } else if(op instanceof ShareOfTotal a) {
                 if(!a.allMembers().contains(a.member().dimensions().get(a.dimension())))
                     throw new IllegalArgumentException("SHARE_MEMBER_NOT_IN_POPULATION");
