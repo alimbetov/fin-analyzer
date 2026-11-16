@@ -28,11 +28,13 @@ public class ReviewedFinancialIntakeService {
     private final JdbcTemplate jdbc;
     private final TrustedFinancialFormMapper mapper;
     private final FactSetPublicationService publisher;
+    private final PilotXlsxTemplateService xlsx;
     private final ObjectMapper json;
 
     public ReviewedFinancialIntakeService(JdbcTemplate jdbc,TrustedFinancialFormMapper mapper,
-                                          FactSetPublicationService publisher,ObjectMapper json) {
-        this.jdbc=jdbc;this.mapper=mapper;this.publisher=publisher;this.json=json;
+                                          FactSetPublicationService publisher,
+                                          PilotXlsxTemplateService xlsx,ObjectMapper json) {
+        this.jdbc=jdbc;this.mapper=mapper;this.publisher=publisher;this.xlsx=xlsx;this.json=json;
     }
     public record IntakeRequest(UUID organizationId,UUID economicEntityId,UUID businessScopeId,
                                 String formCode,String reportingBasis,String currencyCode,int amountScale,
@@ -45,7 +47,7 @@ public class ReviewedFinancialIntakeService {
                                  List<UUID> approvedSourceIds,UUID expectedCurrentRevisionId) {}
     private record Submission(UUID id,UUID organizationId,UUID entityId,UUID scopeId,
                               String form,String basis,String currency,int scale,String submitter,
-                              String fingerprint,String sourceDigest,String cellsJson,int count) {}
+                              String fingerprint,String sourceDigest,String cellsJson,int count,String sourceKind) {}
     public record SubmissionInfo(UUID id,String formCode,String formVersion,String reportingBasis,
                                  String currencyCode,int amountScale,String submittedBy,
                                  String reviewStatus,String reviewBy,String reviewReason,
@@ -84,6 +86,19 @@ public class ReviewedFinancialIntakeService {
 
     @Transactional
     public Submitted submitManual(String verifiedSubject,IntakeRequest request){
+        return submitSource(verifiedSubject,request,"MANUAL",null);
+    }
+    @Transactional
+    public Submitted submitXlsx(String verifiedSubject,PilotXlsxTemplateService.Context context,
+                                byte[] rawBytes){
+        var parsed=xlsx.parse(context,rawBytes);
+        return submitSource(verifiedSubject,new IntakeRequest(
+                context.organizationId(),context.entityId(),context.businessScopeId(),
+                context.formCode(),context.reportingBasis(),context.currency(),
+                context.scale(),parsed),"XLSX",rawBytes);
+    }
+    private Submitted submitSource(String verifiedSubject,IntakeRequest request,
+                                   String kind,byte[] rawBytes){
         checkSubject(verifiedSubject);
         Objects.requireNonNull(request);
         Objects.requireNonNull(request.organizationId());
@@ -105,21 +120,51 @@ public class ReviewedFinancialIntakeService {
         // Manual entry has NO XLSX raw-file digest. This is the server-owned
         // digest of its versioned input manifest, clearly distinguishable from
         // a cryptographically authenticated bank/accounting statement.
-        String documentHash=sha256("FIN-MANUAL-V1|"+request.organizationId()+"|"+
-                request.economicEntityId()+"|"+request.businessScopeId()+"|"+
-                request.formCode()+"|FIN-PILOT-V1|"+request.reportingBasis()+"|"+
-                request.currencyCode()+"|"+request.amountScale()+"|"+fingerprint);
+        String documentHash=kind.equals("XLSX")
+                ?sha256(rawBytes)
+                :sha256("FIN-MANUAL-V1|"+request.organizationId()+"|"+
+                    request.economicEntityId()+"|"+request.businessScopeId()+"|"+
+                    request.formCode()+"|FIN-PILOT-V1|"+request.reportingBasis()+"|"+
+                    request.currencyCode()+"|"+request.amountScale()+"|"+fingerprint);
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO fin_intake.submission(
                 id,organization_id,economic_entity_id,business_scope_id,form_code,
                 form_version,reporting_basis,currency_code,amount_scale,intake_kind,
                 source_document_sha,normalized_fingerprint,cells,expected_cell_count,submitted_by)
-            VALUES (?,?,?,?,?,'FIN-PILOT-V1',?, ?,?,'MANUAL',?,?,?::jsonb,?,?)
+            VALUES (?,?,?,?,?,'FIN-PILOT-V1',?, ?,?,?,?,?,?::jsonb,?,?)
             """,id,request.organizationId(),request.economicEntityId(),request.businessScopeId(),
                 request.formCode(),request.reportingBasis(),request.currencyCode(),
-                request.amountScale(),documentHash,fingerprint,cellsJson,cells.size(),verifiedSubject);
+                request.amountScale(),kind,documentHash,fingerprint,cellsJson,cells.size(),verifiedSubject);
+        if(rawBytes!=null){
+            jdbc.update("""
+                INSERT INTO fin_intake.raw_xlsx(submission_id,organization_id,raw_bytes,raw_sha)
+                VALUES (?,?,?,?)
+                """,id,request.organizationId(),rawBytes,documentHash);
+        }
         return new Submitted(id,fingerprint,documentHash,cells.size(),"PENDING_INDEPENDENT_REVIEW");
+    }
+
+    @Transactional(readOnly=true)
+    public byte[] readRawXlsx(UUID organizationId,UUID sourceId){
+        Objects.requireNonNull(organizationId);Objects.requireNonNull(sourceId);
+        List<byte[]> result=jdbc.query("""
+            SELECT x.raw_bytes FROM fin_intake.raw_xlsx x
+            JOIN fin_intake.submission s
+              ON s.organization_id=x.organization_id AND s.id=x.submission_id
+            WHERE x.organization_id=? AND x.submission_id=?
+              AND x.raw_sha=s.source_document_sha
+            """,(rs,n)->rs.getBytes(1),organizationId,sourceId);
+        if(result.size()!=1)
+            throw new IllegalArgumentException("XLSX_ORIGINAL_NOT_FOUND_OR_FOREIGN");
+        byte[] raw=result.getFirst();
+        String expected=jdbc.queryForObject("""
+            SELECT source_document_sha FROM fin_intake.submission
+            WHERE organization_id=? AND id=?
+            """,String.class,organizationId,sourceId);
+        if(!sha256(raw).equals(expected))
+            throw new IllegalArgumentException("XLSX_ORIGINAL_DIGEST_MISMATCH");
+        return raw;
     }
 
     private static void checkSubject(String subject) {
@@ -186,6 +231,14 @@ public class ReviewedFinancialIntakeService {
             """,Integer.class,organizationId,sourceRevision)!=0)
             throw new IllegalArgumentException("INTAKE_ALREADY_REVIEWED");
         List<TrustedFinancialFormMapper.Cell> cells=deserialize(s.cellsJson());
+        if(s.sourceKind().equals("XLSX")){
+            byte[] verifiedOriginal=readRawXlsx(organizationId,sourceRevision);
+            var original=xlsx.parse(new PilotXlsxTemplateService.Context(
+                    s.organizationId(),s.entityId(),s.scopeId(),s.form(),s.basis(),s.currency(),
+                    s.scale()),verifiedOriginal);
+            if(!TrustedFinancialFormMapper.fingerprint(original).equals(s.fingerprint()))
+                throw new IllegalArgumentException("INTAKE_XLSX_REVIEW_MISMATCH");
+        }
         if(cells.size()!=s.count() || !TrustedFinancialFormMapper.fingerprint(cells).equals(s.fingerprint()))
             throw new IllegalArgumentException("INTAKE_STORED_FINGERPRINT_MISMATCH");
         jdbc.update("""
@@ -216,13 +269,14 @@ public class ReviewedFinancialIntakeService {
             SELECT id,organization_id,economic_entity_id,business_scope_id,
                    form_code,reporting_basis,currency_code,amount_scale,
                    submitted_by,normalized_fingerprint,source_document_sha,
-                   cells::text,expected_cell_count
+                   cells::text,expected_cell_count,intake_kind
             FROM fin_intake.submission
             WHERE organization_id=? AND id=? FOR UPDATE
             """,(rs,n)->new Submission(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                 rs.getObject(3,UUID.class),rs.getObject(4,UUID.class),rs.getString(5),
                 rs.getString(6),rs.getString(7),rs.getInt(8),rs.getString(9),
-                rs.getString(10),rs.getString(11),rs.getString(12),rs.getInt(13)),org,source);
+                rs.getString(10),rs.getString(11),rs.getString(12),rs.getInt(13),
+                rs.getString(14)),org,source);
         if(list.size()!=1)throw new IllegalArgumentException("INTAKE_NOT_FOUND_OR_FORBIDDEN");
         return list.getFirst();
     }
