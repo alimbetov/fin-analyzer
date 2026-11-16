@@ -92,6 +92,35 @@ class AutoIndicatorEngineTest {
         assertThrows(IllegalArgumentException.class,()->compare(curr,curr));
     }
 
+    @Test void dimensionlessCurrentRatioSeparatesCoefficientFromPercentage() {
+        SeriesKey assets=keyFor(ORG,FACTS,"CURRENT_ASSETS","MONEY","KZT",
+                Map.of(),AnalysisContext.DataSpace.ACTUAL,MeasureKind.STOCK);
+        SeriesKey liabilities=keyFor(ORG,FACTS,"CURRENT_LIABILITIES","MONEY","KZT",
+                Map.of(),AnalysisContext.DataSpace.ACTUAL,MeasureKind.STOCK);
+        var numerator=aggregate(assets,interval(FEB),
+                List.of(stock(assets,FEB,"400")),Aggregation.STOCK_CLOSING);
+        var denominator=aggregate(liabilities,interval(FEB),
+                List.of(stock(liabilities,FEB,"200")),Aggregation.STOCK_CLOSING);
+        eq("2",ratioOf(numerator,denominator));
+        eq("200",percentOf(numerator,denominator));
+        var zero=aggregate(liabilities,interval(FEB),
+                List.of(stock(liabilities,FEB,"0")),Aggregation.STOCK_CLOSING);
+        assertEquals(Status.NOT_COMPUTABLE,ratioOf(numerator,zero).status());
+        assertEquals("ZERO_DENOMINATOR",ratioOf(numerator,zero).reason());
+        assertNull(ratioOf(numerator,zero).value());
+        var negative=aggregate(liabilities,interval(FEB),
+                List.of(stock(liabilities,FEB,"-100")),Aggregation.STOCK_CLOSING);
+        assertEquals("NEGATIVE_DENOMINATOR",ratioOf(numerator,negative).reason());
+        SeriesKey usd=keyFor(ORG,FACTS,"CURRENT_LIABILITIES","MONEY","USD",
+                Map.of(),AnalysisContext.DataSpace.ACTUAL,MeasureKind.STOCK);
+        var usdPoint=aggregate(usd,interval(FEB),
+                List.of(stock(usd,FEB,"200")),Aggregation.STOCK_CLOSING);
+        assertThrows(IllegalArgumentException.class,()->ratioOf(numerator,usdPoint));
+        var otherDate=aggregate(liabilities,interval(MAR),
+                List.of(stock(liabilities,MAR,"200")),Aggregation.STOCK_CLOSING);
+        assertThrows(IllegalArgumentException.class,()->ratioOf(numerator,otherDate));
+    }
+
     @Test void movingMeanRequiresCompleteHistoryAndIsChronological() {
         SeriesKey k=key("REV_NET","MONEY","KZT",Map.of());
         var data=List.of(flow(k,JAN,"100"),flow(k,FEB,"200"),flow(k,MAR,"300"),flow(k,APR,"400"));
