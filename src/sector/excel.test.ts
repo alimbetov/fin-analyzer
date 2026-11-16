@@ -51,4 +51,24 @@ describe("IND-R1 controlled sector XLSX", () => {
     book.getWorksheet("Sector")!.getCell("B5").value={formula:"1000+1",result:1001};
     await expect(parseSectorTemplate(await asBuffer(book),context)).rejects.toThrow(/FORMULA_OR_INVALID/);
   });
+  it("rejects a sparse row hundreds of lines past the approved sector schema", async () => {
+    const book=await workbook();
+    book.getWorksheet("Sector")!.getCell("A900").value="injected";
+    await expect(parseSectorTemplate(await asBuffer(book),context))
+      .rejects.toThrow(/EXTRA_ROW/);
+  });
+  it("rejects an extra far-right column even when source counts stay small", async () => {
+    const book=await workbook();
+    book.getWorksheet("Sector")!.getCell("M5").value="injected";
+    await expect(parseSectorTemplate(await asBuffer(book),context))
+      .rejects.toThrow(/EXTRA_COLUMN/);
+  });
+  it("rejects foreign company and hidden schema changes",async()=>{
+    const book=await workbook();
+    await expect(parseSectorTemplate(await asBuffer(book),{...context,company:"Other Co"}))
+      .rejects.toThrow(/METADATA_MISMATCH/);
+    book.getWorksheet("_Metadata")!.getCell("B1").value="sector-pilot/99";
+    await expect(parseSectorTemplate(await asBuffer(book),context))
+      .rejects.toThrow(/METADATA_MISMATCH/);
+  });
 });
