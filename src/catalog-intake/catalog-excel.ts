@@ -169,7 +169,7 @@ export async function parseTypedCatalogExcel(
   data.eachRow(row=>{
     if(row.number>MAX_CATALOG_ROWS+3)throw new Error("CATALOG_XLSX_EXTRA_ROW");
     row.eachCell({includeEmpty:false},(_cell,col)=>{
-      if(col>Math.max(8,width))throw new Error("CATALOG_XLSX_EXTRA_COLUMN");
+      if(col>(row.number===1?8:width))throw new Error("CATALOG_XLSX_EXTRA_COLUMN");
     });
   });
   const expectedPassport=passport(issued);
