@@ -475,8 +475,12 @@ class CatalogXlsxRoundTripIntegrationTest {
         var first = revisionService.confirm(context.organizationId(), project.id(),
                 initial.id(), initial.normalizedFingerprint(), 0, "author", "");
 
-        var draftA = xlsx.saveDraft(context, populated, null);
-        var draftB = xlsx.saveDraft(context, populated, null);
+        byte[] variantA = edit(populated, b -> b.getSheet("FIN_Data")
+                .getRow(1).getCell(0).setCellValue("A-REV"));
+        byte[] variantB = edit(populated, b -> b.getSheet("FIN_Data")
+                .getRow(1).getCell(0).setCellValue("B-REV"));
+        var draftA = xlsx.saveDraft(context, variantA, null);
+        var draftB = xlsx.saveDraft(context, variantB, null);
         var start = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {
             var futureA = executor.submit(() -> {
@@ -652,5 +656,73 @@ class CatalogXlsxRoundTripIntegrationTest {
                 """, confirmed.slotId()));
         assertEquals(1, revisionService.current(context.organizationId(),
                 project.id(), confirmed.slotId()).revisionNumber());
+    }
+
+    @Test void repeatedStructuredDraftIsIdempotentButChangedSourceCreatesNewRevision() {
+        var context = context("DF-AST-01");
+        var project = projectService.createProject(context.organizationId(),
+                context.entityId(), context.businessScopeId(), context.projectCode(),
+                context.currency(), "author");
+        byte[] workbook = filled("DF-AST-01", xlsx.generate(context));
+        var saved = xlsx.saveDraft(context, workbook, null);
+        var first = revisionService.confirm(context.organizationId(), project.id(),
+                saved.id(), saved.normalizedFingerprint(), 0, "author", "");
+
+        // Repeated upload retains its own raw source, but must not silently
+        // advance the logical revision when the normalized contents match.
+        var same = xlsx.saveDraft(context, workbook, null);
+        var duplicate = revisionService.confirm(context.organizationId(), project.id(),
+                same.id(), same.normalizedFingerprint(), 1, "author", "same source");
+        assertEquals(first.revisionId(), duplicate.revisionId());
+        assertEquals(first.draftId(), duplicate.draftId());
+        assertEquals(1, duplicate.revisionNumber());
+        assertEquals(1, revisionService.history(context.organizationId(),
+                project.id(), first.slotId()).size());
+
+        byte[] changedWorkbook = edit(workbook, b -> b.getSheet("FIN_Data")
+                .getRow(1).getCell(0).setCellValue("NEW-ROW"));
+        var changed = xlsx.saveDraft(context, changedWorkbook, null);
+        var second = revisionService.confirm(context.organizationId(), project.id(),
+                changed.id(), changed.normalizedFingerprint(), 1, "author",
+                "changed the canonical row identity");
+        assertEquals(2, second.revisionNumber());
+        assertEquals(first.revisionId(), second.parentRevisionId());
+        assertEquals(2, revisionService.history(context.organizationId(),
+                project.id(), first.slotId()).size());
+    }
+
+    @Test void originalDocumentChecksumParticipatesInDuplicateDetection() {
+        var context = context("D01");
+        var project = projectService.createProject(context.organizationId(),
+                context.entityId(), context.businessScopeId(), context.projectCode(),
+                context.currency(), "author");
+        byte[] register = filled("D01", xlsx.generate(context));
+        var originalDraft = xlsx.saveDraft(context, register, original());
+        var first = revisionService.confirm(context.organizationId(), project.id(),
+                originalDraft.id(), originalDraft.normalizedFingerprint(), 0, "author", "");
+
+        var repeated = xlsx.saveDraft(context, register, original());
+        var same = revisionService.confirm(context.organizationId(), project.id(),
+                repeated.id(), repeated.normalizedFingerprint(), 1, "author", "same PDF");
+        assertEquals(first.revisionId(), same.revisionId());
+
+        byte[] changedPdf = (
+                "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 1 0 R >>\nendobj\n%%EOF\n")
+                .getBytes(StandardCharsets.US_ASCII);
+        var changedOriginal = new CatalogXlsxRoundTripService.OriginalDocument(
+                "evidence.pdf", "application/pdf", changedPdf);
+        var changed = xlsx.saveDraft(context, register, changedOriginal);
+        assertEquals(originalDraft.normalizedFingerprint(),
+                changed.normalizedFingerprint(), "same register cells");
+        assertNotEquals(originalDraft.documentSha256(), changed.documentSha256(),
+                "changed original document is a new source");
+        var revision = revisionService.confirm(context.organizationId(), project.id(),
+                changed.id(), changed.normalizedFingerprint(), 1, "author",
+                "original document replaced");
+        assertEquals(2, revision.revisionNumber());
+        assertEquals(first.revisionId(), revision.parentRevisionId());
+        assertEquals(changed.id(), revision.draftId());
+        assertEquals(2, revisionService.history(context.organizationId(),
+                project.id(), first.slotId()).size());
     }
 }

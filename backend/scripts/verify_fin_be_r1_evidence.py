@@ -86,7 +86,7 @@ def main():
     failures = int(suite.get("failures", "0"))
     errors = int(suite.get("errors", "0"))
     skipped = int(suite.get("skipped", "0"))
-    require(tests >= 175 and not (failures or errors or skipped),
+    require(tests >= 177 and not (failures or errors or skipped),
             f"JUnit tests={tests}, failures={failures}, errors={errors}, skipped={skipped}")
     names = [case.attrib.get("name") for case in suite.findall(".//testcase")]
     require(len(names) == tests, "JUnit test case enumeration mismatch")
@@ -97,7 +97,7 @@ def main():
         # @TestFactory method name rather than their display names. Require
         # the full 166-case cardinality and an actual factory testcase; the
         # independently generated 166-row proof below verifies exact codes.
-        require(tests >= 175, "per-form dynamic JUnit count is missing")
+        require(tests >= 177, "per-form dynamic JUnit count is missing")
         # The Java @AfterAll asserts exactly 166 genuinely successful per-form
         # executions before writing the JSON; CI cross-checks those 166 exact
         # codes and field counts against the independent catalog below.

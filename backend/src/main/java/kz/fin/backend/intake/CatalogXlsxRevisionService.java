@@ -31,7 +31,11 @@ public class CatalogXlsxRevisionService {
                                String changeReason, String state) {}
 
     private record Draft(String formCode, String basis, String periodType, String periodCode,
-                         String coverage, String currency, int scale, String fingerprint) {}
+                         String coverage, String currency, int scale, String fingerprint,
+                         String documentSha) {}
+
+    private record Prior(UUID id, UUID draftId, UUID parentId,
+                         String fingerprint, String documentSha) {}
 
     private record Slot(UUID id, int current) {}
 
@@ -54,7 +58,8 @@ public class CatalogXlsxRevisionService {
         // can claim an unrelated draft merely by matching projectCode.
         var drafts = jdbc.query("""
             SELECT d.form_code,d.reporting_basis,d.period_type,d.period_code,
-                   d.coverage,d.currency,d.amount_scale,d.normalized_sha
+                   d.coverage,d.currency,d.amount_scale,d.normalized_sha,
+                   d.document_sha
               FROM fin_intake.catalog_xlsx_draft d
               JOIN fin_intake.project_v5 p
                 ON p.organization_id=d.organization_id
@@ -67,7 +72,8 @@ public class CatalogXlsxRevisionService {
                AND d.state='UNQUALIFIED_DRAFT'
             """, (rs, i) -> new Draft(
                     rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
-                    rs.getString(5), rs.getString(6), rs.getInt(7), rs.getString(8)),
+                    rs.getString(5), rs.getString(6), rs.getInt(7),
+                    rs.getString(8), rs.getString(9)),
                 draftId, organizationId, projectId, organizationId);
         if (drafts.size() != 1)
             throw new IllegalArgumentException("FIN_CATALOG_DRAFT_PROJECT_MISMATCH");
@@ -106,13 +112,30 @@ public class CatalogXlsxRevisionService {
         UUID previous = null;
         if (slot.current() > 0) {
             var previousRows = jdbc.query("""
-                SELECT id FROM fin_intake.catalog_xlsx_revision
-                WHERE organization_id=? AND slot_id=? AND revision_number=?
-                """, (rs, i) -> (UUID) rs.getObject(1),
+                SELECT r.id,r.draft_id,r.parent_revision_id,r.normalized_sha,
+                       d.document_sha
+                  FROM fin_intake.catalog_xlsx_revision r
+                  JOIN fin_intake.catalog_xlsx_draft d
+                    ON d.id=r.draft_id AND d.organization_id=r.organization_id
+                 WHERE r.organization_id=? AND r.slot_id=?
+                   AND r.revision_number=?
+                """, (rs, i) -> new Prior(
+                    rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                    rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5)),
                     organizationId, slot.id(), slot.current());
             if (previousRows.size() != 1)
                 throw new IllegalStateException("FIN_CATALOG_REVISION_HISTORY_BROKEN");
-            previous = previousRows.getFirst();
+            Prior prior = previousRows.getFirst();
+            // V5-compatible duplicate behavior: repeated content does not
+            // advance the current revision. For evidence-only forms the
+            // independently stored original document hash is part of the
+            // logical content identity, not merely the Excel register cells.
+            if (prior.fingerprint().equals(draft.fingerprint())
+                    && Objects.equals(prior.documentSha(), draft.documentSha())) {
+                return new Confirmed(prior.id(), slot.id(), prior.draftId(),
+                        slot.current(), prior.parentId(), prior.fingerprint());
+            }
+            previous = prior.id();
         }
 
         UUID revisionId = UUID.randomUUID();
