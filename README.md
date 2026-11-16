@@ -34,6 +34,13 @@
 В существующей ветке `feat/fin-r0-r1a` добавлены [отраслевая диагностика и тестовые контракты](docs/FIN-IND-R0-R1-STATUS.md):
 чтение общего Java TSV-каталога 21 раздела и 64 вариантов, 9 расчётных SF-форм с ручным вводом и отдельным XLSX, локальное подтверждение данных, формулы/версии, сохранение ревизий в `.fin.json`. Остальные 54 отраслевые формы остаются только на уровне каталога. Методики не квалифицированы; результаты нового CI, независимое S2 и macOS UAT ожидают подтверждения.
 
+## Текущий инженерный P0 — семь релизных gates
+
+- [P0.1–P0.7: последовательность, реальные контракты, отрицательные сценарии и Definition of Done](docs/FIN-P0-DELIVERY-AND-ACCEPTANCE-R1.md).
+- [Машиночитаемая матрица приёмки P0](docs/FIN-P0-ACCEPTANCE-MATRIX-V1.json): структура сверяется с исходными 92 review-полями (43 finance + 49 industry), 166 формами и 60 методическими семействами; статус релиза остаётся HOLD.
+- `scripts/fin-p0-contract-check.mjs` и `scripts/fin-p0-contract.test.mjs` выполняются в `FIN CI`; проверка статической целостности **не** доказывает зелёный Java/PostgreSQL/Playwright, S2 или реальный E2E.
+- Первый продуктовый выход P0 — **один проверенный React→server source→FactSetRevision→approved method→CORE→reopen E2E**, а не массовое включение 60 методов.
+
 ## Статус
 
 **FIN-R0/R1A: AUTOMATED TESTS PASS / INDEPENDENT APPROVAL PENDING** в рабочей ветке `feat/fin-r0-r1a`. Реализован только первый Balance Sheet с двумя фиксированными периодами, Excel round-trip, контролем данных, Current Ratio и графиками. Остальные формы, стратегии, Quarto, PDF и PWA пока не реализованы. Для подробностей см. [R1A Status](docs/FIN-R1A-STATUS.md).
