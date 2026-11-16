@@ -84,3 +84,18 @@ test("FIN R6: 166 choices are classified, 44 unspecialized cannot be uploaded as
   await studio.getByRole("button",{name:"Проверить ввод"}).click();
   await expect(studio.locator(".fin-catalog-preview")).toContainText("UNQUALIFIED_DRAFT");
 });
+
+test("FIN R6: document D01 performs local SHA-256 inspection but does not publish or upload",async({page})=>{
+  await page.goto("/");
+  const studio=page.locator("#catalog-intake-r6");
+  await studio.getByLabel("Форма").selectOption("D01");
+  await expect(studio.getByRole("alert")).toContainText("Документ/внешняя отчётность");
+  await studio.getByLabel("Evidence source file").setInputFiles({
+    name:"audit.pdf",mimeType:"application/pdf",buffer:Buffer.from("%PDF-1.7\n1 0 obj\n%%EOF\n")
+  });
+  const evidence=studio.getByTestId("fin-evidence-local");
+  await expect(evidence).toContainText("SHA-256:");
+  await expect(evidence).toContainText("NOT_PERFORMED");
+  await expect(evidence).toContainText("NOT STORED ON SERVER");
+  await expect(studio.getByRole("button",{name:"Скачать JSON черновика"})).toHaveCount(0);
+});
