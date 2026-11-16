@@ -278,6 +278,28 @@ public final class AutoIndicatorEngine {
     }
 
     /**
+     * Dimensionless ratio of two compatible values at the same reporting date.
+     * Unlike percentOf, the result is a coefficient (e.g. 2.0000), not 200%.
+     * This primitive is shared by all independently qualified ratio variants.
+     */
+    public static Calculation ratioOf(PeriodPoint numerator, PeriodPoint denominator) {
+        Objects.requireNonNull(numerator);
+        Objects.requireNonNull(denominator);
+        if (!numerator.series().comparableUnit(denominator.series())
+                || !numerator.period().equals(denominator.period()))
+            throw new IllegalArgumentException("RATIO_CONTEXT_OR_UNIT_MISMATCH");
+        Calculation a=numerator.calculation(),b=denominator.calculation();
+        if(!isNumeric(a))return propagate(a);
+        if(!isNumeric(b))return propagate(b);
+        if(b.value().signum()<=0)
+            return blocked(Status.NOT_COMPUTABLE,
+                    b.value().signum()==0 ? "ZERO_DENOMINATOR" : "NEGATIVE_DENOMINATOR");
+        BigDecimal v=quotient(a.value(),b.value());
+        return a.status()==Status.ESTIMATED || b.status()==Status.ESTIMATED
+                ? estimated(v) : ok(v);
+    }
+
+    /**
      * Percentage shares of one metric grouped by a single dimension.
      * Requires the COMPLETE expected population, never normalizes a partial subset
      * to 100%, and never combines pre-aggregated TOTAL rows with details.
