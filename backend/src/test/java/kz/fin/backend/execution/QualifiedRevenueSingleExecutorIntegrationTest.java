@@ -151,6 +151,18 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
         assertEquals(0,result.path("diagnosticFindings").size());
         assertTrue(result.path("methods").toString().contains("FIN-01/REV_NET_MOM"));
         assertTrue(result.path("methods").toString().contains("50"));
+        assertEquals("METHOD_FAMILY_QUALIFICATION_PENDING",
+                result.path("qualification").asText());
+        var revenueEntry=new java.util.ArrayList<com.fasterxml.jackson.databind.JsonNode>();
+        for(var entry:result.path("methods")) {
+            if("FIN-01/REV_NET_MOM".equals(entry.path("methodCode").asText()))
+                revenueEntry.add(entry);
+        }
+        assertEquals(1,revenueEntry.size());
+        assertEquals("METHOD_FAMILY_NOT_YET_APPROVED",
+                revenueEntry.getFirst().path("qualification").asText());
+        assertEquals("METHOD_FAMILY_NOT_YET_APPROVED",
+                revenueEntry.getFirst().path("declaredVariantQualification").asText());
     }
 
     @Test void pilotOrIncompleteActualMetricIsNotAutoQualified() {
