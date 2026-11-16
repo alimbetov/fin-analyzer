@@ -26,8 +26,7 @@ public final class OperatingFinanceMethodEngine {
             if(metricCode==null || !metricCode.matches("[A-Z][A-Z0-9_]{1,127}"))
                 throw new IllegalArgumentException("METHOD_METRIC_CODE_INVALID");
             Objects.requireNonNull(value,"value");
-            if(!value.abs().toString().equals("NaN") &&
-               (value.scale()>12 || value.precision()>38))
+            if(value.scale()>12 || value.precision()>38)
                 throw new IllegalArgumentException("METHOD_VALUE_PRECISION_INVALID");
             if(currency==null || !currency.matches("[A-Z]{3}"))
                 throw new IllegalArgumentException("METHOD_CURRENCY_INVALID");
@@ -89,10 +88,12 @@ public final class OperatingFinanceMethodEngine {
                 purchases.value().signum()<=0)
             throw new IllegalArgumentException("CASH01_NON_POSITIVE_DENOMINATOR");
 
+        // The 360-day method is a year convention, not permission to
+        // multiply a single month or an arbitrary 4-year input by 360.
+        if(!arAverage.periodStart().plusYears(1).equals(arAverage.periodEnd()))
+            throw new IllegalArgumentException("CASH01_ANNUAL_PERIOD_REQUIRED");
         long days=policy==DayCountPolicy.FIXED_360 ? 360L :
                 ChronoUnit.DAYS.between(arAverage.periodStart(),arAverage.periodEnd());
-        if(days<1 || days>366)
-            throw new IllegalArgumentException("CASH01_YEAR_POLICY_REQUIRED");
         BigDecimal dayBasis=BigDecimal.valueOf(days);
         BigDecimal dso=arAverage.value().multiply(dayBasis)
                 .divide(netRevenue.value(),SCALE,RoundingMode.HALF_EVEN);
