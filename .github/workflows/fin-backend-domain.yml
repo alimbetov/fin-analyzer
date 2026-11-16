@@ -6,6 +6,10 @@ on:
       - 'backend/**'
       - '.github/workflows/fin-backend-domain.yml'
   workflow_dispatch:
+concurrency:
+  # Cancel outdated feature-branch runs; do not cancel main / PR / manual checks.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feat/fin-r0-r1a' }}
 jobs:
   backend-domain:
     runs-on: ubuntu-latest
