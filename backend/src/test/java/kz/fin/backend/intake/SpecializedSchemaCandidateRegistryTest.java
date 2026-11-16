@@ -70,13 +70,13 @@ class SpecializedSchemaCandidateRegistryTest {
               "assets","1000000000000000000.000000000001",
               "liabilities","500000000000000000.000000000001",
               "equity","500000000000000000","asOf","2026-10-31"
-            )),"en");
+            ))),"en");
         assertTrue(balanced.validDraft());
         assertFalse(balanced.methodologyApproved());
         var mismatch=SpecializedSchemaCandidateRegistry.validate("F01",List.of(
             new CatalogCaptureRegistry.EntryRow("ROW-001",Map.of(
               "assets","100.01","liabilities","60.01","equity","39.99"
-            )),"en");
+            ))),"en");
         assertFalse(mismatch.validDraft());
         assertTrue(mismatch.findings().stream().anyMatch(f->
             f.code().equals("SPECIALIZED_PROVISIONAL_INVARIANT_MISMATCH")&&
@@ -84,7 +84,7 @@ class SpecializedSchemaCandidateRegistryTest {
         var cash=SpecializedSchemaCandidateRegistry.validate("F03",List.of(
             new CatalogCaptureRegistry.EntryRow("ROW-001",Map.of(
                "openingCash","100","cfo","30","cfi","-10","cff","5","closingCash","125"
-            )),"en");
+            ))),"en");
         assertTrue(cash.validDraft());
         assertFalse(cash.publishable());
         var stale=cash.rows().getFirst().cells();
