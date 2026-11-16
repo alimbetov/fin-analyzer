@@ -4,6 +4,7 @@ import {
   CAPTURE_CATALOG,type CatalogCaptureContext,type CatalogField
 } from "./catalog-schema";
 import {generateTypedCatalogExcel,parseTypedCatalogExcel,TYPED_CATALOG_TEMPLATE_COUNT} from "./catalog-excel";
+import {fieldPresentation,formHasAllHumanLabels} from "./field-presentation-r6";
 
 const ctx:CatalogCaptureContext={
   formCode:"DF-AST-01",projectCode:"PILOT_1",locale:"ru",
@@ -47,7 +48,7 @@ describe("FIN catalog typed workbook integration, per form code",()=>{
     expect(data.getCell("B1").value).toBe(form.code);
     expect(book.getWorksheet("_FIN_Metadata")?.state).toBe("veryHidden");
     for(const [i,field] of form.fields.entries()){
-      expect(data.getCell(2,i+2).value).toBe(field.code);
+      expect(data.getCell(2,i+2).value).toBe(fieldPresentation(form.code,field,context.locale).label);
       expect(data.getCell(3,i+2).value).toBe(field.type);
       data.getCell(4,i+2).value=example(field);
     }
@@ -65,7 +66,7 @@ describe("FIN catalog typed workbook integration, per form code",()=>{
     const info=book.getWorksheet("Instructions")!;
     expect(info.getCell("A1").value).toBeTruthy();
     const fields=book.getWorksheet("FIN_Catalog")!;
-    expect(fields.getCell("B2").value).toBe("assetRef");
+    expect(fields.getCell("B2").value).toBe(fieldPresentation(ctx.formCode,{code:"assetRef",type:"REF"},locale).label);
     expect(fields.getCell("B1").value).toBe(ctx.formCode);
     expect(fields.getCell("G1").value).toBe(locale);
     fields.getCell("B4").value="R-001";
@@ -79,7 +80,7 @@ describe("FIN catalog typed workbook integration, per form code",()=>{
     const data=book.getWorksheet("FIN_Catalog")!;
     data.getCell("B2").value="inventedFinancialMeasure";
     await expect(parseTypedCatalogExcel(await bytes(book),ctx)).rejects.toThrow("CATALOG_XLSX_FIELD_SCHEMA_CHANGED");
-    data.getCell("B2").value="assetRef";
+    data.getCell("B2").value=fieldPresentation(ctx.formCode,{code:"assetRef",type:"REF"},"ru").label;
     book.getWorksheet("_FIN_Metadata")!.getCell("B2").value="F02";
     await expect(parseTypedCatalogExcel(await bytes(book),ctx)).rejects.toThrow("CATALOG_XLSX_META_CHANGED");
     book.getWorksheet("_FIN_Metadata")!.getCell("B2").value=ctx.formCode;
@@ -100,6 +101,49 @@ describe("FIN catalog typed workbook integration, per form code",()=>{
     expect(result.findings).toContainEqual(expect.objectContaining({
       code:"INVALID_DECIMAL",fieldCode:field.code,sourceCell:"FIN_Catalog!"+String.fromCharCode(66+idx)+"4"
     }));
+  });
+  it("visible report passport supplies organization status, form, period, currency, scale and exact template version",async()=>{
+    const book=await readBook(await generateTypedCatalogExcel(ctx));
+    const info=book.getWorksheet("Instructions")!;
+    expect(info.getCell("A5").value).toBe("Паспорт отчёта");
+    expect(info.getCell("B6").value).toContain("Не привязано к организации");
+    expect(info.getCell("B7").value).toContain("DF-AST-01");
+    expect(info.getCell("B8").value).toBe("PILOT_1");
+    expect(info.getCell("B9").value).toContain("2026.10");
+    expect(info.getCell("B10").value).toBe("KZT");
+    expect(info.getCell("B11").value).toBe("1");
+    expect(info.getCell("B12").value).toBe("FIN-CATALOG-XLSX-2");
+    expect(info.getCell("B14").value).toBe("UNQUALIFIED_DRAFT");
+    expect(book.getWorksheet("FIN_Catalog")!.getCell("A1").value).toBe("FIN-CATALOG-XLSX-2");
+    expect(formHasAllHumanLabels(ctx.formCode,
+      CAPTURE_CATALOG.find(f=>f.code===ctx.formCode)!.fields,"ru")).toBe(true);
+    expect(formHasAllHumanLabels("SF-C01",
+      CAPTURE_CATALOG.find(f=>f.code==="SF-C01")!.fields,"zh-Hans")).toBe(false);
+  });
+  it("rejects edited report passport without allowing a false organization or scale",async()=>{
+    const book=await readBook(await generateTypedCatalogExcel(ctx));
+    book.getWorksheet("Instructions")!.getCell("B11").value="1000000";
+    await expect(parseTypedCatalogExcel(await bytes(book),ctx))
+      .rejects.toThrow("CATALOG_XLSX_REPORT_PASSPORT_CHANGED");
+  });
+  it("can import existing FIN-CATALOG-CAPTURE-1 workbook without breaking legacy user exports",async()=>{
+    const book=await readBook(await generateTypedCatalogExcel(ctx));
+    const data=book.getWorksheet("FIN_Catalog")!;
+    data.getCell("A1").value="FIN-CATALOG-CAPTURE-1";
+    const form=CAPTURE_CATALOG.find(f=>f.code===ctx.formCode)!;
+    for(const [i,field] of form.fields.entries())
+      data.getCell(2,i+2).value=field.code;
+    book.getWorksheet("_FIN_Metadata")!.getCell("B1").value="FIN-CATALOG-CAPTURE-1";
+    const info=book.getWorksheet("Instructions")!;
+    for(let row=5;row<=14;row++){
+      info.getCell(row,1).value=null;
+      info.getCell(row,2).value=null;
+    }
+    data.getCell("B4").value="R-001";
+    data.getCell("C4").value="TYPE_A";
+    const parsed=await parseTypedCatalogExcel(await bytes(book),ctx);
+    expect(parsed.valid).toBe(true);
+    expect(parsed.rows[0]?.cells.assetRef).toBe("R-001");
   });
   it("unsupported catalog-only F02 and evidence D01 do not emit a misleading typed workbook",async()=>{
     await expect(generateTypedCatalogExcel({...ctx,formCode:"F02"}))
