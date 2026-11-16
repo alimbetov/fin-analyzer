@@ -559,23 +559,79 @@ public class CatalogXlsxRoundTripService {
             long total = 0;
             int count = 0;
             byte[] buffer = new byte[8192];
+            var paths = new HashSet<String>();
             ZipEntry entry;
             while ((entry = zin.getNextEntry()) != null) {
-                if (++count > 256 || entry.getName().startsWith("/") ||
-                        entry.getName().contains("..") || entry.getName().contains("\\")) {
+                String name = entry.getName();
+                String canonical = name.toLowerCase(java.util.Locale.ROOT);
+                if (++count > 256 || name.startsWith("/") ||
+                        name.contains("..") || name.contains("\\") ||
+                        !paths.add(canonical)) {
                     throw new IllegalArgumentException("CATALOG_XLSX_UNSAFE_ZIP");
                 }
+                // An ordinary workbook needs none of these active or externally
+                // connected OOXML parts. Reject before Apache POI opens them.
+                if (canonical.startsWith("xl/externallinks/") ||
+                        canonical.startsWith("xl/embeddings/") ||
+                        canonical.startsWith("xl/activex/") ||
+                        canonical.startsWith("xl/querytables/") ||
+                        canonical.startsWith("xl/webextensions/") ||
+                        canonical.startsWith("customui/") ||
+                        canonical.equals("xl/connections.xml") ||
+                        canonical.contains("vbaproject")) {
+                    throw new IllegalArgumentException(
+                            "CATALOG_XLSX_ACTIVE_CONTENT_FORBIDDEN");
+                }
+                boolean relation = canonical.endsWith(".rels");
+                var rels = relation ? new ByteArrayOutputStream() : null;
                 int n;
                 while ((n = zin.read(buffer)) != -1) {
                     total += n;
                     if (total > MAX_ZIP_BYTES) {
                         throw new IllegalArgumentException("CATALOG_XLSX_ZIP_BUDGET_EXCEEDED");
                     }
+                    if (relation) {
+                        if (rels.size() + n > 65536)
+                            throw new IllegalArgumentException("CATALOG_XLSX_RELATIONSHIP_LIMIT");
+                        rels.write(buffer, 0, n);
+                    }
                 }
+                if (relation) requireNoExternalRelationships(rels.toByteArray());
             }
             if (count < 5) throw new IllegalArgumentException("CATALOG_XLSX_INVALID_ZIP");
         } catch (IOException e) {
             throw new IllegalArgumentException("CATALOG_XLSX_INVALID_ZIP", e);
+        }
+    }
+
+    private static void requireNoExternalRelationships(byte[] xml) {
+        var factory = javax.xml.stream.XMLInputFactory.newFactory();
+        factory.setProperty(javax.xml.stream.XMLInputFactory.SUPPORT_DTD, false);
+        factory.setProperty(javax.xml.stream.XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        factory.setXMLResolver((publicID, systemID, baseURI, namespace) -> {
+            throw new javax.xml.stream.XMLStreamException(
+                    "CATALOG_XLSX_EXTERNAL_ENTITY_FORBIDDEN");
+        });
+        try {
+            var parser = factory.createXMLStreamReader(new ByteArrayInputStream(xml));
+            try {
+                while (parser.hasNext()) {
+                    if (parser.next() != javax.xml.stream.XMLStreamConstants.START_ELEMENT)
+                        continue;
+                    if (!"Relationship".equals(parser.getLocalName())) continue;
+                    for (int i = 0; i < parser.getAttributeCount(); i++) {
+                        if ("TargetMode".equals(parser.getAttributeLocalName(i)) &&
+                                "External".equalsIgnoreCase(parser.getAttributeValue(i))) {
+                            throw new IllegalArgumentException(
+                                    "CATALOG_XLSX_ACTIVE_CONTENT_FORBIDDEN");
+                        }
+                    }
+                }
+            } finally {
+                parser.close();
+            }
+        } catch (javax.xml.stream.XMLStreamException e) {
+            throw new IllegalArgumentException("CATALOG_XLSX_INVALID_RELATIONSHIP_XML", e);
         }
     }
 }
