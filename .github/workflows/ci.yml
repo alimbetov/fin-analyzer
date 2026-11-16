@@ -34,6 +34,14 @@ jobs:
           retention-days: 14
       - name: Unit tests
         run: npm test
+      - name: Preserve exhaustive template-transfer smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-template-transfer-154-pre-save
+          path: test-results/fin-template-transfer-smoke.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Production build
         run: npm run build
       - name: Install Chromium for Playwright
@@ -112,6 +120,7 @@ jobs:
             kz.fin.backend.api.FinancialApiDisabledIntegrationTest \
             kz.fin.backend.persistence.ReviewedFinancialIntakeIntegrationTest \
             kz.fin.backend.persistence.PilotXlsxIntakeIntegrationTest \
+            kz.fin.backend.persistence.PilotXlsxStructuralTransferTest \
             kz.fin.backend.persistence.ActualProvisionalCrossFormIntegrationTest \
             kz.fin.backend.intake.FormSchemaV5Test \
             kz.fin.backend.intake.CatalogCaptureRegistryTest \
@@ -154,6 +163,7 @@ jobs:
               "kz.fin.backend.api.FinancialApiDisabledIntegrationTest",
               "kz.fin.backend.persistence.ReviewedFinancialIntakeIntegrationTest",
               "kz.fin.backend.persistence.PilotXlsxIntakeIntegrationTest",
+              "kz.fin.backend.persistence.PilotXlsxStructuralTransferTest",
               "kz.fin.backend.persistence.ActualProvisionalCrossFormIntegrationTest",
               "kz.fin.backend.intake.FormSchemaV5Test",
               "kz.fin.backend.intake.CatalogCaptureRegistryTest",
