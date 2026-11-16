@@ -46,6 +46,35 @@ public class ReviewedFinancialIntakeService {
     private record Submission(UUID id,UUID organizationId,UUID entityId,UUID scopeId,
                               String form,String basis,String currency,int scale,String submitter,
                               String fingerprint,String sourceDigest,String cellsJson,int count) {}
+    public record SubmissionInfo(UUID id,String formCode,String formVersion,String reportingBasis,
+                                 String currencyCode,int amountScale,String submittedBy,
+                                 String reviewStatus,String reviewBy,String reviewReason,
+                                 String sourceKind,String sourceDocumentHash,
+                                 List<TrustedFinancialFormMapper.Cell> cells) {
+        public SubmissionInfo { cells=List.copyOf(cells); }
+    }
+
+    @Transactional(readOnly=true)
+    public SubmissionInfo read(UUID organizationId,UUID submissionId){
+        Objects.requireNonNull(organizationId);Objects.requireNonNull(submissionId);
+        List<SubmissionInfo> info=jdbc.query("""
+            SELECT s.id,s.form_code,s.form_version,s.reporting_basis,
+                   s.currency_code,s.amount_scale,s.submitted_by,
+                   coalesce(r.decision,'PENDING'),r.reviewed_by,r.reason,s.intake_kind,
+                   s.source_document_sha,s.cells::text
+            FROM fin_intake.submission s
+            LEFT JOIN fin_intake.review r
+              ON r.organization_id=s.organization_id AND r.submission_id=s.id
+            WHERE s.organization_id=? AND s.id=?
+            """,(rs,n)->new SubmissionInfo(rs.getObject(1,UUID.class),rs.getString(2),
+                rs.getString(3),rs.getString(4),rs.getString(5),rs.getInt(6),
+                rs.getString(7),rs.getString(8),rs.getString(9),rs.getString(10),
+                rs.getString(11),rs.getString(12),deserialize(rs.getString(13))),
+                organizationId,submissionId);
+        if(info.size()!=1)throw new IllegalArgumentException("INTAKE_NOT_FOUND_OR_FORBIDDEN");
+        return info.getFirst();
+    }
+
     private static final Set<String> FORMS=Set.of("F01","F02","F03","DF-CSH-01","DF-CSH-02");
     private static final Map<String,Set<String>> REQUIRED=Map.of(
             "F01",Set.of("assets","liabilities","equity"),
