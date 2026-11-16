@@ -119,7 +119,8 @@ export async function verifyCatalogTemplateTransfer(
   const manual=candidate
     ?validateSpecializedCandidate(context.formCode,[row],context.locale)
     :validateCatalogCapture(context,[row]);
-  const manualValid=candidate?manual.acceptedAsUnqualifiedDraft:manual.valid;
+  const manualValid="acceptedAsUnqualifiedDraft" in manual
+    ?manual.acceptedAsUnqualifiedDraft:manual.valid;
   if(!manualValid)throw new Error("SMOKE_MANUAL_PARITY_REJECTED:"+context.formCode);
   identicalSourceFields(manual.rows[0]!.cells,received.rows[0].cells);
   return {
