@@ -83,7 +83,7 @@ public final class CatA31MethodReviewRegistry {
                 key.methodCode(),key.methodVersion(),r.evidence());
         // Signed reference is relevant to the current server time and must
         // not be confused with the expiry of the underlying source facts.
-        Instant now=jdbc.queryForObject("SELECT CURRENT_TIMESTAMP",Instant.class);
+        Instant now=jdbc.queryForObject("SELECT CURRENT_TIMESTAMP",\n                (rs,i)->rs.getTimestamp(1).toInstant());
         if(now==null || now.isBefore(r.starts()) || !now.isBefore(r.ends()))
             return new Result(ReviewStatus.NOT_EFFECTIVE,r.id(),
                     key.methodCode(),key.methodVersion(),r.evidence());
