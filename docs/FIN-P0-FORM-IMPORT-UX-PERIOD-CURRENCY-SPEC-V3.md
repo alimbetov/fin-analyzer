@@ -1,5 +1,7 @@
 # FIN — P0-S1: единый механизм загрузки форм (React / Excel), периодов и учётной валюты
 
+> **SUPERSEDED FOR ACTIVE DEVELOPMENT — 2026-11-16:** Актуальные требования и жёсткий аудит: [ТЗ V4: ввод, будущий китайский язык, Preview](FIN-P0-FORM-IMPORT-UX-I18N-PREVIEW-SPEC-V4.md) и [AUDIT-V4](FIN-P0-FORM-INTAKE-CRITICAL-AUDIT-V4.md). Ниже сохранена историческая постановка V3; не считать её последним утверждённым объёмом. Keycloak/bearer-token и интерфейс стратегии анализа отложены.
+
 **Версия ТЗ:** 3.0 · **Дата:** 2026-11-16 · **Статус:** PROPOSED / NOT IMPLEMENTED  
 **Ветка:** `feat/fin-r0-r1a` · **PR #2:** Draft · **Production:** HOLD  
 **Заменяет в части ближайшего объёма работ:** `FIN-P0-SMOKE-FORM-DICTIONARY-PROJECT-BOUND-INTAKE-V2.md`. Архитектурные идеи из V2 сохраняются, но задачи Keycloak, ABAC, отдельного сценария безопасности и стратегии финансового анализа **перенесены на следующие этапы**.
