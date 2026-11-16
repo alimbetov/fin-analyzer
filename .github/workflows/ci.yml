@@ -101,6 +101,7 @@ jobs:
             kz.fin.backend.persistence.ReviewedFinancialIntakeIntegrationTest \
             kz.fin.backend.persistence.PilotXlsxIntakeIntegrationTest \
             kz.fin.backend.persistence.ActualProvisionalCrossFormIntegrationTest \
+            kz.fin.backend.intake.FormSchemaV5Test \
             kz.fin.backend.diagnostics.CrossFormDiagnosticEngineTest \
             kz.fin.backend.diagnostics.CrossFormEvidencePlannerTest \
             kz.fin.backend.persistence.TrustedCrossFormDiagnosticIntegrationTest; do
@@ -127,6 +128,7 @@ jobs:
               "kz.fin.backend.persistence.ReviewedFinancialIntakeIntegrationTest",
               "kz.fin.backend.persistence.PilotXlsxIntakeIntegrationTest",
               "kz.fin.backend.persistence.ActualProvisionalCrossFormIntegrationTest",
+              "kz.fin.backend.intake.FormSchemaV5Test",
               "kz.fin.backend.diagnostics.CrossFormDiagnosticEngineTest",
               "kz.fin.backend.diagnostics.CrossFormEvidencePlannerTest",
               "kz.fin.backend.persistence.TrustedCrossFormDiagnosticIntegrationTest",
