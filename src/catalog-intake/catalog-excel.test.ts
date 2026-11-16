@@ -5,6 +5,7 @@ import {
 } from "./catalog-schema";
 import {generateTypedCatalogExcel,parseTypedCatalogExcel,TYPED_CATALOG_TEMPLATE_COUNT} from "./catalog-excel";
 import {fieldPresentation,formHasAllHumanLabels} from "./field-presentation-r6";
+import {SPECIALIZED_CANDIDATES} from "./specialized-contracts";
 
 const ctx:CatalogCaptureContext={
   formCode:"DF-AST-01",projectCode:"PILOT_1",locale:"ru",
@@ -145,10 +146,35 @@ describe("FIN catalog typed workbook integration, per form code",()=>{
     expect(parsed.valid).toBe(true);
     expect(parsed.rows[0]?.cells.assetRef).toBe("R-001");
   });
-  it("unsupported catalog-only F02 and evidence D01 do not emit a misleading typed workbook",async()=>{
-    await expect(generateTypedCatalogExcel({...ctx,formCode:"F02"}))
-      .rejects.toThrow("CATALOG_SCHEMA_NOT_QUALIFIED");
+  it("specialized F02 generates an UNQUALIFIED candidate layout; documents D01 do not masquerade as numeric forms",async()=>{
+    const book=await readBook(await generateTypedCatalogExcel({...ctx,formCode:"F02"}));
+    expect(book.getWorksheet("FIN_Catalog")!.getCell("B2").value).toBe("netRevenue");
+    expect(book.getWorksheet("Instructions")!.getCell("B14").value).toBe("UNQUALIFIED_DRAFT");
     await expect(generateTypedCatalogExcel({...ctx,formCode:"D01"}))
       .rejects.toThrow("CATALOG_SCHEMA_NOT_QUALIFIED");
   });
+  it.each(SPECIALIZED_CANDIDATES)("$code — specialized draft Excel creates, parses and never publishes results",async form=>{
+    const candidate={...ctx,formCode:form.code};
+    const book=await readBook(await generateTypedCatalogExcel(candidate));
+    const data=book.getWorksheet("FIN_Catalog")!;
+    expect(data.getCell("B1").value).toBe(form.code);
+    for(const [i,field] of form.fields.entries()){
+      const value=example(field);
+      data.getCell(4,i+2).value=value;
+    }
+    // Invariant inputs are deliberately made consistent where all components are present.
+    const set=(name:string,value:string)=>{
+      const index=form.fields.findIndex(f=>f.code===name);
+      if(index>=0)data.getCell(4,index+2).value=value;
+    };
+    if(["F01","P01"].includes(form.code))set("assets","246.912");
+    if(form.code==="F03")set("closingCash","493.824");
+    if(form.code==="F04")set("closingEquity","246.912");
+    if(form.code==="P03")set("closingCash","123.456");
+    if(form.code==="P04")set("closingPrincipal","123.456");
+    const parsed=await parseTypedCatalogExcel(await bytes(book),candidate);
+    expect(parsed.valid,JSON.stringify(parsed.findings)).toBe(true);
+    expect(parsed.status).toBe("UNQUALIFIED_DRAFT");
+    expect(parsed.publishable).toBe(false);
+  },30000);
 });
