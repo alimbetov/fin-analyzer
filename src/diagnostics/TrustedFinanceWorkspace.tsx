@@ -1,5 +1,7 @@
 import { useEffect,useMemo,useRef,useState } from "react";
 import type { User } from "oidc-client-ts";
+import {F01_LIQUIDITY_FIELDS,F01_LIQUIDITY_VERSION,F01_PILOT_VERSION,
+  validateF01LiquidityDraft,type F01FormVersion} from "./f01-liquidity";
 import { configuredFinOidc,finUserManager,finApi,loadFinUser,
   tokenOrganizationHints } from "./fin-oidc";
 
@@ -11,7 +13,8 @@ const FIELDS:Record<string,readonly string[]>={
 };
 const LABELS:Record<string,string>={
   assets:"Активы",liabilities:"Обязательства",equity:"Капитал",cash:"Деньги",
-  receivables:"Дебиторская задолженность",netRevenue:"Чистая выручка",
+  receivables:"Дебиторская задолженность",currentAssets:"Оборотные активы",
+  currentLiabilities:"Краткосрочные обязательства",netRevenue:"Чистая выручка",
   cogs:"Себестоимость",operatingExpenses:"Операционные расходы",
   operatingCash:"Операционный денежный поток",investingCash:"Инвестиционный поток",
   financingCash:"Финансовый поток",receipt:"Поступление",payment:"Платёж"
@@ -43,8 +46,10 @@ interface ActualAssessment {
 }
 const UUID_PATTERN=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DECIMAL_PATTERN=/^-?[0-9]{1,26}(\.[0-9]{1,12})?$/;
-function newRows(form:string,month:string):SourceCell[]{
-  return (FIELDS[form]??[]).map((field,i)=>({
+function newRows(form:string,month:string,version:F01FormVersion=F01_PILOT_VERSION):SourceCell[]{
+  const fields=form==="F01" && version===F01_LIQUIDITY_VERSION
+    ? F01_LIQUIDITY_FIELDS : (FIELDS[form]??[]);
+  return fields.map((field,i)=>({
     sourceRowId:form==="F01"?"balance":form==="F02"?"pnl":form==="F03"?"cf":
       (form==="DF-CSH-01"?"receipt":"payment")+(i+1),
     sourceField:field,period:month,enteredAmount:""
@@ -79,6 +84,8 @@ export function TrustedFinanceWorkspace(){
   const [entityId,setEntityId]=useState("");
   const [scopeId,setScopeId]=useState("");
   const [form,setForm]=useState<FormCode>("F02");
+  const [f01Version,setF01Version]=useState<F01FormVersion>(F01_PILOT_VERSION);
+  const activeFormVersion=form==="F01"?f01Version:F01_PILOT_VERSION;
   const [month,setMonth]=useState("2026-10");
   const [currency,setCurrency]=useState("KZT");
   const [scale,setScale]=useState(1);
@@ -125,7 +132,16 @@ export function TrustedFinanceWorkspace(){
   function switchForm(next:FormCode){
     if(cells.some(c=>c.enteredAmount.trim()) &&
        !window.confirm("Несохранённый черновик будет очищен. Продолжить?"))return;
-    setForm(next);setCells(newRows(next,month));
+    setForm(next);setF01Version(F01_PILOT_VERSION);
+    setSelectedFile(null);setCells(newRows(next,month));
+  }
+  function switchF01Version(next:F01FormVersion){
+    if(cells.some(c=>c.enteredAmount.trim()) &&
+       !window.confirm("Смена версии F01 очистит несохранённые значения. Продолжить?"))
+      return;
+    setF01Version(next);
+    setSelectedFile(null);setCells(newRows("F01",month,next));
+    setMessage("");setError("");
   }
   async function submitManual(){
     validateScope();
@@ -133,9 +149,14 @@ export function TrustedFinanceWorkspace(){
     if(chosen.some(c=>!DECIMAL_PATTERN.test(c.enteredAmount.trim())))
       throw new Error("FIN_DECIMAL_FORMAT_INVALID");
     if(chosen.length===0)throw new Error("FIN_FINANCIAL_CELLS_REQUIRED");
+    if(form==="F01" && activeFormVersion===F01_LIQUIDITY_VERSION) {
+      const issues=validateF01LiquidityDraft(chosen);
+      if(issues.length)throw new Error("F01_LIQUIDITY_INPUT_INVALID");
+    }
     const result=await api<{id:string;state:string}>("/submissions",{
       method:"POST",body:JSON.stringify({
         economicEntityId:entityId,businessScopeId:scopeId,formCode:form,
+        formVersion:activeFormVersion,
         reportingBasis:"MANAGEMENT",currencyCode:currency,amountScale:scale,
         cells:chosen
       })
@@ -147,10 +168,11 @@ export function TrustedFinanceWorkspace(){
     validateScope();
     const params=new URLSearchParams({
       economicEntityId:entityId,businessScopeId:scopeId,
-      reportingBasis:"MANAGEMENT",currencyCode:currency,amountScale:String(scale)
+      reportingBasis:"MANAGEMENT",currencyCode:currency,amountScale:String(scale),
+      formVersion:activeFormVersion
     });
     const blob=await api<Blob>("/templates/"+form+"?"+params.toString());
-    download(blob,"FIN-"+form+"-FIN-PILOT-V1.xlsx");
+    download(blob,"FIN-"+form+"-"+activeFormVersion+".xlsx");
     setMessage("Шаблон загружен с сервера. После заполнения файл должен пройти серверную проверку.");
   }
   async function submitXlsx(){
@@ -162,6 +184,7 @@ export function TrustedFinanceWorkspace(){
     body.append("economicEntityId",entityId);
     body.append("businessScopeId",scopeId);
     body.append("formCode",form);
+    body.append("formVersion",activeFormVersion);
     body.append("reportingBasis","MANAGEMENT");
     body.append("currencyCode",currency);
     body.append("amountScale",String(scale));
@@ -250,7 +273,8 @@ export function TrustedFinanceWorkspace(){
               placeholder="UUID" onChange={e=>setScopeId(e.target.value)}/></label>
           <label className="field">Отчётный месяц
             <input aria-label="Месяц доверенного источника" type="month" value={month}
-              onChange={e=>{setMonth(e.target.value);setCells(newRows(form,e.target.value));}}/></label>
+              onChange={e=>{setMonth(e.target.value);
+                setCells(newRows(form,e.target.value,activeFormVersion));}}/></label>
         </div>
         <div className="graph-controls">
           <label className="field">Форма
@@ -258,6 +282,12 @@ export function TrustedFinanceWorkspace(){
               onChange={e=>switchForm(e.target.value as FormCode)}>
               {Object.keys(FIELDS).map(x=><option key={x}>{x}</option>)}
             </select></label>
+          {form==="F01" && <label className="field">Версия F01
+            <select aria-label="Версия финансовой формы F01" value={f01Version}
+              onChange={e=>switchF01Version(e.target.value as F01FormVersion)}>
+              <option value={F01_PILOT_VERSION}>F01 · базовая</option>
+              <option value={F01_LIQUIDITY_VERSION}>F01 · текущие активы/обязательства</option>
+            </select></label>}
           <label className="field">Валюта
             <select aria-label="Валюта доверенной формы" value={currency}
               onChange={e=>setCurrency(e.target.value)}>
@@ -271,6 +301,13 @@ export function TrustedFinanceWorkspace(){
               <option value={1000}>Тысячи</option>
             </select></label>
         </div>
+        {form==="F01" && activeFormVersion===F01_LIQUIDITY_VERSION &&
+          <p className="graph-disclaimer">
+            Введите активы, обязательства, капитал, оборотные активы и краткосрочные
+            обязательства на одну дату баланса (конец выбранного месяца).
+            Проверка источника выполняется вторым пользователем FIN_REVIEW;
+            это не утверждённый коэффициент ликвидности.
+          </p>}
         <h3 className="graph-subtitle">1. Ввод и проверка данных</h3>
         <div className="table-scroll"><table className="data-table">
           <thead><tr><th>Строка источника</th><th>Показатель</th>
@@ -315,7 +352,7 @@ export function TrustedFinanceWorkspace(){
             onClick={()=>void execute(readSubmission)}>Получить заявку</button>
         </div>
         {submission && <div className="graph-study" aria-label="Состояние проверки">
-          <strong>{submission.formCode}: {submission.reviewStatus}</strong>
+          <strong>{submission.formCode} · {submission.formVersion}: {submission.reviewStatus}</strong>
           <p className="graph-small">Автор: {submission.submittedBy}. Тип: {submission.sourceKind}.
             SHA-256 источника: {submission.sourceDocumentHash}</p>
           <p className="graph-small">Проверяющий: {submission.reviewBy??"не назначен"}.
