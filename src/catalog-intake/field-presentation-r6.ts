@@ -1,3 +1,4 @@
+import presentationText from "../../backend/src/main/resources/fin/form-field-presentation-review-r6.tsv?raw";
 import type {CatalogField} from "./catalog-schema";
 
 /**
@@ -11,15 +12,46 @@ export interface FieldPresentation {
   readonly help:string;readonly requiredness:"UNSPECIFIED_PENDING_METHOD_REVIEW";
   readonly translationReview:TranslationReview;
 }
-const pilot:Record<string,Record<FieldDisplayLocale,string>>={
-  assetRef:{ru:"Идентификатор актива",kk:"Актив идентификаторы",en:"Asset identifier","zh-Hans":"资产标识"},
-  type:{ru:"Вид актива",kk:"Актив түрі",en:"Asset type","zh-Hans":"资产类型"},
-  acquiredAt:{ru:"Дата приобретения",kk:"Сатып алынған күні",en:"Acquisition date","zh-Hans":"购置日期"},
-  cost:{ru:"Первоначальная стоимость",kk:"Бастапқы құны",en:"Original cost","zh-Hans":"原始成本"},
-  netBookValue:{ru:"Балансовая стоимость",kk:"Баланстық құны",en:"Net book value","zh-Hans":"账面净值"},
-  capacity:{ru:"Мощность (единица требует уточнения)",kk:"Қуаты (өлшем бірлігі нақтыланады)",
-    en:"Capacity (unit to be defined)","zh-Hans":"产能（单位待确认）"}
-};
+export const PRESENTATION_HEADER=
+  "formCode\tfieldCode\tfieldType\tlabelRu\tlabelKk\tlabelEn\tlabelZhHans\treviewStatus\trequiredness\tunitPolicy";
+export interface PresentationReviewRow {
+  formCode:string;fieldCode:string;fieldType:string;
+  labels:Readonly<Record<FieldDisplayLocale,string>>;
+  reviewStatus:"PROVISIONAL_NOT_S2"|"PENDING_TRANSLATION";
+  requiredness:"PENDING_METHOD_REVIEW";unitPolicy:string;
+}
+export function parsePresentationInventory(text:string):readonly PresentationReviewRow[]{
+  const lines=text.trimEnd().split(/\r?\n/);
+  if(lines.shift()!==PRESENTATION_HEADER)
+    throw new Error("R6_FIELD_TRANSLATION_HEADER_DRIFT");
+  const keys=new Set<string>();
+  const records=lines.map(line=>{
+    const row=line.split("\t");
+    if(row.length!==10)throw new Error("R6_FIELD_TRANSLATION_BAD_ROW");
+    const [formCode,fieldCode,fieldType,ru,kk,en,zh,review,required,unitPolicy]=row as string[];
+    const key=formCode+":"+fieldCode;
+    if(keys.has(key)||!/^[A-Z][A-Z0-9-]*$/.test(formCode!)||
+       !/^[A-Za-z][A-Za-z0-9_]*$/.test(fieldCode!)||
+       !["REF","CODE","DATE","MONEY","DECIMAL","PERIOD","ENUM","INTEGER","TEXT","BOOLEAN"].includes(fieldType!)||
+       !["PROVISIONAL_NOT_S2","PENDING_TRANSLATION"].includes(review!)||
+       required!=="PENDING_METHOD_REVIEW"||!unitPolicy)
+      throw new Error("R6_FIELD_TRANSLATION_DUPLICATE_OR_UNAPPROVED");
+    keys.add(key);
+    if(review==="PENDING_TRANSLATION"&&[ru,kk,en,zh].some(Boolean))
+      throw new Error("R6_FIELD_TRANSLATION_UNREVIEWED_VALUE");
+    return {formCode:formCode!,fieldCode:fieldCode!,fieldType:fieldType!,
+      labels:{ru:ru!,kk:kk!,en:en!,"zh-Hans":zh!},
+      reviewStatus:review as PresentationReviewRow["reviewStatus"],
+      requiredness:"PENDING_METHOD_REVIEW" as const,unitPolicy:unitPolicy!};
+  });
+  if(records.length!==794)throw new Error("R6_FIELD_TRANSLATION_COVERAGE_DRIFT");
+  return records;
+}
+export const PRESENTATION_REVIEW_INVENTORY=parsePresentationInventory(presentationText);
+const translated=new Map(PRESENTATION_REVIEW_INVENTORY.map(row=>[
+  row.formCode+":"+row.fieldCode,row
+]));
+
 const unit:Record<string,Record<FieldDisplayLocale,string>>={
   MONEY:{ru:"KZT в масштабе формы",kk:"Нысан масштабындағы KZT",
     en:"KZT in report scale","zh-Hans":"按报表单位计的 KZT"},
@@ -40,7 +72,9 @@ const help:Record<FieldDisplayLocale,string>={
 };
 export function fieldPresentation(formCode:string,field:CatalogField,
                                   locale:FieldDisplayLocale):FieldPresentation {
-  const label=formCode==="DF-AST-01"?pilot[field.code]?.[locale]:undefined;
+  const candidate=translated.get(formCode+":"+field.code);
+  // This dictionary is a review backlog, not a translation approval.
+  const label=candidate?.labels[locale]||undefined;
   return {
     fieldCode:field.code,label:label||field.code,
     unit:unit[field.type]?.[locale]||notSet[locale],
