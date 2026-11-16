@@ -48,5 +48,22 @@ class FinancialApiDisabledIntegrationTest {
         mvc.perform(post(base+"/fact-sets/"+UUID.randomUUID()+"/assessments/2026-10")
                         .with(jwt()))
                 .andExpect(status().isForbidden());
+        // New V5 server revision endpoints must obey the same fail-closed IAM gate.
+        String project=base+"/projects-v5/"+UUID.randomUUID();
+        mvc.perform(post(base+"/projects-v5").with(jwt())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(project+"/forms/F02/previews").with(jwt())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(project+"/forms/F02/previews/"+UUID.randomUUID()+"/confirm").with(jwt())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(project+"/forms/F02/history?periodCode=2026.10").with(jwt()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(project+"/forms/F02/history/1?periodCode=2026.10"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(project+"/forms/F02/uploads?periodCode=2026.10").with(jwt()))
+                .andExpect(status().isForbidden());
     }
 }
