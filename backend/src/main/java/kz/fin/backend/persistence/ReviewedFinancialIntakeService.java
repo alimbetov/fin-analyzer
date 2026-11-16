@@ -184,6 +184,14 @@ public class ReviewedFinancialIntakeService {
         Map<YearMonth,List<TrustedFinancialFormMapper.Cell>> byMonth=new TreeMap<>();
         for(var c:cells)byMonth.computeIfAbsent(c.period(),ignore->new ArrayList<>()).add(c);
         if(byMonth.size()>24)throw new IllegalArgumentException("INTAKE_TOO_MANY_MONTHS");
+        if("F01".equals(form) && "FIN-LIQUIDITY-V1".equals(version)) {
+            if(byMonth.size()!=1)
+                throw new IllegalArgumentException("INTAKE_F01_ONE_AS_OF_DATE_REQUIRED");
+            Set<String> allowed=Set.of("assets","liabilities","equity",
+                    "cash","receivables","currentAssets","currentLiabilities");
+            if(cells.stream().anyMatch(row->!allowed.contains(row.sourceField())))
+                throw new IllegalArgumentException("INTAKE_F01_UNKNOWN_LIQUIDITY_FIELD");
+        }
         for(var entry:byMonth.entrySet()){
             var rows=entry.getValue();
             Set<String> fields=new HashSet<>();
