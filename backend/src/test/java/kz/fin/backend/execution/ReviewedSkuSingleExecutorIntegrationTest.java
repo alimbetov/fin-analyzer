@@ -52,7 +52,17 @@ class ReviewedSkuSingleExecutorIntegrationTest {
     private static final YearMonth FEB=YearMonth.of(2026,2);
     private static final LocalDate START=FEB.atDay(1);
     private static final LocalDate END=FEB.plusMonths(1).atDay(1);
-    private static final String DOC_HASH="c".repeat(64);
+    private static final byte[] ORIGINAL="{\"fixture\":\"synthetic-verified-json\"}"
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    private static final String DOC_HASH=sha256(ORIGINAL);
+    private static String sha256(byte[] bytes) {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch(java.security.NoSuchAlgorithmException e) {
+            throw new AssertionError(e);
+        }
+    }
     private record Fixture(UUID organization,UUID entity,UUID scope,
                            UUID revision,String snapshotHash) {}
     private record Source(Fixture fixture,UUID id) {}
@@ -96,6 +106,11 @@ class ReviewedSkuSingleExecutorIntegrationTest {
             """,id,f.organization(),f.entity(),f.scope(),f.revision(),
             badSnapshot?"0".repeat(64):f.snapshotHash(),
             START,END,DOC_HASH,lines,new BigDecimal(net));
+        jdbc.update("""
+            INSERT INTO fin_con.sku_source_original(
+                population_id,organization_id,original_bytes,sha256,original_length)
+            VALUES (?,?,?,?,?)
+            """,id,f.organization(),ORIGINAL,DOC_HASH,ORIGINAL.length);
         return new Source(f,id);
     }
 
@@ -268,15 +283,62 @@ class ReviewedSkuSingleExecutorIntegrationTest {
         assertEquals(0L,planned(f,QualifiedSkuAbcAdapter.CODE));
     }
 
-    @Test void reviewAfterOutboxConsumptionFailsInsteadOfSilentlyLosingConTasks(){
+    @Test void lateApprovalQueuesSupplementalRunWithoutRewritingOriginalCore() throws Exception {
         Fixture f=publishedF02();
         Source s=source(f,5,"1000",false);
         standardSales(s);
         toTerminal(f);
         assertEquals(0L,planned(f,QualifiedSkuParetoAdapter.CODE));
-        assertThrows(DataAccessException.class,
-                ()->review(s,"independent-sku-reviewer"));
-        assertTrue(loader.load(revision(f)).isEmpty());
+        for(int n=0;n<20;n++) {
+            coreReports.publishReady();
+            var oldCount=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.core_report_snapshot snap
+                WHERE snap.organization_id=? AND snap.fact_set_revision_id=?
+                """,Long.class,f.organization(),f.revision());
+            if(oldCount==1L) break;
+        }
+        UUID original=jdbc.queryForObject("""
+            SELECT snap.id FROM fin_exec.core_report_snapshot snap
+            WHERE snap.organization_id=? AND snap.fact_set_revision_id=?
+            """,UUID.class,f.organization(),f.revision());
+        var originalContent=coreReports.load(f.organization(),original);
+        assertEquals("PARTIAL",originalContent.path("coreReadiness").asText());
+
+        review(s,"independent-sku-reviewer");
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.fact_publication_outbox
+            WHERE organization_id=? AND fact_set_revision_id=?
+              AND event_type='SKU_POPULATION_APPROVED'
+            """,Long.class,f.organization(),f.revision()));
+        assertTrue(loader.load(revision(f)).isPresent());
+        for(int i=0;i<100;i++) {
+            scheduler.tick();
+            var done=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.analysis_run r
+                JOIN fin_exec.fact_publication_outbox event ON event.event_id=r.event_id
+                WHERE r.organization_id=? AND r.fact_set_revision_id=?
+                  AND event.event_type='SKU_POPULATION_APPROVED'
+                  AND r.run_status IN ('COMPLETED','PARTIAL','FAILED')
+                """,Long.class,f.organization(),f.revision());
+            if(done==1L)break;
+        }
+        assertEquals(1L,planned(f,QualifiedSkuParetoAdapter.CODE));
+        assertEquals(1L,planned(f,QualifiedSkuAbcAdapter.CODE));
+        assertEquals("CALCULATED",result(f,QualifiedSkuParetoAdapter.CODE).path("status").asText());
+        for(int i=0;i<30;i++) {
+            coreReports.publishReady();
+            Long count=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.core_report_snapshot snap
+                WHERE snap.organization_id=? AND snap.fact_set_revision_id=?
+                """,Long.class,f.organization(),f.revision());
+            if(count==2L)break;
+        }
+        assertEquals(2L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.core_report_snapshot
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.organization(),f.revision()));
+        assertEquals(originalContent,coreReports.load(f.organization(),original));
+        assertThrows(DataAccessException.class,()->review(s,"another-reviewer"));
     }
 
     @Test void duplicateOrOrphanReturnAndOverRefundAreRejected(){
