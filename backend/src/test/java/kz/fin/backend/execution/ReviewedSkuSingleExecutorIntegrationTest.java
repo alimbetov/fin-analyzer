@@ -201,7 +201,16 @@ class ReviewedSkuSingleExecutorIntegrationTest {
               AND pareto.method_code='CON-01/PARETO_SALES'
             """,Long.class,f.organization(),f.revision()));
 
-        assertTrue(coreReports.publishReady());
+        // Other tests may have left unrelated terminal runs in the same
+        // Testcontainers database. Locate THIS organization's immutable report.
+        for(int i=0;i<40;i++) {
+            coreReports.publishReady();
+            Long found=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.core_report_snapshot
+                WHERE organization_id=? AND fact_set_revision_id=?
+                """,Long.class,f.organization(),f.revision());
+            if(found==1L)break;
+        }
         UUID report=jdbc.queryForObject("""
             SELECT id FROM fin_exec.core_report_snapshot
             WHERE organization_id=? AND fact_set_revision_id=?
