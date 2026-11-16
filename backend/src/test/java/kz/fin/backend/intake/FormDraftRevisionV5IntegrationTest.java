@@ -13,6 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Real PostgreSQL evidence: revisions and import events are not simulated. */
@@ -155,6 +156,38 @@ class FormDraftRevisionV5IntegrationTest {
         assertThrows(IllegalArgumentException.class,
             ()->ledger.confirm(x.org,p.id(),current.id(),
                 current.confirmationDigest(),1,"intruder","x"));
+    }
+
+    @Test void concurrentConfirmationsFromSameVersionYieldOneNewRevision() throws Exception {
+        var scope=Scope.fresh();var p=project(scope,"FIN_PARALLEL");
+        confirm(scope,preview(scope,p.id(),"ru","400"),"");
+        var a=preview(scope,p.id(),"ru","420");
+        var b=preview(scope,p.id(),"en","430");
+        assertEquals(1,a.expectedRevision());
+        assertEquals(1,b.expectedRevision());
+        CountDownLatch start=new CountDownLatch(1);
+        ExecutorService workers=Executors.newFixedThreadPool(2);
+        try{
+            Callable<String> first=()->{
+                start.await(10,TimeUnit.SECONDS);
+                try{return confirm(scope,a,"First correction").result();}
+                catch(FormDraftRevisionV5Service.RevisionConflictException e){return "CONFLICT";}
+            };
+            Callable<String> second=()->{
+                start.await(10,TimeUnit.SECONDS);
+                try{return confirm(scope,b,"Other correction").result();}
+                catch(FormDraftRevisionV5Service.RevisionConflictException e){return "CONFLICT";}
+            };
+            Future<String> fa=workers.submit(first);
+            Future<String> fb=workers.submit(second);
+            start.countDown();
+            List<String> results=List.of(fa.get(20,TimeUnit.SECONDS),fb.get(20,TimeUnit.SECONDS));
+            assertEquals(1,results.stream().filter("CREATED"::equals).count());
+            assertEquals(1,results.stream().filter("CONFLICT"::equals).count());
+        }finally{workers.shutdownNow();}
+        assertEquals(List.of(2,1),ledger.history(scope.org,p.id(),"2026.10").stream()
+            .map(FormDraftRevisionV5Service.DraftHistory::revisionNumber).toList());
+        assertEquals(3,ledger.uploads(scope.org,p.id(),"2026.10").size());
     }
 
     @Test void periodScaleAndSourceIdentityArePinnedAcrossRepeats(){
