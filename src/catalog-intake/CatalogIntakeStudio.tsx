@@ -8,6 +8,7 @@ import {generateTypedCatalogExcel,parseTypedCatalogExcel} from "./catalog-excel"
 import {formatExactDecimal} from "../intake-v5/form-schema";
 import {SPECIALIZED_CANDIDATES,validateSpecializedCandidate} from "./specialized-contracts";
 import {fieldPresentation} from "./field-presentation-r6";
+import {inspectLocalEvidence,type EvidenceDraft} from "./evidence-contract-r6";
 import type {PeriodType,ValueCoverage} from "../intake-v5/reporting-period";
 
 const LOCALIZED={
@@ -92,6 +93,7 @@ export function CatalogIntakeStudio(){
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
+  const [evidenceDraft,setEvidenceDraft]=useState<EvidenceDraft|null>(null);
   const generation=useRef(0);
   const form=getCaptureForm(context.formCode);
   const candidate=SPECIALIZED_CANDIDATES.find(f=>f.code===form.code);
@@ -102,7 +104,7 @@ export function CatalogIntakeStudio(){
   function changeContext(partial:Partial<CatalogCaptureContext>){
     resetPreview();
     setContext(old=>({...old,...partial}));
-    if(partial.formCode!==undefined)setRows([freshRow()]);
+    if(partial.formCode!==undefined){setRows([freshRow()]);setEvidenceDraft(null);}
   }
   function changeRow(index:number,next:CatalogRow){
     resetPreview();setRows(previous=>previous.map((r,i)=>i===index?next:r));
@@ -138,6 +140,17 @@ export function CatalogIntakeStudio(){
     }catch(e){
       if(generation.current===request)setError(e instanceof Error?e.message:"CATALOG_XLSX_INVALID");
     }finally{if(generation.current===request)setBusy(false);}
+  }
+  async function inspectEvidence(e:ChangeEvent<HTMLInputElement>){
+    const file=e.target.files?.[0];e.target.value="";
+    if(!file)return;
+    setError("");setEvidenceDraft(null);setBusy(true);
+    try{
+      const evidence=await inspectLocalEvidence(context.formCode,file.name,
+        new Uint8Array(await file.arrayBuffer()));
+      setEvidenceDraft(evidence);
+    }catch(e){setError(e instanceof Error?e.message:"EVIDENCE_LOCAL_INVALID");}
+    finally{setBusy(false);}
   }
   function validateManual(){
     setError("");setMessage("");
@@ -224,9 +237,25 @@ export function CatalogIntakeStudio(){
     <p className="fin-catalog-context">
       {form.code} · {form.kind} · {form.aggregateRoot} · {form.grain} · {form.qualification}
     </p>
-    {!typed?<p className="fin-catalog-blocked" role="alert">
-      {form.captureMode==="EVIDENCE_ONLY"?labels.evidence:labels.blocked}
-    </p>:<>
+    {!typed?<div>
+      <p className="fin-catalog-blocked" role="alert">
+        {form.captureMode==="EVIDENCE_ONLY"?labels.evidence:labels.blocked}
+      </p>
+      {form.captureMode==="EVIDENCE_ONLY"&&<div className="fin-catalog-preview">
+        <p>{labels.local}</p>
+        <label className="fin-catalog-import">
+          {context.locale==="ru"?"Проверить документ локально":context.locale==="kk"?"Құжатты жергілікті тексеру":"Inspect document locally"}
+          <input type="file" aria-label="Evidence source file"
+             accept=".pdf,.xlsx,.docx,.png,.jpg,.jpeg,.xml"
+             disabled={busy} onChange={inspectEvidence}/>
+        </label>
+        {evidenceDraft&&<div className="fin-catalog-context" data-testid="fin-evidence-local">
+          <p>{evidenceDraft.formCode} · {evidenceDraft.filename} · {evidenceDraft.byteLength} bytes</p>
+          <p>SHA-256: <code>{evidenceDraft.sha256}</code></p>
+          <p>{evidenceDraft.status} · {evidenceDraft.sourceScan} · NOT STORED ON SERVER</p>
+        </div>}
+      </div>}
+    </div>:<>
       <div className="fin-catalog-table-wrap">
         <table className="fin-catalog-table">
           <caption>{form.code} · {labels.field} / {labels.type}</caption>
