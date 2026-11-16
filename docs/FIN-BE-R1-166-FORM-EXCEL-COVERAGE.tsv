@@ -1,4 +1,3 @@
-# FIN-BE-R1 — 166-form Excel generation/import contract matrix; SPECIFIED only, not proof of implementation
 formCode	catalog	formKind	grain	catalogMode	schemaContract	fieldCount	existingJavaXlsxPilot	targetGeneratedXlsx	targetXlsxRoundTrip	targetServerImport	targetPersistenceClass	targetNumericFactPromotion	executionState	testCaseId
 C01	FCP_TD	STRUCTURED	SOURCE_ROW	SCHEMA_CANDIDATE	specialized-schema-candidates-r6.tsv	6	NO	STRUCTURED_DATA_XLSX_V1	EXACT_TYPED_ROW_ROUNDTRIP	DRAFT_ONLY_XLSX	IMMUTABLE_UNQUALIFIED_SCHEMA_DRAFT	BLOCKED_UNTIL_SCHEMA_AND_METHOD_REVIEW	TARGET_NOT_IMPLEMENTED	BE-R1-ALL-C01
 C02	FCP_TD	STRUCTURED	SOURCE_ROW	SCHEMA_CANDIDATE	specialized-schema-candidates-r6.tsv	5	NO	STRUCTURED_DATA_XLSX_V1	EXACT_TYPED_ROW_ROUNDTRIP	DRAFT_ONLY_XLSX	IMMUTABLE_UNQUALIFIED_SCHEMA_DRAFT	BLOCKED_UNTIL_SCHEMA_AND_METHOD_REVIEW	TARGET_NOT_IMPLEMENTED	BE-R1-ALL-C02
