@@ -105,6 +105,11 @@ public class CatalogIssuedTemplateService {
         var parsed = xlsx.parseIssued(context, bytes, id);
         if (!parsed.rows().equals(rows) || parsed.rows().size() != rows.size())
             throw new IllegalStateException("FIN_EXPORT_XLSX_ROUNDTRIP_MISMATCH");
+        // Compare the workbook's *actual normalized financial values* against the
+        // chosen immutable source revision, not only against caller-supplied rows.
+        // Otherwise a caller could attach altered cells to a genuine revision ID.
+        if (!parsed.normalizedFingerprint().equals(source.normalizedSha()))
+            throw new IllegalStateException("FIN_EXPORT_XLSX_SOURCE_FINGERPRINT_MISMATCH");
         String fp = CatalogXlsxRoundTripService.schemaFingerprint(context.formCode());
         String rawHash = sha256(bytes);
         jdbc.update("""
