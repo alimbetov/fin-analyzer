@@ -65,5 +65,9 @@ class FinancialApiDisabledIntegrationTest {
                 .andExpect(status().isForbidden());
         mvc.perform(get(project+"/forms/F02/uploads?periodCode=2026.10").with(jwt()))
                 .andExpect(status().isForbidden());
+        mvc.perform(get(project+"/forms/F02/current?periodCode=2026.10").with(jwt()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(project+"/forms/F02/previews/"+UUID.randomUUID()+"/freshness").with(jwt()))
+                .andExpect(status().isForbidden());
     }
 }
