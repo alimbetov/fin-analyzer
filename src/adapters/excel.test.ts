@@ -63,4 +63,14 @@ describe("controlled XLSX contract", () => {
     await expect(readWorkbook(workbook)).rejects.toThrow(/Неожиданные столбцы/);
   });
 
+  it("rejects sparse data beyond the last approved balance row", async () => {
+    const book = await workbookForTest();
+    book.getWorksheet("Balance")!.getCell("A900").value = "FORGED";
+    await expect(readWorkbook(book)).rejects.toThrow(/Неожиданные строки/);
+  });
+  it("does not silently accept an extra far-right balance field", async () => {
+    const book = await workbookForTest();
+    book.getWorksheet("Balance")!.getCell("X6").value = "UNREGISTERED";
+    await expect(readWorkbook(book)).rejects.toThrow(/Неожиданные столбцы/);
+  });
 });
