@@ -606,6 +606,64 @@ class FactPublicationIntegrationTest {
             """,Long.class,f.org(),f.revisionId()));
     }
 
+
+    @Test void repeatedPoisonPlanningIsDeadLetteredAfterFiveAttempts() {
+        var f=fixture();
+        publish(f);
+        kz.fin.backend.execution.MethodTaskAdapter badPlan =
+            new kz.fin.backend.execution.MethodTaskAdapter() {
+                @Override public String methodCode() {return "SYS/ALWAYS_POISON_FIXTURE";}
+                @Override public boolean autoEligible() {return true;}
+                @Override public boolean applicable(TrustedRevision ignored) {
+                    if(f.revisionId().equals(ignored.factSetRevisionId()))
+                        throw new IllegalStateException("SYNTHETIC_POISON");
+                    return false;
+                }
+                @Override public String execute(TrustedRevision ignored) {
+                    return "{\"unused\":true}";
+                }
+            };
+        var worker=new kz.fin.backend.execution.SingleExecutorScheduler(
+            jdbc,txManager,List.of(badPlan),false);
+        UUID eventId=jdbc.queryForObject("""
+            SELECT event_id FROM fin_exec.fact_publication_outbox
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,UUID.class,f.org(),f.revisionId());
+        for(int i=1;i<=5;i++) {
+            // No sleep, advance only this fixture's retry timestamp.
+            jdbc.update("""
+                UPDATE fin_exec.outbox_planning_failure
+                SET next_retry_at=now()-interval '1 second'
+                WHERE event_id=?
+                """,eventId);
+            for(int tries=0;tries<150;tries++) {
+                worker.tick();
+                Integer attempts=jdbc.query("""
+                    SELECT attempt_count FROM fin_exec.outbox_planning_failure
+                    WHERE event_id=?
+                    """,rs->rs.next()?rs.getInt(1):null,eventId);
+                if(attempts!=null && attempts>=i) break;
+            }
+        }
+        Integer count=jdbc.queryForObject("""
+            SELECT attempt_count FROM fin_exec.outbox_planning_failure
+            WHERE event_id=?
+            """,Integer.class,eventId);
+        Boolean dead=jdbc.queryForObject("""
+            SELECT dead_letter FROM fin_exec.outbox_planning_failure
+            WHERE event_id=?
+            """,Boolean.class,eventId);
+        assertEquals(5,count);
+        assertEquals(Boolean.TRUE,dead);
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.outbox_delivery WHERE event_id=?
+            """,Long.class,eventId));
+        for(int i=0;i<3;i++) worker.tick();
+        assertEquals(5,jdbc.queryForObject("""
+            SELECT attempt_count FROM fin_exec.outbox_planning_failure WHERE event_id=?
+            """,Integer.class,eventId));
+    }
+
     private boolean attemptPublish(Fixture candidate,UUID expected,
                                    CountDownLatch ready,CountDownLatch start) {
         ready.countDown();
