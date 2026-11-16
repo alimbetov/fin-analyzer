@@ -1,3 +1,5 @@
+> **P0 SPECIFICATION HARDENING (2026-11-16):** Нормативные execution/report/qualification состояния и правила задаёт [FIN-EXECUTION-CONTRACT-V1.md](FIN-EXECUTION-CONTRACT-V1.md). Независимые синтетические случаи и матрица приёмки: [FIN-DIAG-60-P0-ACCEPTANCE.md](FIN-DIAG-60-P0-ACCEPTANCE.md), [p0-golden-cases-v1.json](../backend/src/test/resources/fin/method60/p0-golden-cases-v1.json). При разночтениях этот контракт имеет приоритет. Исправления **спецификации**, не свидетельство реализации или GREEN CI.
+
 # FIN-DIAG-60 — AUTO-RUN + COMPOSITE ANALYSIS + REPORT ORCHESTRATION
 
 **Дата:** 2026-11-16 · **Версия:** 1.0 · **Статус:** PROPOSED / NOT IMPLEMENTED  
