@@ -15,7 +15,6 @@ test("FIN V5: localized React table, validation, exact preview and draft export"
   await expect(preview.getByText("400,00")).toBeVisible();
   await expect(preview.getByText("260,00")).toBeVisible();
   await expect(preview.getByText("90,00")).toBeVisible();
-  await expect(studio.getByLabel("Чистая выручка")).toHaveValue("111");
   await expect(preview.getByText("Проверено").first()).toBeVisible();
   await page.screenshot({path:"test-results/fin-v5-entry-preview-"+test.info().project.name+".png",fullPage:true});
   const [file]=await Promise.all([
@@ -63,6 +62,7 @@ test("FIN V5: downloaded locale-specific XLSX rows 1/2/3+ round-trip to same pre
   await expect(preview.getByText("400,00")).toBeVisible();
   await expect(preview.getByText("260,00")).toBeVisible();
   await expect(preview.getByText("90,00")).toBeVisible();
+  await expect(studio.getByLabel("Чистая выручка")).toHaveValue("111");
   await page.screenshot({path:"test-results/fin-v5-xlsx-preview-"+test.info().project.name+".png",fullPage:true});
   sheet.getCell("A1").value="F01";
   const tampered=Buffer.from(await book.xlsx.writeBuffer());
