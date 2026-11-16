@@ -1,5 +1,5 @@
 import catalogText from "../../backend/src/main/resources/fin/form-compatibility.tsv?raw";
-import { normalizeDecimal,normalizeUserDecimal } from "../intake-v5/form-schema";
+import { normalizeUserDecimal } from "../intake-v5/form-schema";
 import { resolvePeriod, type PeriodType, type ValueCoverage } from "../intake-v5/reporting-period";
 
 /**
