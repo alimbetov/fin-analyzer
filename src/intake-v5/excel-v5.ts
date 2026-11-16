@@ -147,6 +147,20 @@ export async function parseF02ExcelV5(source: ArrayBuffer, expected: EntryContex
   const suppliedLocale=literal(meta.getCell(5,2)) as FormLocale;
   requireActiveLocale(suppliedLocale);
   const instructions=book.getWorksheet("Instructions")!;
+  instructions.eachRow(row=>{
+    if(row.number>DIRECTIONS[suppliedLocale].length)
+      throw new Error("XLSX_V5_INSTRUCTIONS_CHANGED");
+    row.eachCell({includeEmpty:false},(_cell,col)=>{
+      if(col>1)throw new Error("XLSX_V5_INSTRUCTIONS_CHANGED");
+    });
+  });
+  meta.eachRow(row=>{
+    if(row.number>META_KEYS.length)
+      throw new Error("XLSX_V5_METADATA_CHANGED");
+    row.eachCell({includeEmpty:false},(_cell,col)=>{
+      if(col>2)throw new Error("XLSX_V5_METADATA_CHANGED");
+    });
+  });
   if(instructions.actualRowCount!==DIRECTIONS[suppliedLocale].length ||
      instructions.actualColumnCount>1)
     throw new Error("XLSX_V5_INSTRUCTIONS_CHANGED");
