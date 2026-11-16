@@ -16,6 +16,18 @@ jobs:
           node-version: "22"
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: P0 source-backed delivery contract and negative guards (not S2 or production acceptance)
+        run: |
+          node --test scripts/fin-p0-contract.test.mjs
+          node scripts/fin-p0-contract-check.mjs --evidence
+      - name: Archive P0 static contract proof (not CI GREEN)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-p0-static-contract
+          path: test-results/fin-p0-static-contract.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Typecheck
         run: npm run typecheck
       - name: Sector pilot kernel and five-question diagnostic smoke tests
