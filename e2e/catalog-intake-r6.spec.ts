@@ -99,3 +99,29 @@ test("FIN R6: document D01 performs local SHA-256 inspection but does not publis
   await expect(evidence).toContainText("NOT STORED ON SERVER");
   await expect(studio.getByRole("button",{name:"Скачать JSON черновика"})).toHaveCount(0);
 });
+
+test("FIN R7: specialized manual draft refuses missing project and invalid period before local save",async({page})=>{
+  await page.goto("/");
+  const studio=page.locator("#catalog-intake-r6");
+  await studio.getByLabel("Форма").selectOption("F04");
+  await studio.getByLabel("ROW-001 openingEquity").fill("100");
+  await studio.getByLabel("ROW-001 contributions").fill("20");
+  await studio.getByLabel("ROW-001 dividends").fill("10");
+  await studio.getByLabel("ROW-001 otherChanges").fill("0");
+  await studio.getByLabel("ROW-001 closingEquity").fill("110");
+
+  await studio.getByRole("button",{name:"Проверить ввод"}).click();
+  await expect(studio.locator(".fin-catalog-preview")).toContainText("PROJECT_CODE_REQUIRED");
+  await expect(studio.getByRole("button",{name:"Скачать JSON черновика"})).toBeDisabled();
+
+  await studio.getByLabel("Код проекта (локальный)").fill("FIN_R7");
+  await studio.getByLabel("Период",{exact:true}).fill("2026.13");
+  await studio.getByRole("button",{name:"Проверить ввод"}).click();
+  await expect(studio.locator(".fin-catalog-preview")).toContainText("INVALID_REPORTING_PERIOD");
+  await expect(studio.getByRole("button",{name:"Скачать JSON черновика"})).toBeDisabled();
+
+  await studio.getByLabel("Период",{exact:true}).fill("2026.10");
+  await studio.getByRole("button",{name:"Проверить ввод"}).click();
+  await expect(studio.getByRole("button",{name:"Скачать JSON черновика"})).toBeEnabled();
+  await expect(studio.locator(".fin-catalog-preview")).toContainText("UNQUALIFIED_DRAFT");
+});
