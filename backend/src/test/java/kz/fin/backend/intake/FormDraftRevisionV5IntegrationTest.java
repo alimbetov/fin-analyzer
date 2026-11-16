@@ -50,7 +50,7 @@ class FormDraftRevisionV5IntegrationTest {
     }
     private FormDraftRevisionV5Service.Confirmation confirm(Scope s,
                                            FormDraftRevisionV5Service.Preview p,String reason){
-        return ledger.confirm(s.org,p.id(),p.confirmationDigest(),p.expectedRevision(),
+        return ledger.confirm(s.org,p.projectId(),p.id(),p.confirmationDigest(),p.expectedRevision(),
                               "author",reason);
     }
 
@@ -137,9 +137,9 @@ class FormDraftRevisionV5IntegrationTest {
         assertThrows(IllegalArgumentException.class,
             ()->ledger.history(foreign.org,p.id(),"2026.10"));
         assertThrows(IllegalArgumentException.class,
-            ()->ledger.confirm(foreign.org,current.id(),current.confirmationDigest(),1,"author","x"));
+            ()->ledger.confirm(foreign.org,p.id(),current.id(),current.confirmationDigest(),1,"author","x"));
         assertThrows(IllegalArgumentException.class,
-            ()->ledger.confirm(x.org,current.id(),"0".repeat(64),1,"author","x"));
+            ()->ledger.confirm(x.org,p.id(),current.id(),"0".repeat(64),1,"author","x"));
     }
 
     @Test void periodScaleAndSourceIdentityArePinnedAcrossRepeats(){
