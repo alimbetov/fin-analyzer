@@ -122,7 +122,8 @@ public final class SpecializedSchemaCandidateRegistry {
                     field.type(),row.cells().getOrDefault(field.code(),""),locale));}
                 catch(IllegalArgumentException e){
                     add(findings,e.getMessage(),row.rowId(),field.code());
-                    canonical.put(field.code(),row.cells().getOrDefault(field.code(),""));
+                    // Invalid null is a controlled field error, never an NPE or a persisted cell.
+                    canonical.put(field.code(),Objects.toString(row.cells().get(field.code()),""));
                 }
             }
             if(canonical.values().stream().allMatch(String::isBlank))
