@@ -1,7 +1,7 @@
 import {describe,it,expect} from "vitest";
 import {
   CAPTURE_CATALOG,CATALOG_CAPTURE_VERSION,MAX_CATALOG_ROWS,
-  getCaptureForm,parseCaptureCatalog,validateCatalogCapture,normalizeTypedValue,
+  getCaptureForm,parseCaptureCatalog,validateCatalogCapture,validateCatalogContext,normalizeTypedValue,
   type CatalogField,type CatalogCaptureContext,type CatalogRow
 } from "./catalog-schema";
 import {PILOT_F02_SCHEMA} from "../intake-v5/form-schema";
@@ -101,6 +101,19 @@ describe("FIN catalog capture executable registry",()=>{
     expect(normalizeTypedValue("BOOLEAN","false")).toBe("false");
     expect(normalizeTypedValue("MONEY","-0012.500")).toBe("-12.5");
   });
+  it("common project, period and currency context is rejected for specialized manual intake",()=>{
+    const valid={...ctx,formCode:"F04"};
+    expect(validateCatalogContext(valid)).toEqual([]);
+    const invalid=[
+      [{...valid,projectCode:""},"PROJECT_CODE_REQUIRED"],
+      [{...valid,periodCode:"2026.13"},"INVALID_REPORTING_PERIOD"],
+      [{...valid,amountScale:17 as 1},"MONEY_CONTEXT_UNSUPPORTED"],
+      [{...valid,currency:"USD" as "KZT"},"MONEY_CONTEXT_UNSUPPORTED"]
+    ] as const;
+    for(const [context,code] of invalid)
+      expect(validateCatalogContext(context)).toContainEqual({code});
+  });
+
   it("missing != zero and unsupported contexts cannot be approved",()=>{
     const input=row("DF-AST-01");
     const blank=validateCatalogCapture(ctx,[{rowId:"ROW-001",cells:{cost:""}}]);
