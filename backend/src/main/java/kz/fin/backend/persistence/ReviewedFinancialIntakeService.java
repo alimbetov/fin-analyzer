@@ -207,6 +207,13 @@ public class ReviewedFinancialIntakeService {
         try{return json.writeValueAsString(cells);}
         catch(JsonProcessingException e){throw new IllegalArgumentException("INTAKE_INVALID_CELLS",e);}
     }
+    private static String sha256(byte[] input) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input));
+        }catch(NoSuchAlgorithmException e){
+            throw new IllegalStateException("SHA256_UNAVAILABLE",e);
+        }
+    }
     private static String sha256(String input) {
         try{
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
