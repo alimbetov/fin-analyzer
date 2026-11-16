@@ -111,6 +111,20 @@ public class FactSetPublicationService {
                 SELECT snapshot_hash FROM fin_fact.fact_set_publication
                 WHERE fact_set_revision_id=? AND organization_id=?
                 """,String.class,request.candidateRevisionId(),request.organizationId());
+        // The outbox append is part of the SAME transaction as fact publication
+        // and pointer advancement. Consumers must deduplicate event delivery.
+        // This event does not itself grant access to ACTUAL data.
+        jdbc.update("""
+                INSERT INTO fin_exec.fact_publication_outbox(
+                    event_id, organization_id, economic_entity_id, business_scope_id,
+                    fact_set_revision_id, event_type, reporting_basis, data_space,
+                    snapshot_hash, current_version)
+                VALUES (?,?,?,?,?,'FACT_SET_PUBLISHED',?,?,?,?)
+                """,
+                UUID.randomUUID(), request.organizationId(), request.economicEntityId(),
+                request.businessScopeId(), request.candidateRevisionId(),
+                request.reportingBasis().name(), request.dataSpace().name(), hash, version);
+
         return new Publication(request.candidateRevisionId(),Objects.requireNonNull(hash),version);
     }
 
