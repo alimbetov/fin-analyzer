@@ -53,3 +53,35 @@ Require Java 21, running Docker for PostgreSQL Testcontainers, one commit SHA fo
 **EXEC-R3:** immutable CORE report and on-demand optional ML report enrichment on identical approved facts.
 
 **Operations:** `FIN_EXECUTION_ENABLED=true` only in an isolated environment after migrations and verification. `main` untouched.
+
+## EXEC-R2 Qualification hardening update — 2026-11-16
+
+This update amends the earlier implementation status; **all tests below remain authored, not witnessed PASS**.
+
+- **R2-Q01 Expired-lease fencing fix.** `SingleExecutorScheduler.complete()` and `retryOrFail()` now require both the current fencing token and `lease_until > now()`. A worker whose lease elapsed cannot publish stale output even before a replacement worker claims the task.
+- **R2-Q02 Two-poller concurrency proof.** Added a PostgreSQL Testcontainers integration scenario: two independent scheduler instances consume one published event concurrently, then assert one run and one computed task.
+- **R2-Q03 Lease expiry without waiting.** A synthetic adapter expires its own lease, returns a result, and verifies the first output was rejected. The reclaimed attempt gets a new fencing token and publishes the only durable result.
+- **R2-Q04 Poison planning exhaustion.** A synthetic always-failing applicability adapter exhausts five persisted planner attempts; the event is marked `dead_letter` and not repeatedly processed.
+- **R2-Q05 Failure isolation.** Earlier integration scenario checks a poisoned event cannot permanently block a subsequently published healthy event.
+
+### Qualification matrix
+
+| Evidence | Expected | Verified in this update |
+|---|---|---|
+| Outbox migration / publisher atomicity | Commit-or-rollback | Code and tests inspected only |
+| 2 workers / 1 event | 1 logical run, 1 published task | Test added, execution pending |
+| Expired lease | Stale output rejected, token increments | Fix/test added, execution pending |
+| Poison event | 5 attempts → dead-letter, next healthy event proceeds | Test added, execution pending |
+| JUnit 5 / Maven / PostgreSQL Testcontainers | GREEN on same SHA | **NOT CONFIRMED** |
+| React CORE report E2E | Immutable qualified report | **NOT IMPLEMENTED** |
+| Financial method adapter | Qualified real calculation | **NOT IMPLEMENTED** |
+
+### Next gated actions
+
+1. Run `mvn -B -ntp -f backend/pom.xml verify` with a real PostgreSQL Testcontainers Docker daemon; capture Surefire reports and failing logs.
+2. Confirm `FIN CI / backend-verification`, `verify`, `desktop-macos`, `acceptance-gate` all `success` on the same SHA; record actual URLs.
+3. Fix every failing test on that SHA (new SHA requires new complete green).
+4. Perform independent S2 review of concurrency/DB isolation and source trust; consider worker heartbeats/timeouts for any adapter running near the fixed 60-second lease.
+5. **Only then** connect FIN-01/FIN-04 first qualified economic variants using the existing `AutoIndicatorEngine` / `TrustedAutoReportService` without duplicating formulas, and build a CORE report snapshot.
+
+Until those gates, `FIN_EXECUTION_ENABLED=false` outside isolated local qualification and **release HOLD**.
