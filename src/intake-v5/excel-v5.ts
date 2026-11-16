@@ -2,7 +2,8 @@ import ExcelJS from "exceljs";
 import { enforceZipBudget } from "../adapters/zip-budget";
 import {
   FORMAT_VERSION, FORM_SCHEMA_VERSION, MAX_PILOT_XLSX_BYTES, PILOT_F02_SCHEMA,
-  type ActiveLocale, type EntryContext, type EntryRow, type FormLocale, requireActiveLocale
+  type ActiveLocale, type EntryContext, type EntryRow, type FormLocale, requireActiveLocale,
+  normalizeUserDecimal
 } from "./form-schema";
 
 const MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -130,7 +131,8 @@ export async function parseF02ExcelV5(source: ArrayBuffer, expected: EntryContex
   try {
     await book.xlsx.load(new Uint8Array(source) as unknown as Parameters<typeof book.xlsx.load>[0]);
   } catch { throw new Error("XLSX_V5_DAMAGED"); }
-  if(book.worksheets.length!==3 || !book.getWorksheet("FIN_Data") ||
+  if(book.worksheets.length!==3 || book.worksheets.map(s=>s.name).join("|")!=="FIN_Data|Instructions|_FIN_Metadata" ||
+      !book.getWorksheet("FIN_Data") ||
       !book.getWorksheet("Instructions") || !book.getWorksheet("_FIN_Metadata") ||
       book.getWorksheet("_FIN_Metadata")!.state!=="veryHidden")
     throw new Error("XLSX_V5_SHEETS_CHANGED");
@@ -140,19 +142,42 @@ export async function parseF02ExcelV5(source: ArrayBuffer, expected: EntryContex
       throw new Error("XLSX_V5_FORMULAS_FORBIDDEN");
   })));
   const meta=book.getWorksheet("_FIN_Metadata")!;
+  const suppliedLocale=literal(meta.getCell(5,2)) as FormLocale;
+  requireActiveLocale(suppliedLocale);
+  const instructions=book.getWorksheet("Instructions")!;
+  if(instructions.actualRowCount!==DIRECTIONS[suppliedLocale].length ||
+     instructions.actualColumnCount>1)
+    throw new Error("XLSX_V5_INSTRUCTIONS_CHANGED");
+  for (const [index,expectedLine] of DIRECTIONS[suppliedLocale].entries())
+    if(literal(instructions.getCell(index+1,1))!==expectedLine)
+      throw new Error("XLSX_V5_INSTRUCTIONS_CHANGED: "+(index+1));
   if(meta.actualRowCount!==META_KEYS.length || meta.actualColumnCount>2)
     throw new Error("XLSX_V5_METADATA_CHANGED");
+  const expectedManifest=manifest(expected);
+  // Locale is a display-coordinate, not project/data identity. Accept a
+  // published workbook in ru/kk/en regardless of the currently selected UI.
+  expectedManifest[4]=suppliedLocale;
   for(const [index,key] of META_KEYS.entries()) {
     if(literal(meta.getCell(index+1,1))!==key ||
-        literal(meta.getCell(index+1,2))!==manifest(expected)[index])
+        literal(meta.getCell(index+1,2))!==expectedManifest[index])
       throw new Error("XLSX_V5_CONTEXT_MISMATCH: "+key);
   }
   const sheet=book.getWorksheet("FIN_Data")!;
+  // actualRowCount counts populated rows, not the largest row index.
+  // A relocated row at row 900 must not bypass the five-row budget.
+  sheet.eachRow(row=>{
+    if(row.number>PILOT_F02_SCHEMA.fields.length+2)
+      throw new Error("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
+    row.eachCell({includeEmpty:false},cell=>{
+      if(cell.col>8)throw new Error("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
+    });
+  });
   if(sheet.actualColumnCount>8 || sheet.actualRowCount>PILOT_F02_SCHEMA.fields.length+2)
     throw new Error("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
+  const issuedContext={...expected,locale:suppliedLocale};
   for(let i=1;i<=8;i++) {
-    if(literal(sheet.getCell(1,i))!==passport(expected)[i-1] ||
-        literal(sheet.getCell(2,i))!==HEADERS[expected.locale][i-1])
+    if(literal(sheet.getCell(1,i))!==passport(issuedContext)[i-1] ||
+        literal(sheet.getCell(2,i))!==HEADERS[suppliedLocale][i-1])
       throw new Error("XLSX_V5_VISIBLE_HEADER_CHANGED: "+i);
   }
   const rows: EntryRow[]=[];
@@ -160,13 +185,21 @@ export async function parseF02ExcelV5(source: ArrayBuffer, expected: EntryContex
     const y=index+3;
     if(literal(sheet.getCell(y,1))!==field.rowId ||
        literal(sheet.getCell(y,2))!==field.code ||
-       literal(sheet.getCell(y,3))!==field.labels[expected.locale] ||
+       literal(sheet.getCell(y,3))!==field.labels[suppliedLocale] ||
        literal(sheet.getCell(y,5))!==expected.reportCurrency ||
        literal(sheet.getCell(y,6))!=="" ||
        literal(sheet.getCell(y,7))!==expected.periodCode ||
        literal(sheet.getCell(y,8))!=="")
       throw new Error("XLSX_V5_ROW_CONTEXT_CHANGED: "+y);
-    rows.push({rowId:field.rowId,fieldCode:field.code,rawValue:literal(sheet.getCell(y,4))});
+    const raw=literal(sheet.getCell(y,4));
+    // Value semantics belong to the source template's locale, not to the
+    // language subsequently chosen to inspect the preview.
+    let rawValue=raw;
+    if(raw.trim()) {
+      try {rawValue=normalizeUserDecimal(raw,suppliedLocale);}
+      catch { /* Keep invalid raw text for the shared validator/preview. */ }
+    }
+    rows.push({rowId:field.rowId,fieldCode:field.code,rawValue});
   }
   return rows;
 }
