@@ -185,8 +185,16 @@ public final class ReviewedSkuIntakeService {
 
     private Document parse(byte[] raw) {
         final JsonNode root;
-        try { root=json.readTree(raw); }
-        catch(Exception e){throw new IllegalArgumentException("SKU_INVALID_JSON_DOCUMENT",e);}
+        // Reject duplicate JSON property names, rather than silently accepting
+        // last-write-wins event kinds, SKU IDs, dates or amount values.
+        try(var parser=json.getFactory().createParser(raw)) {
+            parser.enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+            root=json.readTree(parser);
+            if(parser.nextToken()!=null)
+                throw new IllegalArgumentException("SKU_TRAILING_JSON_CONTENT");
+        } catch(Exception e) {
+            throw new IllegalArgumentException("SKU_INVALID_JSON_DOCUMENT",e);
+        }
         if(root==null || !root.isObject() || !keys(root,FILE_KEYS))
             throw new IllegalArgumentException("SKU_INVALID_DOCUMENT_SHAPE");
         final YearMonth period;
@@ -222,7 +230,8 @@ public final class ReviewedSkuIntakeService {
             try {
                 date=LocalDate.parse(requiredText(entry,"saleDate"));
                 String rawAmount=requiredText(entry,"grossAmount");
-                if(!rawAmount.matches("(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,12})?"))
+                if(rawAmount.length()>52 ||
+                        !rawAmount.matches("(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,12})?"))
                     throw new IllegalArgumentException("SKU_AMOUNT_FORMAT_INVALID");
                 amount=new BigDecimal(rawAmount);
             }catch(Exception e){
