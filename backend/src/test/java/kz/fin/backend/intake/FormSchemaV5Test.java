@@ -34,6 +34,21 @@ class FormSchemaV5Test {
         assertFalse(FormSchemaV5.normalizeF02(List.of(rows.getFirst(),rows.getFirst())).valid());
         assertThrows(IllegalArgumentException.class,()->FormSchemaV5.canonicalDecimal("1,000.00"));
     }
+    @Test void commaDecimalAgreementIsExplicitlySourceLocaleBound(){
+        assertEquals("1.25",FormSchemaV5.canonicalUserDecimal("1,25","ru"));
+        assertEquals("1.25",FormSchemaV5.canonicalUserDecimal("1,25","kk"));
+        assertThrows(IllegalArgumentException.class,()->FormSchemaV5.canonicalUserDecimal("1,25","en"));
+        assertThrows(IllegalArgumentException.class,()->FormSchemaV5.canonicalUserDecimal("1 000,25","ru"));
+        var rows=List.of(
+          new FormSchemaV5.Input("pnl","netRevenue","400,50"),
+          new FormSchemaV5.Input("pnl","cogs","260,25"),
+          new FormSchemaV5.Input("pnl","operatingExpenses","90"));
+        var result=FormSchemaV5.normalizeF02(rows,"ru");
+        assertTrue(result.valid(),result.errors().toString());
+        assertEquals(List.of("400.5","260.25","90"),result.cells().stream()
+            .map(FormSchemaV5.Input::decimalText).toList());
+        assertFalse(FormSchemaV5.normalizeF02(rows,"en").valid());
+    }
     @Test void allTimeGranularitiesWithISOLeapYearAndYearRollover(){
         var week=ReportingPeriodV5.resolve(ReportingPeriodV5.Type.WEEK,"2026-W01",
             ReportingPeriodV5.Coverage.PERIOD_ONLY);
