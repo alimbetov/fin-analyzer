@@ -113,6 +113,10 @@ FIN_Data row 2 сохраняет **три локализованных заго
 
 ### 7.2. Единый серверный PreviewSnapshot
 
+**Компонент:** `FormPreviewTable` — самостоятельный read-only React-компонент. **Источник данных:** `PreviewSnapshot` от общего нормализатора/валидатора. Никаких отдельных JSX-таблиц для ручного и Excel ввода; разница только в provenance и координатах ошибки.
+
+
+
 После server parse/validation ручного ввода или XLSX всегда **PREVIEW**, а не сразу SAVED/APPROVED. Статусы PARSED, VALIDATION_FAILED, PREVIEW_READY, SAVED_DRAFT; отдельно позже REVIEWED/PUBLISHED. Preview read-only и server-authoritative: идентификатор preview, hash нормализованных строк и контекста, version form/schema/layout, project, period/coverage, currency+scale, source type, errors and warnings.
 
 Паспорт на экране: «Проект · Форма/версия · Период/границы · Тип периода · Валюта учёта · Валюта отчёта · Масштаб · Загружено из Excel / введено вручную». Над таблицей — counts total/populated/missing/errors/warnings. Названия и коды в одном месте, не скрывать исходную экономическую единицу. Локализация Preview использует одни labels со схемой; переключение языка не меняет raw input/hash.
