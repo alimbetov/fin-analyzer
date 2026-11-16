@@ -54,7 +54,7 @@ describe("R6.1 specialized schema proposals: 32 real code-contract validations",
       expect(draft.methodologyApproved).toBe(false);
       expect(draft.publishable).toBe(false);
       for(const field of form.fields)
-        expect(draft.rows[0]?.cells[field.code]).toBe(normalizeTypedValue(field.type,fixture(field.type),"ru"));
+        expect(draft.rows[0]?.cells[field.code]).toBe(normalizeTypedValue(field.type,candidateRow(form).cells[field.code]!,"ru"));
     });
   it.each(SPECIALIZED_CANDIDATES)(
     "$code — unknown source field, duplicate row and missing rows are rejected",
