@@ -347,12 +347,11 @@ class ReviewedSkuSingleExecutorIntegrationTest {
 
     @Test void crossSkuReturnIsNotAllowedEvenIfOverallNetWouldReconcile(){
         Fixture f=publishedF02();
-        Source s=source(f,4,"1000",false);
+        Source s=source(f,3,"1000",false);
         line(s,"sale-a","A","SALE",null,"500");
         line(s,"sale-b","B","SALE",null,"600");
         line(s,"return-a-on-b","A","RETURN","sale-b","100");
-        line(s,"sale-c","C","SALE",null,"0.000000000001");
-        // The sum is non-1000, and the return points to another SKU.
+        // Total exactly matches F02; approval must reject wrong SKU lineage.
         assertThrows(DataAccessException.class,
                 ()->review(s,"independent-sku-reviewer"));
     }
