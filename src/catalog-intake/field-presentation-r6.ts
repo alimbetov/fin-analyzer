@@ -5,7 +5,8 @@ import type {CatalogField} from "./catalog-schema";
  * Human-readable financial terms need independent professional review.
  * Never translate field codes algorithmically or label proposed text APPROVED.
  */
-export type FieldDisplayLocale="ru"|"kk"|"en"|"zh-Hans";
+export const REPORT_DISPLAY_LOCALES=["ru","kk","en","zh-Hans"] as const;
+export type FieldDisplayLocale=typeof REPORT_DISPLAY_LOCALES[number];
 export type TranslationReview="PROVISIONAL_TRANSLATION"|"TRANSLATION_NOT_READY";
 export interface FieldPresentation {
   readonly fieldCode:string;readonly label:string;readonly unit:string;
