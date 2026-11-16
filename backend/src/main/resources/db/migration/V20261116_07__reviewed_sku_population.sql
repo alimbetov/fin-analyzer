@@ -124,6 +124,24 @@ BEGIN
     ) THEN RAISE EXCEPTION 'SKU_FACT_SNAPSHOT_CONTEXT_MISMATCH'; END IF;
     IF NEW.decision='REJECTED' THEN RETURN NEW; END IF;
 
+    -- Synchronize with SingleExecutor.planOne(): it locks the same immutable
+    -- FACT_SET_PUBLISHED outbox row FOR UPDATE SKIP LOCKED.
+    -- This prevents a concurrent approval from being silently omitted in the DAG.
+    PERFORM 1 FROM fin_exec.fact_publication_outbox event
+     WHERE event.organization_id=p.organization_id
+       AND event.fact_set_revision_id=p.fact_set_revision_id
+       AND event.event_type='FACT_SET_PUBLISHED'
+     FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'SKU_PUBLICATION_EVENT_NOT_FOUND'; END IF;
+    IF EXISTS (
+       SELECT 1 FROM fin_exec.outbox_delivery delivery
+       JOIN fin_exec.fact_publication_outbox event
+          ON event.event_id=delivery.event_id
+       WHERE event.organization_id=p.organization_id
+         AND event.fact_set_revision_id=p.fact_set_revision_id
+         AND event.event_type='FACT_SET_PUBLISHED'
+    ) THEN RAISE EXCEPTION 'SKU_REVIEW_TOO_LATE_NEW_FACT_REVISION_REQUIRED'; END IF;
+
     SELECT count(*),
            COALESCE(sum(CASE WHEN event_kind='SALE'
                     THEN gross_amount ELSE -gross_amount END),0)
