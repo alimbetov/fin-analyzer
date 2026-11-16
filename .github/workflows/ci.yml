@@ -133,6 +133,7 @@ jobs:
             kz.fin.backend.execution.QualifiedCurrentRatioIntegrationTest \
             kz.fin.backend.execution.QualifiedCurrentRatioFeatureGateTest \
             kz.fin.backend.analytics.ConcentrationAnalysisEngineTest \
+            kz.fin.backend.analytics.OperatingFinanceMethodEngineTest \
             kz.fin.backend.execution.ReviewedSkuSingleExecutorIntegrationTest \
             kz.fin.backend.execution.QualifiedSkuConcentrationFeatureGateTest \
             kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest \
@@ -176,6 +177,7 @@ jobs:
               "kz.fin.backend.execution.QualifiedCurrentRatioIntegrationTest",
               "kz.fin.backend.execution.QualifiedCurrentRatioFeatureGateTest",
               "kz.fin.backend.analytics.ConcentrationAnalysisEngineTest",
+              "kz.fin.backend.analytics.OperatingFinanceMethodEngineTest",
               "kz.fin.backend.execution.ReviewedSkuSingleExecutorIntegrationTest",
               "kz.fin.backend.execution.QualifiedSkuConcentrationFeatureGateTest",
               "kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest",
