@@ -118,6 +118,14 @@ export async function parseBalanceTemplate(input: ArrayBuffer, expectedCompany: 
       || readLiteral(sheet.getCell("B3").value) !== "тыс. ₸") {
     throw new Error("Видимые реквизиты компании или единицы измерения не соответствуют шаблону FIN");
   }
+  // actualRowCount counts filled rows, not the greatest row index.
+  // Reject extra data even if a user placed it at row 900.
+  sheet.eachRow(row => {
+    if (row.number > 10) throw new Error("Неожиданные строки в Balance");
+    row.eachCell({ includeEmpty: false }, (_cell, col) => {
+      if (col > 4) throw new Error("Неожиданные столбцы в Balance");
+    });
+  });
   if (sheet.actualColumnCount > 4) {
     throw new Error("Неожиданные столбцы в Balance");
   }
