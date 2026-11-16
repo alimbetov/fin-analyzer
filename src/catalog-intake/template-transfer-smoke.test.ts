@@ -1,5 +1,6 @@
 import {afterAll,describe,expect,it} from "vitest";
 import ExcelJS from "exceljs";
+import extensionSheetsText from "../../backend/src/main/resources/fin/form-extension-sheets-v2.tsv?raw";
 import {mkdirSync,writeFileSync} from "node:fs";
 import {
   CAPTURE_CATALOG,type CatalogCaptureContext
@@ -11,6 +12,8 @@ import {
 } from "./template-transfer-smoke";
 
 const forms=EDITABLE_CATALOG.map(f=>f.code);
+const extensionSheetCodes=extensionSheetsText.trimEnd().split(/\r?\n/)
+  .slice(1).map(row=>row.split("\t")[0]!);
 const proof:Record<string,{checkedFields:number;variants:string[]}>={};
 const base:CatalogCaptureContext={
   formCode:"DF-AST-01",projectCode:"SMOKE_2026",locale:"ru",
@@ -89,6 +92,20 @@ describe("FIN R7 exhaustive XLSX structural transfer: all 166 classified, 154 ed
     await expect(parseTypedCatalogExcel(await save(book),context))
       .rejects.toThrow(/CATALOG_XLSX_META_CHANGED/);
   },30000);
+
+  it("30 extension sheets are registered supporting sheets, not invented standalone templates",()=>{
+    expect(extensionSheetCodes).toHaveLength(30);
+    expect(new Set(extensionSheetCodes).size).toBe(30);
+    expect(extensionSheetCodes.some(code=>forms.includes(code))).toBe(false);
+  });
+
+  it.each(extensionSheetCodes)(
+    "%s — EX sheet has no independent XLSX upload contract until separately qualified",
+    async formCode=>{
+      await expect(generateTypedCatalogExcel({...base,formCode}))
+        .rejects.toThrow("CATALOG_UNKNOWN_FORM");
+    }
+  );
 
   it.each(CAPTURE_CATALOG.filter(x=>x.captureMode==="EVIDENCE_ONLY").map(x=>x.code))(
     "%s — document/tax evidence has no fabricated numeric XLSX template",
