@@ -45,6 +45,15 @@ public class TrustedFinancialPopulationService {
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public VerifiedPopulation requireComplete(UUID authorizedOrg,UUID publishedFactSet,
                                                List<RequiredGroup> requirements) {
+        return verify(authorizedOrg,publishedFactSet,requirements,false);
+    }
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public VerifiedPopulation requireReviewedActual(UUID authorizedOrg,UUID publishedFactSet,
+                                                     List<RequiredGroup> requirements){
+        return verify(authorizedOrg,publishedFactSet,requirements,true);
+    }
+    private VerifiedPopulation verify(UUID authorizedOrg,UUID publishedFactSet,
+                                      List<RequiredGroup> requirements,boolean reviewedActual) {
         Objects.requireNonNull(authorizedOrg);Objects.requireNonNull(publishedFactSet);
         requirements=List.copyOf(Objects.requireNonNull(requirements));
         if(requirements.isEmpty() || new HashSet<>(requirements).size()!=requirements.size())
@@ -54,10 +63,35 @@ public class TrustedFinancialPopulationService {
              WHERE organization_id=? AND fact_set_revision_id=?
             """,(rs,i)->rs.getString(1),authorizedOrg,publishedFactSet);
         if(spaces.size()!=1) throw new IllegalArgumentException("POPULATION_FACTSET_NOT_PUBLISHED_OR_FOREIGN");
-        if(!spaces.getFirst().equals("SYNTHETIC"))
+        if(reviewedActual? !spaces.getFirst().equals("ACTUAL")
+                : !spaces.getFirst().equals("SYNTHETIC"))
             throw new IllegalArgumentException("ACTUAL_FINANCIAL_MAPPER_NOT_AUTHORIZED");
         List<MappedFact> all=new ArrayList<>();
         for(RequiredGroup required:requirements){
+            if(reviewedActual){
+                Long trusted=jdbc.queryForObject("""
+                    SELECT count(*) FROM fin_intake.submission s
+                    JOIN fin_intake.review r ON r.organization_id=s.organization_id
+                       AND r.submission_id=s.id AND r.decision='APPROVED'
+                    JOIN fin_fact.approved_source_revision sr
+                       ON sr.organization_id=s.organization_id AND sr.source_revision_id=s.id
+                       AND sr.form_code=s.form_code AND sr.form_version=s.form_version
+                    JOIN fin_fact.approved_source_intake i
+                       ON i.organization_id=s.organization_id AND i.source_revision_id=s.id
+                       AND i.normalized_cell_fingerprint=s.normalized_fingerprint
+                       AND i.source_document_hash=s.source_document_sha
+                       AND i.expected_cell_count=s.expected_cell_count
+                       AND i.reviewed_by=r.reviewed_by
+                    JOIN fin_fact.source_population_control c
+                       ON c.organization_id=s.organization_id AND c.source_revision_id=s.id
+                       AND c.metric_code=? AND c.time_start=? AND c.time_end=?
+                       AND c.source_document_hash=s.source_document_sha
+                    WHERE s.organization_id=? AND s.id=? AND s.submitted_by<>r.reviewed_by
+                    """,Long.class,required.metricCode(),required.start(),required.end(),
+                        authorizedOrg,required.sourceRevisionId());
+                if(trusted==null || trusted!=1)
+                    throw new IllegalArgumentException("ACTUAL_SOURCE_REVIEW_OR_DIGEST_MISSING");
+            }
             List<Control> controls=jdbc.query("""
                 SELECT expected_rows,expected_total FROM fin_fact.source_population_control
                 WHERE organization_id=? AND source_revision_id=? AND metric_code=?
