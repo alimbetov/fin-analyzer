@@ -125,6 +125,12 @@ jobs:
           java-version: "21"
           cache: maven
           cache-dependency-path: backend/pom.xml
+      - name: Provision offline PDF renderer fonts (Latin, Kazakh, Simplified Chinese)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends fonts-dejavu-core fonts-arphic-gbsn00lp
+          test -r /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+          test -r /usr/share/fonts/truetype/arphic-gbsn00lp/gbsn00lp.ttf
       - name: JUnit 5 and PostgreSQL Testcontainers (real Docker)
         run: mvn -B -ntp -f backend/pom.xml verify
       - name: Require 166 real Java XLSX PostgreSQL and revision case proofs
