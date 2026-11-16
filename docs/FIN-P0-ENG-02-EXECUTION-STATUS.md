@@ -11,7 +11,8 @@
 4. `PublishedFactIntegrityAdapter`: one real, **internal non-financial** `SYS/VERIFY_PUBLISHED_FACT_SET` task, validating trusted publication hash and approved facts. It is not one of the 60 economic methodologies.
 5. `SingleExecutorScheduler`: atomic event-to-DAG plan, unknown dependency/cycle rejection at startup, task leasing `FOR UPDATE SKIP LOCKED`, retry/backoff, fencing token guard, TTL recovery of expired worker leases, dependent task blocking on failed prerequisites, run completion tracking.
 6. `ExecutionSchedulingConfiguration` and `application.yml`: opt-in `FIN_EXECUTION_ENABLED=false` by default; scheduled tick every 10 seconds when enabled.
-7. JUnit tests: integration scenarios in `FactPublicationIntegrationTest` for outbox transaction rollback, immutable event, unique logical task execution, expired lease reclaim; `SingleExecutorGraphTest` for unknown/cyclic dependency and duplicate adapters; `ExecutionContractsTest` for independent CORE/ML readiness.
+7. `V20261116_03__outbox_plan_retry.sql`: durable planning retry / dead-letter ledger so a failing event cannot permanently block the next event.
+8. JUnit tests: integration scenarios in `FactPublicationIntegrationTest` for outbox transaction rollback, immutable event, unique logical task execution, expired lease reclaim and poison-event isolation; `SingleExecutorGraphTest` for unknown/cyclic dependency and duplicate adapters; `ExecutionContractsTest` for independent CORE/ML readiness.
 
 ### Runtime flow
 
@@ -25,7 +26,7 @@ Worker adapter runs **outside the database transaction**, and its result is publ
 - No automatic execution of 60 actual financial methodologies. Only the internal fact-integrity adapter is auto-enabled.
 - Full `AnalysisProfile` selection, versioned methodology qualification, signed report snapshot and `CORE/CORE_WITH_ML` UI are not integrated into this scheduler.
 - No public API for start/preview/status/cancel, ABAC on report reads, scheduler metrics, or exact resource/cost quotas.
-- Outbox planning **poison event policy** is not yet persisted: a failing planner may repeatedly retry the same head event. Implement dedicated retry/dead-letter tracking before production.
+- Persisted planning retry ledger and dead-letter after five attempts are implemented via `V20261116_03__outbox_plan_retry.sql` and `SingleExecutorScheduler`. Still require executed concurrency tests, monitoring/alerting and retry operations before production.
 - Adapter executions longer than the 60-second lease can be re-executed. Fencing prevents stale publication but **heartbeat, timeouts and cancellation** remain mandatory before adding CPU-heavy methods or ML.
 - Idempotency across manual user-initiated report requests is not implemented; current dedup is by immutable event ID.
 - There is not yet a tenant-facing ML flow. All ML/Monte Carlo execution remains opt-in and blocked.
