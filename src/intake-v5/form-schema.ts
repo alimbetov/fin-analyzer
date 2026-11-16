@@ -101,6 +101,14 @@ export function normalizeDecimal(value: string): string {
   return sign + clean + (decimals ? "." + decimals : "");
 }
 
+/** A comma decimal separator is accepted only in RU/KK and never as a thousands separator. */
+export function normalizeUserDecimal(value:string,locale:ActiveLocale):string {
+  const trimmed=value.trim();
+  if ((locale==="ru" || locale==="kk") && /^-?[0-9]{1,26},[0-9]{1,12}$/.test(trimmed))
+    return normalizeDecimal(trimmed.replace(",","."));
+  return normalizeDecimal(trimmed);
+}
+
 export function validateF02(context: EntryContext, rows: readonly EntryRow[]): ValidatedEntry {
   const findings: EntryFinding[] = [];
   if (!/^[\p{L}\p{N}_-]{1,50}$/u.test(context.projectCode))
@@ -124,7 +132,7 @@ export function validateF02(context: EntryContext, rows: readonly EntryRow[]): V
       return { rowId: field.rowId, fieldCode: field.code, rawValue: "" };
     }
     try {
-      return { rowId: field.rowId, fieldCode: field.code, rawValue: normalizeDecimal(raw) };
+      return { rowId: field.rowId, fieldCode: field.code, rawValue: normalizeUserDecimal(raw,context.locale) };
     } catch {
       findings.push({ code: "INVALID_DECIMAL", fieldCode: field.code });
       return { rowId: field.rowId, fieldCode: field.code, rawValue: raw };
