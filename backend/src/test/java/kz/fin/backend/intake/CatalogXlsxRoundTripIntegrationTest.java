@@ -329,6 +329,9 @@ class CatalogXlsxRoundTripIntegrationTest {
                     assertEquals(confirmed.normalizedFingerprint(),
                             snapshot.normalizedFingerprint());
                     assertEquals(context.locale(), snapshot.sourceInputLocale());
+                    assertEquals(context.entityId(), snapshot.economicEntityId());
+                    assertEquals(context.businessScopeId(), snapshot.businessScopeId());
+                    assertEquals(context.projectCode(), snapshot.projectCode());
                     assertEquals(context.currency(), snapshot.currency());
                     assertEquals(context.amountScale(), snapshot.amountScale());
                     assertEquals(parsed.rows().size(), snapshot.rows().size());

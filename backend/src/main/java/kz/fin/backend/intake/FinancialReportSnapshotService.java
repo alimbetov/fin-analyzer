@@ -64,7 +64,9 @@ public class FinancialReportSnapshotService {
         }
     }
 
-    public record Snapshot(UUID organizationId, UUID projectId, String formCode,
+    public record Snapshot(UUID organizationId, UUID projectId,
+                           UUID economicEntityId, UUID businessScopeId,
+                           String projectCode, String formCode,
                            String captureMode, String reportingBasis,
                            ReportingPeriodV5.Type periodType, String periodCode,
                            ReportingPeriodV5.Coverage coverage,
@@ -204,6 +206,7 @@ public class FinancialReportSnapshotService {
         if (!stored.revisionFingerprint().equals(verified))
             throw new IllegalStateException("FIN_EXPORT_NORMALIZED_FINGERPRINT_MISMATCH");
         return new Snapshot(query.organizationId(), query.projectId(),
+                stored.entityId(), stored.scopeId(), stored.projectCode(),
                 stored.formCode(), stored.captureMode(), stored.basis(),
                 source.periodType(), stored.period(), source.coverage(),
                 stored.currency(), stored.scale(), source.locale(),
