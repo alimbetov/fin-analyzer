@@ -172,6 +172,16 @@ class ReviewedSkuSingleExecutorIntegrationTest {
                 ()->review(s,"sku-source-author")); // four-eyes
         review(s,"independent-sku-reviewer");
         assertTrue(loader.load(revision(f)).isPresent());
+        assertThrows(DataAccessException.class,
+                ()->line(s,"sale-new","NEW","SALE",null,"10"));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_con.sku_sales_line SET gross_amount=999
+            WHERE population_id=? AND source_line_ref='sale-a'
+            """,s.id()));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_con.sku_population_review SET reviewed_by='forged'
+            WHERE population_id=?
+            """,s.id()));
         assertTrue(loader.load(new MethodTaskAdapter.TrustedRevision(
                 UUID.randomUUID(),f.entity(),f.scope(),f.revision(),
                 f.snapshotHash(),"ACTUAL")).isEmpty());
@@ -319,6 +329,32 @@ class ReviewedSkuSingleExecutorIntegrationTest {
                 new BigDecimal(p.path("rows").get(4).path("netSales").asText())));
         var a=result(f,QualifiedSkuAbcAdapter.CODE);
         assertEquals("C",a.path("rows").get(4).path("abcClass").asText());
+    }
+
+    @Test void internallyReconciledSkuTotalMustStillMatchIndependentReviewedF02(){
+        Fixture f=publishedF02();
+        Source s=source(f,5,"990",false);
+        line(s,"sale-a","A","SALE",null,"500");
+        line(s,"sale-b","B","SALE",null,"300");
+        line(s,"sale-c","C","SALE",null,"200");
+        line(s,"return-c","C","RETURN","sale-c","50");
+        line(s,"sale-d","D","SALE",null,"40");
+        // Internal SKU total is correctly 990; reviewed F02 is 1000.
+        assertThrows(DataAccessException.class,
+                ()->review(s,"independent-sku-reviewer"));
+        assertTrue(loader.load(revision(f)).isEmpty());
+    }
+
+    @Test void crossSkuReturnIsNotAllowedEvenIfOverallNetWouldReconcile(){
+        Fixture f=publishedF02();
+        Source s=source(f,4,"1000",false);
+        line(s,"sale-a","A","SALE",null,"500");
+        line(s,"sale-b","B","SALE",null,"600");
+        line(s,"return-a-on-b","A","RETURN","sale-b","100");
+        line(s,"sale-c","C","SALE",null,"0.000000000001");
+        // The sum is non-1000, and the return points to another SKU.
+        assertThrows(DataAccessException.class,
+                ()->review(s,"independent-sku-reviewer"));
     }
 
     @Test void mismatchedDeclaredRevenueAndPublishedSnapshotCannotBeApproved(){
