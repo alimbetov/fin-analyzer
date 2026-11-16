@@ -6,12 +6,14 @@ import {
 } from "./catalog-schema";
 import {generateTypedCatalogExcel,parseTypedCatalogExcel} from "./catalog-excel";
 import {formatExactDecimal} from "../intake-v5/form-schema";
+import {SPECIALIZED_CANDIDATES,validateSpecializedCandidate} from "./specialized-contracts";
+import {fieldPresentation} from "./field-presentation-r6";
 import type {PeriodType,ValueCoverage} from "../intake-v5/reporting-period";
 
 const LOCALIZED={
   ru:{
     title:"Каталог финансовых форм — типизированный ввод",
-    subtitle:"166 кодов в реестре · 122 типизированных черновика · 44 требуют отдельного контракта",
+    subtitle:"166 кодов · 122 типизированных и 32 специализированных черновика · 12 документных источников",
     form:"Форма",project:"Код проекта (локальный)",locale:"Язык шаблона",
     periodType:"Тип периода",period:"Период",coverage:"Характер накопления",
     currency:"Валюта",scale:"Масштаб",download:"Скачать Excel",
@@ -27,7 +29,7 @@ const LOCALIZED={
   },
   kk:{
     title:"Қаржылық нысандар каталогы — типтелген енгізу",
-    subtitle:"Тізілімде 166 код · 122 типтелген нобай · 44 бөлек келісімшартты талап етеді",
+    subtitle:"166 код · 122 типтелген және 32 арнайы нобай · 12 құжаттық дереккөз",
     form:"Нысан",project:"Жоба коды (жергілікті)",locale:"Үлгі тілі",
     periodType:"Кезең түрі",period:"Кезең",coverage:"Жинақтау сипаты",
     currency:"Валюта",scale:"Масштаб",download:"Excel жүктеп алу",
@@ -43,7 +45,7 @@ const LOCALIZED={
   },
   en:{
     title:"Financial forms catalog — typed data entry",
-    subtitle:"166 catalog codes · 122 typed draft contracts · 44 require a separate contract",
+    subtitle:"166 codes · 122 typed plus 32 specialized draft candidates · 12 document evidence sources",
     form:"Form",project:"Project code (local)",locale:"Template language",
     periodType:"Period type",period:"Period",coverage:"Value coverage",
     currency:"Currency",scale:"Scale",download:"Download Excel",
@@ -92,8 +94,10 @@ export function CatalogIntakeStudio(){
   const [busy,setBusy]=useState(false);
   const generation=useRef(0);
   const form=getCaptureForm(context.formCode);
+  const candidate=SPECIALIZED_CANDIDATES.find(f=>f.code===form.code);
+  const fields=candidate?.fields??form.fields;
   const labels=LOCALIZED[context.locale];
-  const typed=form.captureMode==="TYPED_DRAFT";
+  const typed=form.captureMode==="TYPED_DRAFT"||!!candidate;
   function resetPreview(){generation.current++;setPreview(null);setError("");setMessage("");}
   function changeContext(partial:Partial<CatalogCaptureContext>){
     resetPreview();
@@ -137,7 +141,14 @@ export function CatalogIntakeStudio(){
   }
   function validateManual(){
     setError("");setMessage("");
-    try{setPreview(validateCatalogCapture(context,rows));setPreviewSource("MANUAL");}
+    try{
+      const found=candidate?validateSpecializedCandidate(form.code,rows,context.locale):null;
+      setPreview(found?{
+        status:"UNQUALIFIED_DRAFT",publishable:false,context,
+        rows:found.rows,findings:found.findings,valid:found.acceptedAsUnqualifiedDraft
+      }:validateCatalogCapture(context,rows));
+      setPreviewSource("MANUAL");
+    }
     catch(e){setError(e instanceof Error?e.message:"CATALOG_PREVIEW_FAILED");}
   }
   function saveDraft(){
@@ -166,7 +177,7 @@ export function CatalogIntakeStudio(){
         <select aria-label={labels.form} value={context.formCode}
           onChange={e=>changeContext({formCode:e.target.value})}>
           {CAPTURE_CATALOG.map(item=><option key={item.code} value={item.code}>
-            {item.code} · {item.captureMode==="TYPED_DRAFT"?"TYPED":item.captureMode}
+            {item.code} · {item.captureMode==="TYPED_DRAFT"?"TYPED":SPECIALIZED_CANDIDATES.some(s=>s.code===item.code)?"SPECIALIZED_CANDIDATE":item.captureMode}
           </option>)}
         </select>
       </label>
@@ -221,8 +232,8 @@ export function CatalogIntakeStudio(){
           <caption>{form.code} · {labels.field} / {labels.type}</caption>
           <thead><tr>
             <th scope="col">{labels.row}</th>
-            {form.fields.map(field=><th key={field.code} scope="col">
-              <span>{field.code}</span><small>{field.type}</small>
+            {fields.map(field=><th key={field.code} scope="col">
+              <span>{fieldPresentation(form.code,field,context.locale).label}</span><small>{field.type} · {field.code}</small>
             </th>)}
             <th scope="col">{labels.status}</th>
           </tr></thead>
@@ -231,7 +242,7 @@ export function CatalogIntakeStudio(){
               <input aria-label={labels.row+" "+(i+1)} value={row.rowId}
                 onChange={e=>changeRow(i,{...row,rowId:e.target.value})}/>
             </th>
-            {form.fields.map(field=><td key={field.code}
+            {fields.map(field=><td key={field.code}
               className={["MONEY","DECIMAL","INTEGER"].includes(field.type)?"fin-catalog-number":"fin-catalog-text"}>
               <input aria-label={row.rowId+" "+field.code} value={row.cells[field.code]??""}
                 onChange={e=>changeRow(i,{...row,cells:{...row.cells,[field.code]:e.target.value}})}
@@ -262,12 +273,12 @@ export function CatalogIntakeStudio(){
       <p>{labels.source}: {previewSource} · {preview.findings.length} {labels.error.toLowerCase()}</p>
       <div className="fin-catalog-table-wrap"><table className="fin-catalog-table">
         <thead><tr><th>{labels.row}</th>
-          {getCaptureForm(preview.context.formCode).fields.map(f=><th key={f.code}>{f.code}</th>)}
+          {(SPECIALIZED_CANDIDATES.find(s=>s.code===preview.context.formCode)?.fields??getCaptureForm(preview.context.formCode).fields).map(f=><th key={f.code}>{fieldPresentation(preview.context.formCode,f,context.locale).label}</th>)}
           <th>{labels.status}</th>
         </tr></thead>
         <tbody>{preview.rows.map((row,i)=><tr key={i}>
           <td className="fin-catalog-text">{row.rowId}</td>
-          {getCaptureForm(preview.context.formCode).fields.map(field=><td
+          {(SPECIALIZED_CANDIDATES.find(s=>s.code===preview.context.formCode)?.fields??getCaptureForm(preview.context.formCode).fields).map(field=><td
             key={field.code}
             className={["MONEY","DECIMAL","INTEGER"].includes(field.type)?"fin-catalog-number":"fin-catalog-text"}>
             {formatDisplay(row.cells[field.code]??"",field.type,context.locale)}
