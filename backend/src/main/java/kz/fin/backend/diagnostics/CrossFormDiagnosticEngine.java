@@ -118,10 +118,27 @@ public final class CrossFormDiagnosticEngine {
     }
 
     public static Report evaluate(Scope scope,Collection<Evidence> evidences) {
+        return evaluateInternally(scope,evidences,false);
+    }
+    /**
+     * Unqualified, read-only arithmetic for independently reviewed ACTUAL
+     * evidence. Call only from guarded server orchestration and label every
+     * output PROVISIONAL; financial method S2 remains HOLD.
+     */
+    public static Report evaluateProvisionalActual(Scope scope,Collection<Evidence> evidences){
+        if(scope==null || scope.dataSpace()!=AnalysisContext.DataSpace.ACTUAL)
+            throw new IllegalArgumentException("ACTUAL_PROVISIONAL_CONTEXT_REQUIRED");
+        return evaluateInternally(scope,evidences,true);
+    }
+    private static Report evaluateInternally(Scope scope,Collection<Evidence> evidences,
+                                             boolean provisionalActual) {
         Objects.requireNonNull(scope);
         Objects.requireNonNull(evidences);
-        if(scope.dataSpace()!=AnalysisContext.DataSpace.SYNTHETIC)
+        if(provisionalActual?scope.dataSpace()!=AnalysisContext.DataSpace.ACTUAL
+                :scope.dataSpace()!=AnalysisContext.DataSpace.SYNTHETIC)
             throw new IllegalArgumentException("UNQUALIFIED_CROSS_FORM_ACTUAL");
+        String methodQualification=provisionalActual
+                ?"ACTUAL_PROVISIONAL_METHOD_S2_HOLD":"SYNTHETIC_PILOT_NOT_CAUSAL";
         Map<MetricKey,Evidence> values=new HashMap<>();
         for(Evidence evidence:evidences){
             Objects.requireNonNull(evidence);
@@ -144,7 +161,7 @@ public final class CrossFormDiagnosticEngine {
             if(!missing.isEmpty()){
                 findings.add(new Finding(rule.code(),rule.type(),Verdict.MISSING_EVIDENCE,
                         "CROSS_FORM_REQUIRES_ADDITIONAL_APPROVED_EVIDENCE",
-                        Map.of(),missing,List.of(),"SYNTHETIC_PILOT_NOT_CAUSAL"));
+                        Map.of(),missing,List.of(),methodQualification));
                 continue;
             }
             Map<String,BigDecimal> computed=new TreeMap<>();
@@ -228,9 +245,10 @@ public final class CrossFormDiagnosticEngine {
                 values.get(key).sources().forEach(source->provenance.putIfAbsent(source.factId(),source));
             findings.add(new Finding(rule.code(),rule.type(),verdict,reason,
                     computed,List.of(),List.copyOf(provenance.values()),
-                    "SYNTHETIC_PILOT_NOT_CAUSAL"));
+                    methodQualification));
         }
-        return new Report(scope,METHOD_VERSION,values,findings,"SYNTHETIC_ONLY_UNQUALIFIED");
+        return new Report(scope,METHOD_VERSION,values,findings,provisionalActual
+                ?"ACTUAL_PREVIEW_UNQUALIFIED_NO_CAUSAL_CLAIMS":"SYNTHETIC_ONLY_UNQUALIFIED");
     }
     private static BigDecimal amount(Map<MetricKey,Evidence> evidence,MetricKey key){
         return evidence.get(key).amount();
