@@ -52,6 +52,11 @@ public final class ReviewedSkuPopulationLoader {
               ON review.population_id=source.id
              AND review.organization_id=source.organization_id
              AND review.decision='APPROVED'
+            JOIN fin_con.sku_source_original original
+              ON original.population_id=source.id
+             AND original.organization_id=source.organization_id
+             AND original.sha256=source.source_document_hash
+             AND original.sha256=encode(sha256(original.original_bytes),'hex')
             JOIN fin_fact.fact_set_publication publication
               ON publication.fact_set_revision_id=source.fact_set_revision_id
              AND publication.organization_id=source.organization_id
