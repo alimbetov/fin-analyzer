@@ -19,7 +19,11 @@ function literal(value: ExcelJS.CellValue): string | null {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" && Number.isFinite(value) && value >= 0 &&
-      value <= 1e12) return String(value);
+      value <= 1e12) {
+    const text=String(value);
+    if (/e/i.test(text) || text.replace(/[^0-9]/g, "").length>15) return null;
+    return text;
+  }
   return null;
 }
 function metadata(context: SectorTemplateContext): Array<[string, string]> {
