@@ -190,6 +190,51 @@ class FormDraftRevisionV5IntegrationTest {
         assertEquals(3,ledger.uploads(scope.org,p.id(),"2026.10").size());
     }
 
+    @Test void invalidManualUploadCannotWritePreviewOrDraftOrAdvanceCurrentVersion(){
+        var scope=Scope.fresh();
+        var project=project(scope,"FIN_INVALID");
+        var successful=preview(scope,project.id(),"ru","400");
+        confirm(scope,successful,"");
+        long previewsBefore=jdbc.queryForObject("""
+          SELECT COUNT(*) FROM fin_intake.preview_v5 p
+          JOIN fin_intake.form_slot_v5 s ON s.id=p.slot_id
+          WHERE s.project_id=?
+          """,Long.class,project.id());
+        long draftsBefore=jdbc.queryForObject("""
+          SELECT COUNT(*) FROM fin_intake.draft_revision_v5 d
+          JOIN fin_intake.form_slot_v5 s ON s.id=d.slot_id
+          WHERE s.project_id=?
+          """,Long.class,project.id());
+
+        assertEquals("FIN_V5_CELLS_REQUIRED",assertThrows(IllegalArgumentException.class,
+          ()->ledger.previewManual(scope.org,project.id(),"2026.10","ru",1,
+                  null,"author")).getMessage());
+        assertThrows(IllegalArgumentException.class,
+          ()->ledger.previewManual(scope.org,project.id(),"2026.10","ru",1,
+                  f02("400","","90"),"author"));
+        assertThrows(IllegalArgumentException.class,
+          ()->ledger.previewManual(scope.org,project.id(),"2026.10","ru",1,
+                  f02("400","1e6","90"),"author"));
+        assertThrows(IllegalArgumentException.class,
+          ()->ledger.previewManual(scope.org,project.id(),null,"ru",1,
+                  f02("400","260","90"),"author"));
+        assertThrows(IllegalArgumentException.class,
+          ()->ledger.previewManual(scope.org,project.id(),"2026.10","zh-Hans",1,
+                  f02("400","260","90"),"author"));
+
+        assertEquals(previewsBefore,jdbc.queryForObject("""
+          SELECT COUNT(*) FROM fin_intake.preview_v5 p
+          JOIN fin_intake.form_slot_v5 s ON s.id=p.slot_id
+          WHERE s.project_id=?
+          """,Long.class,project.id()));
+        assertEquals(draftsBefore,jdbc.queryForObject("""
+          SELECT COUNT(*) FROM fin_intake.draft_revision_v5 d
+          JOIN fin_intake.form_slot_v5 s ON s.id=d.slot_id
+          WHERE s.project_id=?
+          """,Long.class,project.id()));
+        assertEquals(1,ledger.history(scope.org,project.id(),"2026.10").getFirst().revisionNumber());
+    }
+
     @Test void periodScaleAndSourceIdentityArePinnedAcrossRepeats(){
         var scope=Scope.fresh();var p=project(scope,"FIN_CONTEXT");
         preview(scope,p.id(),"ru","400");
