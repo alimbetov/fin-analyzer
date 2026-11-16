@@ -63,10 +63,12 @@ class CatalogXlsxRoundTripIntegrationTest {
     @Autowired CatalogXlsxRevisionService revisionService;
     @Autowired CatalogIssuedTemplateService issuedService;
     @Autowired FinancialReportSnapshotService reportSnapshotService;
+    @Autowired CatalogXlsxExportService xlsxExportService;
     @Autowired FormDraftRevisionV5Service projectService;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
     private static final Map<String, Map<String,Object>> EVIDENCE = new ConcurrentHashMap<>();
+    private static final Map<String, Map<String,Object>> X2_EXPORT_EVIDENCE = new ConcurrentHashMap<>();
 
     private static CatalogXlsxRoundTripService.Context context(String code) {
         return new CatalogXlsxRoundTripService.Context(
@@ -346,6 +348,87 @@ class CatalogXlsxRoundTripIntegrationTest {
                         assertEquals(context.locale(), selection.sourceInputLocale());
                     }
 
+                    // X2: all four report display languages must produce a
+                    // populated SERVER-issued V2 workbook from this exact
+                    // confirmed Postgres revision, with no value drift.
+                    for (String display : CatalogReportLocale.DISPLAY) {
+                        var exported = xlsxExportService.export(snapshotQuery(
+                                context, project.id(), context.amountScale(),
+                                confirmed.revisionId(), null), display);
+                        assertEquals(confirmed.revisionId(), exported.sourceRevisionId());
+                        assertEquals(confirmed.draftId(), exported.sourceDraftId());
+                        assertEquals(display, exported.displayLocale());
+                        assertEquals(context.locale(), exported.sourceInputLocale());
+                        assertEquals(context.currency(), exported.currency());
+                        assertEquals(context.amountScale(), exported.amountScale());
+                        assertEquals("CONFIRMED_UNQUALIFIED_DRAFT", exported.sourceState());
+                        assertEquals(parsed.normalizedFingerprint(),
+                                exported.normalizedFingerprint());
+                        byte[] reportBytes = exported.workbook();
+                        try (var report = new XSSFWorkbook(new ByteArrayInputStream(reportBytes))) {
+                            assertEquals(3, report.getNumberOfSheets());
+                            assertEquals(org.apache.poi.ss.usermodel.SheetVisibility.VERY_HIDDEN,
+                                    report.getSheetVisibility(2));
+                            assertEquals(context.locale(), report.getSheet("_FIN_Metadata")
+                                    .getRow(14).getCell(1).getStringCellValue());
+                            assertEquals(exported.issuedTemplateId().toString(),
+                                    report.getSheet("_FIN_Metadata").getRow(16)
+                                            .getCell(1).getStringCellValue());
+                            assertTrue(report.getSheet("Instructions").getRow(7)
+                                    .getCell(0).getStringCellValue().contains("KZT"));
+                            assertTrue(report.getSheet("Instructions").getRow(8)
+                                    .getCell(0).getStringCellValue()
+                                    .contains(confirmed.revisionId().toString()));
+                            assertTrue(report.getSheet("Instructions").getRow(10)
+                                    .getCell(0).getStringCellValue().contains(display));
+                            var data = report.getSheet("FIN_Data");
+                            assertEquals(snapshot.rows().size(), data.getLastRowNum());
+                            for (int line = 0; line < snapshot.rows().size(); line++) {
+                                var source = snapshot.rows().get(line);
+                                var outRow = data.getRow(line + 1);
+                                assertEquals(source.rowId(),
+                                        outRow.getCell(0).getStringCellValue());
+                                for (int col = 0; col < fields.size(); col++) {
+                                    var cell = outRow.getCell(col + 1);
+                                    assertEquals(org.apache.poi.ss.usermodel.CellType.STRING,
+                                            cell.getCellType());
+                                    assertEquals("@", cell.getCellStyle().getDataFormatString());
+                                    assertEquals(source.cells().get(fields.get(col).code()),
+                                            cell.getStringCellValue());
+                                }
+                            }
+                        }
+                        var reimported = issuedService.preview(context.organizationId(),
+                                project.id(), exported.issuedTemplateId(), reportBytes);
+                        assertEquals(snapshot.rows(), reimported.parsed().rows());
+                        assertEquals(snapshot.normalizedFingerprint(),
+                                reimported.parsed().normalizedFingerprint());
+                        String storedManifestSha = jdbc.queryForObject("""
+                                SELECT original_template_sha
+                                  FROM fin_intake.catalog_xlsx_issued_template
+                                 WHERE id=? AND organization_id=? AND project_id=?
+                                """, String.class, exported.issuedTemplateId(),
+                                context.organizationId(), project.id());
+                        assertEquals(exported.workbookSha256(), storedManifestSha);
+                        var exportProof = new LinkedHashMap<String, Object>();
+                        exportProof.put("formCode", definition.code());
+                        exportProof.put("displayLocale", display);
+                        exportProof.put("mode", definition.captureMode().name());
+                        exportProof.put("sourceRevisionId", confirmed.revisionId().toString());
+                        exportProof.put("rowCount", snapshot.rows().size());
+                        exportProof.put("fieldCount", fields.size());
+                        exportProof.put("testCaseId", "FIN-X2-" + definition.code() + "-" + display);
+                        exportProof.put("issuedPopulated", true);
+                        exportProof.put("strictV2Parsed", true);
+                        exportProof.put("valuesEqual", true);
+                        exportProof.put("sourceContextUnchanged", true);
+                        exportProof.put("manifestDigestVerified", true);
+                        exportProof.put("sourceStatus", "CONFIRMED_UNQUALIFIED_DRAFT");
+                        exportProof.put("artifactSha256", exported.workbookSha256());
+                        assertNull(X2_EXPORT_EVIDENCE.putIfAbsent(
+                                definition.code() + "|" + display, Map.copyOf(exportProof)));
+                    }
+
                     assertEquals("CONFIRMED_UNQUALIFIED_DRAFT",
                             revisionService.current(context.organizationId(),
                                     project.id(), confirmed.slotId()).state());
@@ -384,6 +467,34 @@ class CatalogXlsxRoundTripIntegrationTest {
                     proof.put("state", "PASSED_UNQUALIFIED_DRAFT");
                     EVIDENCE.put(definition.code(), Map.copyOf(proof));
                 }));
+    }
+
+    @AfterAll
+    static void writeX2ExportEvidence() throws Exception {
+        assertEquals(166 * 4, X2_EXPORT_EVIDENCE.size(),
+                "Every form and each of four display locales requires actual XLSX round-trip");
+        var cases = new ArrayList<Map<String, Object>>();
+        for (var def : CatalogCaptureRegistry.all()) {
+            for (String locale : CatalogReportLocale.DISPLAY) {
+                var row = X2_EXPORT_EVIDENCE.get(def.code() + "|" + locale);
+                assertNotNull(row, "Missing X2 export " + def.code() + "/" + locale);
+                cases.add(row);
+            }
+        }
+        var manifest = new LinkedHashMap<String, Object>();
+        manifest.put("schemaVersion", "FIN_BE_R1_X2_ISSUED_XLSX_EXPORT_V1");
+        manifest.put("gitSha", System.getenv().getOrDefault("GITHUB_SHA", "LOCAL_TEST"));
+        manifest.put("formCount", 166);
+        manifest.put("displayLocales", CatalogReportLocale.DISPLAY);
+        manifest.put("format", "XLSX");
+        manifest.put("casesPassed", cases.size());
+        manifest.put("financialQualified", false);
+        manifest.put("cases", cases);
+        Path base = Path.of(System.getProperty("basedir",
+                Files.exists(Path.of("backend/pom.xml")) ? "backend" : "."));
+        Path dest = base.resolve("target/fin-evidence/fin-be-r1-x2-xlsx-export-coverage.json");
+        Files.createDirectories(dest.getParent());
+        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(dest.toFile(), manifest);
     }
 
     @AfterAll
@@ -479,6 +590,78 @@ class CatalogXlsxRoundTripIntegrationTest {
                 c, project.id(), 1000, null, null)).amountScale());
         assertEquals(1, reportSnapshotService.load(snapshotQuery(
                 c, project.id(), 1, null, null)).amountScale());
+    }
+
+    @Test
+    void x2LatestHonorsHeadAndExactRevisionEvenWhenNewDraftExists() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(), c.entityId(),
+                c.businessScopeId(), c.projectCode(), c.currency(), "author");
+        byte[] initialWorkbook = filled(c.formCode(), xlsx.generate(c));
+        var firstDraft = xlsx.saveDraft(c, initialWorkbook, null);
+        var first = revisionService.confirm(c.organizationId(), project.id(), firstDraft.id(),
+                firstDraft.normalizedFingerprint(), 0, "author", "");
+        var unconfirmed = edit(initialWorkbook, book -> book.getSheet("FIN_Data")
+                .getRow(1).getCell(0).setCellValue("SECOND-ROW"));
+        var laterDraft = xlsx.saveDraft(c, unconfirmed, null);
+        var query = snapshotQuery(c, project.id(), c.amountScale(), null, null);
+        var latest = xlsxExportService.export(query, "zh-Hans");
+        assertEquals(first.revisionId(), latest.sourceRevisionId());
+        var second = revisionService.confirm(c.organizationId(), project.id(),
+                laterDraft.id(), laterDraft.normalizedFingerprint(),
+                1, "author", "Updated source row");
+        assertEquals(second.revisionId(),
+                xlsxExportService.export(query, "kk").sourceRevisionId());
+        var old = xlsxExportService.export(snapshotQuery(
+                c, project.id(), c.amountScale(), first.revisionId(), null), "en");
+        assertEquals(first.revisionId(), old.sourceRevisionId());
+        assertEquals(firstDraft.id(), old.sourceDraftId());
+        assertThrows(IllegalArgumentException.class, () -> xlsxExportService.export(
+                snapshotQuery(c, project.id(), c.amountScale(), null, first.revisionId()),
+                "ru"));
+        assertEquals(2L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_revision
+                 WHERE organization_id=?
+                """, Long.class, c.organizationId()));
+    }
+
+    @Test
+    void x2RejectsWrongTenantAndTamperingWithoutGeneratingSourceDrafts() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(), c.entityId(),
+                c.businessScopeId(), c.projectCode(), c.currency(), "author");
+        var draft = xlsx.saveDraft(c, filled(c.formCode(), xlsx.generate(c)), null);
+        var confirmed = revisionService.confirm(c.organizationId(), project.id(), draft.id(),
+                draft.normalizedFingerprint(), 0, "author", "");
+        var exported = xlsxExportService.export(snapshotQuery(
+                c, project.id(), c.amountScale(), null, null), "zh-Hans");
+        assertThrows(IllegalArgumentException.class, () ->
+                issuedService.preview(UUID.randomUUID(), project.id(),
+                        exported.issuedTemplateId(), exported.workbook()));
+        assertThrows(IllegalArgumentException.class, () ->
+                issuedService.preview(c.organizationId(), UUID.randomUUID(),
+                        exported.issuedTemplateId(), exported.workbook()));
+        byte[] editedMetadata = edit(exported.workbook(),
+                book -> book.getSheet("_FIN_Metadata").getRow(13)
+                        .getCell(1).setCellValue("1000"));
+        assertThrows(IllegalArgumentException.class, () ->
+                issuedService.preview(c.organizationId(), project.id(),
+                        exported.issuedTemplateId(), editedMetadata));
+        byte[] injectedFormula = edit(exported.workbook(),
+                book -> book.getSheet("FIN_Data").getRow(1)
+                        .getCell(2).setCellFormula("1+1"));
+        assertThrows(IllegalArgumentException.class, () ->
+                issuedService.preview(c.organizationId(), project.id(),
+                        exported.issuedTemplateId(), injectedFormula));
+        assertThrows(IllegalArgumentException.class, () -> xlsxExportService.export(
+                snapshotQuery(c, UUID.randomUUID(), c.amountScale(), null, null), "ru"));
+        assertThrows(IllegalArgumentException.class, () -> xlsxExportService.export(
+                snapshotQuery(c, project.id(), c.amountScale(), null, null), "zh-CN"));
+        assertEquals(confirmed.revisionId(), reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), null, null)).sourceRevisionId());
+        assertEquals(1L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_draft WHERE organization_id=?
+                """, Long.class, c.organizationId()));
     }
 
     @Test void everyDraftIsImmutableAndInvalidOriginalCannotBeStored() {
