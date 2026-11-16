@@ -10,6 +10,11 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 
 import java.util.*;
 
@@ -22,6 +27,25 @@ import java.util.*;
 @Configuration
 public class FinancialApiSecurity {
     @Bean
+    public CorsConfigurationSource finCors(
+            @Value("${fin.security.ui-origin:}") String origin){
+        CorsConfiguration config=new CorsConfiguration();
+        if(!origin.isBlank()){
+            if(!origin.startsWith("https://") &&
+                    !origin.matches("http://localhost(:[0-9]{2,5})?"))
+                throw new IllegalStateException("FIN_UI_ORIGIN_MUST_BE_EXPLICIT");
+            config.setAllowedOrigins(List.of(origin));
+        }
+        config.setAllowedMethods(List.of("GET","POST","OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization","Content-Type"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(600L);
+        UrlBasedCorsConfigurationSource source=new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/v1/financial/**",config);
+        return source;
+    }
+
+    @Bean
     public SecurityFilterChain finSecurity(
             HttpSecurity http,
             @Value("${fin.security.enabled:false}") boolean enabled,
@@ -29,6 +53,7 @@ public class FinancialApiSecurity {
             @Value("${fin.security.jwks-uri:}") String jwks,
             @Value("${fin.security.audience:}") String audience) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
+                .cors(Customizer.withDefaults())
                 .sessionManagement(sm->sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         if(!enabled){
             http.authorizeHttpRequests(auth->auth.anyRequest().denyAll());
@@ -51,6 +76,7 @@ public class FinancialApiSecurity {
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(issuer), expectedAudience));
         http.authorizeHttpRequests(auth->auth
+                .requestMatchers(HttpMethod.OPTIONS,"/api/v1/financial/**").permitAll()
                 .requestMatchers("/api/v1/financial/**").authenticated()
                 .anyRequest().denyAll())
                 .oauth2ResourceServer(resource->resource.jwt(jwt->jwt.decoder(decoder)));
