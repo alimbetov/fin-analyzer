@@ -76,14 +76,17 @@ public class TrustedAutoReportService {
         if(pub==null) throw new IllegalArgumentException("UNPUBLISHED_OR_FOREIGN_FACT_SET");
 
         Map<MetricId,Policy> policies=loadPolicies();
+        Set<MetricId> referencedMetrics=new HashSet<>();
         for(var col:definition.columns()) {
             for(SeriesKey key:referencedSeries(col.operation())) {
                 if(!matches(pub,key)) throw new IllegalArgumentException("REPORT_SCOPE_MISMATCH");
                 validatedPolicy(pub,policies,key.metricCode(),key.metricVersion(),
                         key.measureKind(),key.unitCode());
+                referencedMetrics.add(new MetricId(key.metricCode(),key.metricVersion()));
             }
         }
-        Map<SeriesKey,List<Observation>> observations=loadAuthorizedObservations(pub,policies);
+        Map<SeriesKey,List<Observation>> observations=
+                loadAuthorizedObservations(pub,policies,referencedMetrics);
         AutoReportProjection.Projection projection=
                 AutoReportProjection.project(definition,observations);
 
@@ -340,8 +343,15 @@ public class TrustedAutoReportService {
     }
 
     private Map<SeriesKey,List<Observation>> loadAuthorizedObservations(
-            Publication pub,Map<MetricId,Policy> policies) {
-        List<Observation> rows=jdbc.query("""
+            Publication pub,Map<MetricId,Policy> policies,Set<MetricId> required) {
+        // Scope the DB read to methods explicitly authorized and present in the
+        // pinned report definition. Unrelated unqualified facts must not break
+        // an otherwise qualified financial calculation.
+        if(required.isEmpty())return Map.of();
+        var sorted=new ArrayList<>(required);
+        sorted.sort(Comparator.comparing(MetricId::code).thenComparing(MetricId::version));
+        String pairs=String.join(",",Collections.nCopies(sorted.size(),"(?,?)"));
+        String query="""
             SELECT a.metric_code,a.metric_version,a.unit_code,a.currency_code,
                    a.dimensions::text AS dimension_json,a.time_kind,
                    a.start_inclusive,a.end_exclusive,a.value_state,
@@ -350,8 +360,15 @@ public class TrustedAutoReportService {
             JOIN fin_fact.fact_assertion a
               ON a.id=s.fact_assertion_id AND a.organization_id=s.organization_id
             WHERE s.organization_id=? AND s.fact_set_revision_id=?
+              AND (a.metric_code,a.metric_version) IN (""" + pairs + """
+              )
             ORDER BY a.metric_code,a.start_inclusive
-            """,(rs,i)->toObservation(pub,policies,rs),pub.organization(),pub.revision());
+            """;
+        var args=new ArrayList<Object>();
+        args.add(pub.organization()); args.add(pub.revision());
+        for(var key:sorted){args.add(key.code());args.add(key.version());}
+        List<Observation> rows=jdbc.query(query,(rs,i)->toObservation(pub,policies,rs),
+                args.toArray());
         Map<SeriesKey,List<Observation>> grouped=new HashMap<>();
         for(Observation row:rows){
             grouped.computeIfAbsent(row.series(),ignored->new ArrayList<>()).add(row);
