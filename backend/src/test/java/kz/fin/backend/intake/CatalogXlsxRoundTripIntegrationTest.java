@@ -713,6 +713,44 @@ class CatalogXlsxRoundTripIntegrationTest {
     }
 
     @Test
+    void x2RejectsForgedValuesWhenRevisionAndDraftIdsAreGenuine() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(), c.entityId(),
+                c.businessScopeId(), c.projectCode(), c.currency(), "author");
+        var draft = xlsx.saveDraft(c, filled(c.formCode(), xlsx.generate(c)), null);
+        var confirmed = revisionService.confirm(c.organizationId(), project.id(), draft.id(),
+                draft.normalizedFingerprint(), 0, "author", "");
+        var source = reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), confirmed.revisionId(), null));
+        var forged = new ArrayList<>(source.rows());
+        var first = forged.getFirst();
+        var changed = new LinkedHashMap<>(first.cells());
+        changed.put("assetRef", "FORGED_SOURCE_VALUE");
+        forged.set(0, new CatalogCaptureRegistry.EntryRow(first.rowId(), changed));
+
+        var validIdentityButFalseContent = new CatalogIssuedTemplateService.ExportSource(
+                source.sourceRevisionId(), source.sourceDraftId(),
+                source.normalizedFingerprint(), "zh-Hans", "integrity-auditor");
+        var failure = assertThrows(IllegalStateException.class, () ->
+                issuedService.issuePopulated(project.id(), c, forged,
+                        List.of("Attempted forged financial source"), validIdentityButFalseContent));
+        assertEquals("FIN_EXPORT_XLSX_SOURCE_FINGERPRINT_MISMATCH", failure.getMessage());
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_issued_template
+                WHERE organization_id=? AND project_id=?
+                """, Long.class, c.organizationId(), project.id()));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_export_receipt
+                WHERE organization_id=? AND project_id=?
+                """, Long.class, c.organizationId(), project.id()));
+        var legitimate = xlsxExportService.export(snapshotQuery(
+                c, project.id(), c.amountScale(), source.sourceRevisionId(), null), "zh-Hans");
+        assertEquals(source.normalizedFingerprint(), legitimate.normalizedFingerprint());
+        assertEquals(source.rows(), issuedService.preview(c.organizationId(), project.id(),
+                legitimate.issuedTemplateId(), legitimate.workbook()).parsed().rows());
+    }
+
+    @Test
     void x2ReceiptAndManifestRollBackAtomicallyOnWrongProvenance() {
         var c = context("DF-AST-01");
         var project = projectService.createProject(c.organizationId(), c.entityId(),
