@@ -17,7 +17,13 @@ function safeExcelText(text: string): string {
 function readLiteral(value: ExcelJS.CellValue): string | null {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    // Excel numeric cells carry at most 15 reliable significant decimal digits.
+    // Reject amounts that could silently lose digits when converted to text.
+    const exact = String(value);
+    if (/e/i.test(exact) || exact.replace(/[^0-9]/g, "").length > 15) return null;
+    return exact;
+  }
   return null;
 }
 
