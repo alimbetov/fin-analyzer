@@ -146,6 +146,13 @@ class ReviewedFinancialIntakeIntegrationTest {
             liquidityF01(OCT,"1000","600","400","400","601")));
         assertThrows(IllegalArgumentException.class,()->liquiditySubmission(x,
             liquidityF01(OCT,"1000","600","400","-1","200")));
+        var mixed=new ArrayList<>(liquidityF01(OCT,"1000","600","400","400","200"));
+        mixed.set(mixed.size()-1,
+            c(SEP,"balance","currentLiabilities","200"));
+        assertThrows(IllegalArgumentException.class,()->liquiditySubmission(x,mixed));
+        var unknown=new ArrayList<>(liquidityF01(OCT,"1000","600","400","400","200"));
+        unknown.add(c(OCT,"balance","inventedMetric","25"));
+        assertThrows(IllegalArgumentException.class,()->liquiditySubmission(x,unknown));
         assertThrows(IllegalArgumentException.class,()->intake.submitManual("author",
             new ReviewedFinancialIntakeService.IntakeRequest(
                 x.org(),x.entity(),x.scope(),"F02","MANAGEMENT","KZT",1,
