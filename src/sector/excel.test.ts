@@ -42,6 +42,18 @@ describe("IND-R1 controlled sector XLSX", () => {
       expect(await parseSectorTemplate(await asBuffer(book),ctx),formCode).toEqual(expected);
     }
   });
+  it.each(PILOT_FORMS)("%s — all sector templates reject foreign currency and month",async formCode=>{
+    const ctx={...context,formCode};
+    const source=await generateSectorTemplate(ctx);
+    const original=await source.arrayBuffer();
+    await expect(parseSectorTemplate(original,{...ctx,currency:"USD"}))
+      .rejects.toThrow(/METADATA_MISMATCH/);
+    await expect(parseSectorTemplate(original,{...ctx,period:"2026-10"}))
+      .rejects.toThrow(/METADATA_MISMATCH/);
+    await expect(parseSectorTemplate(original,{...ctx,modelCode:"FORGED_MODEL"}))
+      .rejects.toThrow(/METADATA_MISMATCH/);
+  });
+
   it("rejects cross-company, cross-period, tampered codes and formulas",async()=>{
     const book=await workbook();
     await expect(parseSectorTemplate(await asBuffer(book),{...context,period:"2026-10"})).rejects.toThrow(/METADATA_MISMATCH/);
