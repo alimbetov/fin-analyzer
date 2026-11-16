@@ -1,0 +1,609 @@
+{
+  "catalogVersion": "METHOD-R1-PREQUALIFICATION-1",
+  "dataClassification": "REGISTRY_METADATA",
+  "releaseGate": "HOLD",
+  "source": "FIN-DIAG-60-IMPLEMENTATION-TZ.md",
+  "note": "Catalogue coverage is not executable coverage. No family is promoted to qualified; pilot variants may be separately gated by server-side data contracts.",
+  "methods": [
+    {
+      "code": "FIN-01",
+      "group": "FIN",
+      "title": "Horizontal Analysis",
+      "implementationStatus": "ONE_VARIANT_WIRED_UNQUALIFIED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": "AutoIndicatorEngine,TrustedAutoReportService,QualifiedRevenueHorizontalAdapter",
+      "notes": "REV_NET_MOM only; full method family not qualified"
+    },
+    {
+      "code": "FIN-02",
+      "group": "FIN",
+      "title": "Vertical Analysis",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": "AutoReportProjection.PercentOf,ShareOfTotal",
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "FIN-03",
+      "group": "FIN",
+      "title": "Trend Analysis",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "FIN-04",
+      "group": "FIN",
+      "title": "Financial Ratios",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": "AutoIndicatorEngine,ThreeStatementModel",
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "FIN-05",
+      "group": "FIN",
+      "title": "Factor Decomposition",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "FIN-06",
+      "group": "FIN",
+      "title": "Index Analysis",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "FIN-07",
+      "group": "FIN",
+      "title": "DuPont",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "FIN-08",
+      "group": "FIN",
+      "title": "Cash Flow Analysis",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CON-01",
+      "group": "CON",
+      "title": "Pareto",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": "ScenarioEconomicsEngine",
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CON-02",
+      "group": "CON",
+      "title": "ABC Classification",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": "ScenarioEconomicsEngine",
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CON-03",
+      "group": "CON",
+      "title": "XYZ Classification",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CON-04",
+      "group": "CON",
+      "title": "ABC-XYZ",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CON-05",
+      "group": "CON",
+      "title": "HHI",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CON-06",
+      "group": "CON",
+      "title": "Gini/Lorenz",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "PRO-01",
+      "group": "PRO",
+      "title": "CVP",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "PRO-02",
+      "group": "PRO",
+      "title": "Break-Even",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "PRO-03",
+      "group": "PRO",
+      "title": "Contribution Margin",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": "ScenarioEconomicsEngine",
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "PRO-04",
+      "group": "PRO",
+      "title": "Unit Economics",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "PRO-05",
+      "group": "PRO",
+      "title": "Activity-Based Costing",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "PRO-06",
+      "group": "PRO",
+      "title": "Standard Cost Variance",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CASH-01",
+      "group": "CASH",
+      "title": "Cash Conversion Cycle",
+      "implementationStatus": "CODE_CANDIDATE_NOT_QUALIFIED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": "ScenarioEconomicsEngine",
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CASH-02",
+      "group": "CASH",
+      "title": "Aging",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CASH-03",
+      "group": "CASH",
+      "title": "13-week Cash Forecast",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CASH-04",
+      "group": "CASH",
+      "title": "Working Capital",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CASH-05",
+      "group": "CASH",
+      "title": "Cash Stress Testing",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "CASH-06",
+      "group": "CASH",
+      "title": "Liquidity Gap",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "BUD-01",
+      "group": "BUD",
+      "title": "Budget vs Actual",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "BUD-02",
+      "group": "BUD",
+      "title": "Flexible Budget",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "BUD-03",
+      "group": "BUD",
+      "title": "Rolling Forecast",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "BUD-04",
+      "group": "BUD",
+      "title": "Driver-Based Planning",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "BUD-05",
+      "group": "BUD",
+      "title": "Zero-Based Budgeting",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "BUD-06",
+      "group": "BUD",
+      "title": "Responsibility Centers",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-01",
+      "group": "INV",
+      "title": "NPV/XNPV",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-02",
+      "group": "INV",
+      "title": "IRR/MIRR",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-03",
+      "group": "INV",
+      "title": "DCF",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-04",
+      "group": "INV",
+      "title": "WACC/Cost of Equity",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-05",
+      "group": "INV",
+      "title": "Sensitivity",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-06",
+      "group": "INV",
+      "title": "Scenarios",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-07",
+      "group": "INV",
+      "title": "Monte Carlo",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "INV-08",
+      "group": "INV",
+      "title": "DSCR/Debt Capacity",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "OPS-01",
+      "group": "OPS",
+      "title": "EOQ",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "OPS-02",
+      "group": "OPS",
+      "title": "Safety Stock/Reorder Point",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "OPS-03",
+      "group": "OPS",
+      "title": "OEE",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "OPS-04",
+      "group": "OPS",
+      "title": "Theory of Constraints",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "OPS-05",
+      "group": "OPS",
+      "title": "Value Stream Map",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "OPS-06",
+      "group": "OPS",
+      "title": "Yield/Scrap",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "QLT-01",
+      "group": "QLT",
+      "title": "Ishikawa",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "QLT-02",
+      "group": "QLT",
+      "title": "Five Whys",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "QLT-03",
+      "group": "QLT",
+      "title": "FMEA",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "QLT-04",
+      "group": "QLT",
+      "title": "SPC",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "QLT-05",
+      "group": "QLT",
+      "title": "PDCA",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "QLT-06",
+      "group": "QLT",
+      "title": "Benchmarking",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "STR-01",
+      "group": "STR",
+      "title": "SWOT",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "STR-02",
+      "group": "STR",
+      "title": "PESTEL",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "STR-03",
+      "group": "STR",
+      "title": "Porter Five Forces",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "STR-04",
+      "group": "STR",
+      "title": "Balanced Scorecard",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "ADV-01",
+      "group": "ADV",
+      "title": "Time-Series Forecast",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "ADV-02",
+      "group": "ADV",
+      "title": "Regression/Drivers",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "ADV-03",
+      "group": "ADV",
+      "title": "Constraint Optimization",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    },
+    {
+      "code": "ADV-04",
+      "group": "ADV",
+      "title": "Multi-Criteria Decision",
+      "implementationStatus": "NOT_YET_AUDITED",
+      "releaseQualified": false,
+      "autoRunAllowed": false,
+      "candidateImplementation": null,
+      "notes": "Requires code-level inventory, independent economic golden cases, negative scenarios and approval"
+    }
+  ]
+}
