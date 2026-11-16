@@ -488,6 +488,75 @@ class FactPublicationIntegrationTest {
             """,Long.class,healthy.org(),healthy.revisionId()));
     }
 
+
+    @Test void expiredWorkerCannotPublishEvenBeforeAnotherWorkerReclaimsItsTask() {
+        var f=fixture();
+        publish(f);
+        UUID event=jdbc.queryForObject("""
+            SELECT event_id FROM fin_exec.fact_publication_outbox
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,UUID.class,f.org(),f.revisionId());
+        String hash=jdbc.queryForObject("""
+            SELECT snapshot_hash FROM fin_fact.fact_set_publication
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,String.class,f.org(),f.revisionId());
+        UUID run=UUID.randomUUID(), task=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO fin_exec.analysis_run
+              (id,event_id,organization_id,fact_set_revision_id,snapshot_hash,profile_code)
+            VALUES (?,?,?,?,?,'LEASE_FENCING_TEST')
+            """,run,event,f.org(),f.revisionId(),hash);
+        jdbc.update("""
+            INSERT INTO fin_exec.outbox_delivery(event_id,analysis_run_id)
+            VALUES (?,?)
+            """,event,run);
+        jdbc.update("""
+            INSERT INTO fin_exec.analysis_task
+              (id,run_id,method_code,task_status)
+            VALUES (?,?,'SYS/LEASE_EXPIRY_FIXTURE','READY')
+            """,task,run);
+
+        var invocations=new java.util.concurrent.atomic.AtomicInteger();
+        kz.fin.backend.execution.MethodTaskAdapter adapter=
+            new kz.fin.backend.execution.MethodTaskAdapter() {
+                @Override public String methodCode() { return "SYS/LEASE_EXPIRY_FIXTURE"; }
+                @Override public String execute(TrustedRevision revision) {
+                    if(invocations.incrementAndGet()==1) {
+                        // Deterministic expired-lease simulation; no 60s sleep.
+                        jdbc.update("""
+                            UPDATE fin_exec.analysis_task
+                               SET lease_until=now()-interval '1 second'
+                             WHERE id=?
+                            """,task);
+                        return "{\"attempt\":1}";
+                    }
+                    return "{\"attempt\":2}";
+                }
+            };
+        var worker=new kz.fin.backend.execution.SingleExecutorScheduler(
+            jdbc,txManager,List.of(adapter),false);
+        for(int i=0;i<150 && invocations.get()==0;i++) worker.tick();
+        assertEquals(1,invocations.get());
+        assertEquals("RUNNING",jdbc.queryForObject("""
+            SELECT task_status FROM fin_exec.analysis_task WHERE id=?
+            """,String.class,task));
+        assertNull(jdbc.queryForObject("""
+            SELECT result_json::text FROM fin_exec.analysis_task WHERE id=?
+            """,String.class,task));
+
+        for(int i=0;i<150 && invocations.get()<2;i++) worker.tick();
+        assertEquals(2,invocations.get());
+        assertEquals("COMPUTED",jdbc.queryForObject("""
+            SELECT task_status FROM fin_exec.analysis_task WHERE id=?
+            """,String.class,task));
+        assertEquals(2L,jdbc.queryForObject("""
+            SELECT fencing_token FROM fin_exec.analysis_task WHERE id=?
+            """,Long.class,task));
+        assertTrue(jdbc.queryForObject("""
+            SELECT result_json::text FROM fin_exec.analysis_task WHERE id=?
+            """,String.class,task).contains("\"attempt\": 2"));
+    }
+
     private boolean attemptPublish(Fixture candidate,UUID expected,
                                    CountDownLatch ready,CountDownLatch start) {
         ready.countDown();
