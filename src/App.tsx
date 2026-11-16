@@ -12,6 +12,7 @@ import { SectorStudio } from "./sector/SectorStudio";
 import { RelationshipStudio } from "./diagnostics/RelationshipStudio";
 import { TrustedFinanceWorkspace } from "./diagnostics/TrustedFinanceWorkspace";
 import { FormIntakeStudioV5 } from "./intake-v5/FormIntakeStudioV5";
+import { CatalogIntakeStudio } from "./catalog-intake/CatalogIntakeStudio";
 import { createSectorState, type SectorState } from "./sector/state";
 
 function downloadFile(blob: Blob, filename: string): void {
@@ -333,6 +334,7 @@ export default function App() {
         <RelationshipStudio />
 
         <FormIntakeStudioV5 />
+        <CatalogIntakeStudio />
         <TrustedFinanceWorkspace />
 
         <section className="panel project-panel" id="project">
