@@ -90,6 +90,8 @@ jobs:
             kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest \
             kz.fin.backend.persistence.PostgresInvariantTest \
             kz.fin.backend.persistence.FactPublicationIntegrationTest \
+            kz.fin.backend.execution.ExecutionContractsTest \
+            kz.fin.backend.execution.SingleExecutorGraphTest \
             kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest \
             kz.fin.backend.persistence.TrustedFinancialFormMapperIntegrationTest \
             kz.fin.backend.diagnostics.R4ProofAndDecisionTest \
@@ -121,6 +123,8 @@ jobs:
               "kz.fin.backend.diagnostics.ScenarioEconomicsEngineTest",
               "kz.fin.backend.persistence.PostgresInvariantTest",
               "kz.fin.backend.persistence.FactPublicationIntegrationTest",
+              "kz.fin.backend.execution.ExecutionContractsTest",
+              "kz.fin.backend.execution.SingleExecutorGraphTest",
               "kz.fin.backend.persistence.TrustedFinancialPopulationIntegrationTest",
               "kz.fin.backend.persistence.TrustedFinancialFormMapperIntegrationTest",
               "kz.fin.backend.diagnostics.R4ProofAndDecisionTest",
