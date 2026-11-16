@@ -37,6 +37,8 @@ class TrustedBusinessDiagnosticIntegrationTest {
     @Autowired FactAssertionJpaRepository facts;
     @Autowired FactSetPublicationService publicationService;
     @Autowired TrustedBusinessDiagnosticService diagnostics;
+    @Autowired kz.fin.backend.execution.SingleExecutorScheduler scheduler;
+    @Autowired kz.fin.backend.execution.CompositeCoreReportPublisher coreReports;
 
     private static final YearMonth CURRENT=YearMonth.of(2026,10);
     private static final EconomicKernel.ReportingBasis BASIS=EconomicKernel.ReportingBasis.MANAGEMENT;
@@ -119,6 +121,93 @@ class TrustedBusinessDiagnosticIntegrationTest {
     private void publish(Fixture f,UUID current){
         publicationService.publish(new FactSetPublicationService.Request(f.org(),f.entity(),f.scope(),
                 BASIS,f.dataSpace(),f.revision(),current));
+    }
+
+
+    @Test void orchestratedSyntheticDiagnosticsBuildImmutablePartialCoreReport() {
+        Fixture fixture=seed(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),null,
+                AnalysisContext.DataSpace.SYNTHETIC,"150",true,true,"KZT",false);
+        publish(fixture,null);
+
+        for(int i=0;i<30;i++) {
+            scheduler.tick();
+            var done=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.analysis_run
+                WHERE organization_id=? AND fact_set_revision_id=? AND run_status='COMPLETED'
+                """,Long.class,fixture.org(),fixture.revision());
+            if(done==1L) break;
+        }
+
+        assertEquals(2L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_task t
+            JOIN fin_exec.analysis_run r ON r.id=t.run_id
+            WHERE r.organization_id=? AND r.fact_set_revision_id=?
+              AND t.task_status='COMPUTED'
+            """,Long.class,fixture.org(),fixture.revision()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_task t
+            JOIN fin_exec.analysis_run r ON r.id=t.run_id
+            WHERE r.organization_id=? AND r.fact_set_revision_id=?
+              AND t.method_code='SYS/DIAGNOSTIC_PILOT' AND t.task_status='COMPUTED'
+            """,Long.class,fixture.org(),fixture.revision()));
+        for(int i=0;i<30;i++) {
+            coreReports.publishReady();
+            var ready=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.core_report_snapshot s
+                WHERE s.organization_id=? AND s.fact_set_revision_id=?
+                """,Long.class,fixture.org(),fixture.revision());
+            if(ready==1L) break;
+        }
+        UUID reportId=jdbc.queryForObject("""
+            SELECT id FROM fin_exec.core_report_snapshot
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,UUID.class,fixture.org(),fixture.revision());
+        assertNotNull(reportId);
+        var snapshot=coreReports.load(fixture.org(),reportId);
+        assertEquals("CORE",snapshot.path("reportMode").asText());
+        assertEquals("PARTIAL",snapshot.path("coreReadiness").asText());
+        assertEquals("NOT_REQUESTED",snapshot.path("mlReadiness").asText());
+        assertEquals("SYNTHETIC",snapshot.path("sourceClassification").asText());
+        assertEquals(2,snapshot.path("methods").size());
+        assertEquals(3,snapshot.path("diagnosticFindings").size());
+        assertEquals("GROSS_MARGIN_YOY_COMPRESSION",
+                snapshot.path("diagnosticFindings").get(0).path("ruleCode").asText());
+        assertEquals("CORE_REPORT_NOT_FOUND_OR_FORBIDDEN",
+                assertThrows(IllegalArgumentException.class,
+                    ()->coreReports.load(UUID.randomUUID(),reportId)).getMessage());
+        assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_exec.core_report_snapshot SET snapshot='{}'::jsonb WHERE id=?
+            """,reportId));
+        assertEquals(false,coreReports.publishReady() &&
+            jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.core_report_snapshot WHERE id=?
+                """,Long.class,reportId)==0L);
+    }
+
+    @Test void actualFinancialRevisionNeverExecutesSyntheticDiagnosticPilot() {
+        Fixture fixture=seed(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),null,
+                AnalysisContext.DataSpace.ACTUAL,"150",true,false,"KZT",false);
+        publish(fixture,null);
+        for(int i=0;i<30;i++) {
+            scheduler.tick();
+            var done=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.analysis_run
+                WHERE organization_id=? AND fact_set_revision_id=? AND run_status='COMPLETED'
+                """,Long.class,fixture.org(),fixture.revision());
+            if(done==1L) break;
+        }
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_task t
+            JOIN fin_exec.analysis_run r ON r.id=t.run_id
+            WHERE r.organization_id=? AND r.fact_set_revision_id=?
+              AND t.method_code='SYS/DIAGNOSTIC_PILOT'
+            """,Long.class,fixture.org(),fixture.revision()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_task t
+            JOIN fin_exec.analysis_run r ON r.id=t.run_id
+            WHERE r.organization_id=? AND r.fact_set_revision_id=?
+              AND t.task_status='COMPUTED'
+            """,Long.class,fixture.org(),fixture.revision()));
     }
 
     @Test void evaluatesVerifiedThirteenMonthHistoryAndPersistsExplanations(){
