@@ -113,3 +113,102 @@ Unit/property/golden: dependency topological order, no cycles, unique cache fing
 `AUTO-R5`: independent method/reports/security qualification, full E2E on one SHA, feature-flagged rollout.
 
 **Коммит с этим файлом — только утверждаемое проектное требование, а не выполненная реализация или тестовое доказательство.**
+
+## 10. Утверждённый контракт SingleExecutor / optional ML (2026-11-16)
+
+**Нормативное дополнение:** любой расчёт, включая 60 аналитических методик, статистику, симуляции, ML и оптимизацию, инициируется через **единый фасад `SingleExecutor`**. Это **одна логическая точка входа, а НЕ один Java thread, одна очередь или один физический worker**. SingleExecutor использует существующий MethodologyRegistry, проверку доверенных фактов, серверный auth/ABAC, ApplicabilityResolver, dependency DAG, task scheduling, calculation trace, immutable snapshots и quotas.
+
+### 10.1. Режимы отчёта
+
+| Mode | Содержимое | Правило готовности |
+|---|---|---|
+| `CORE` | Применимые и квалифицированные финансовые/статистические/отраслевые/сценарные методы, в том числе немашинные прогнозы и расчёты | Независим от ML; ML не планируется по умолчанию |
+| `CORE_WITH_ML` | Тот же CORE **плюс** только квалифицированные ML-выводы (прогнозы, anomaly/segmentation, интервалы, baseline/error) | ML opt-in/policy, разрешения, соответствие данных, `ADVISORY` model status |
+
+`CORE` и `CORE_WITH_ML` — **профили состава отчёта**, а не два разных движка, версии бизнес-фактов или расходящиеся финансовые показатели. Числа и квалификация CORE-секций идентичны для одного `FactSetRevision`, methodologyVersion и assumptions fingerprint. ML не переписывает CORE и не подменяет историю.
+
+Если запрошен `CORE_WITH_ML`, но ML отключён, не обучен, не прошёл baseline/holdout или закончился с ошибкой — отчёт CORE **успешно формируется** и выдаётся, а ML-раздел помечается `DISABLED / NOT_AVAILABLE / INSUFFICIENT_DATA / UNQUALIFIED / FAILED / PENDING`; итоговый статус `CORE_COMPLETE_ML_UNAVAILABLE` или `CORE_COMPLETE_ML_PENDING`, без ложного объявления `CORE_WITH_ML_COMPLETE`. При недостатке обязательных CORE-фактов действует прежнее правило `PARTIAL/BLOCKED` независимо от ML.
+
+**Опциональное последующее обогащение:** если CORE отчёт создан до окончания ML, после квалифицированного ML запуска создаётся **новая immutable revision отчёта** с `parentReportId` и ссылкой на ровно тот же `FactSetRevision`/assumptions; прежняя CORE-ревизия остаётся доступна и неизменна. ML из другой версии фактов не может «дополнить» отчёт без нового согласованного CORE запуска.
+
+### 10.2. Интерфейсы и разделение ответственности
+
+Предлагаемые контракты (выверить с реальными типами перед кодированием):
+
+```java
+enum ReportMode { CORE, CORE_WITH_ML }
+enum ExecutionKind { DETERMINISTIC, STATISTICAL, ML_PREDICTION, OPTIMIZATION, QUALITATIVE }
+record AnalysisRequest(
+    String organizationId, String factSetRevisionId,
+    ReportMode reportMode, String businessQuestion,
+    java.util.Set<String> requestedMethods, String idempotencyKey) {}
+interface SingleExecutor {
+    AnalysisPlan preview(AnalysisRequest request, AuthContext trustedAuth);
+    AnalysisRunId submit(AnalysisRequest request, AuthContext trustedAuth);
+    AnalysisStatus status(AnalysisRunId runId, AuthContext trustedAuth);
+}
+interface SpecializedExecutionAdapter {
+    ExecutionKind kind();
+    MethodologyResult execute(VerifiedMethodologyContext context);
+}
+```
+
+`organizationId` и любые идентификаторы в request являются **только запрошенным scope**; права и approval получают только server-side. Не использовать client-provided `approvalState`, `ML_ADVISORY` и `reportQualified`. Пользователь может включить ML в рамках права, но не повысить его статус квалификации. Предварительный `preview` не сохраняет и не исполняет ML-задачи. SingleExecutor планирует worker tasks, управляет зависимостями и повторными попытками; адаптеры не публикуют внешние отчёты самостоятельно.
+
+### 10.3. Опциональные ML-выполнения
+
+- Default `reportMode=CORE`, `mlPolicy=DISABLED`, пока пользователь/организация явно не включили ML.
+- `CORE`-запуск никогда не ждёт ML training/inference; ошибочный ML adapter не влияет на статус CORE.
+- `CORE_WITH_ML`: сначала зафиксировать CORE snapshot; затем запускать только доступные, сертифицированные в проекте ML-advisory модели в рамках quotas.
+- Требования по данным, временная валидация и baseline обязательны. `EXPERIMENTAL`, `SHADOW`, `UNQUALIFIED` не попадают в официальный ML-раздел как готовые выводы.
+- Сводный отчёт различает `OBSERVED FACT`, `DETERMINISTIC RESULT`, `SCENARIO ASSUMPTION`, `ML PREDICTION`, `INTERPRETATION`. Показывать `modelVersion`, feature-set, horizon, backtest metrics и interval при наличии подтверждённой калибровки.
+- Результаты ML не влияют на исторические финансовые тождества и исходный `FactSetRevision`.
+- Optimization и Monte Carlo также делегируются специализированным адаптерам через SingleExecutor и запускаются по отдельной политике затрат; они не считаются ML по умолчанию.
+
+### 10.4. Report snapshot и API
+
+Рекомендуемые поля `UnifiedReportSnapshot`:
+
+```json
+{
+  "reportModeRequested": "CORE_WITH_ML",
+  "reportModeDelivered": "CORE",
+  "coreStatus": "COMPLETE",
+  "mlStatus": "PENDING",
+  "factSetRevisionId": "synthetic-rev-001",
+  "methodologyVersions": {},
+  "coreSnapshotId": "synthetic-core-001",
+  "mlSnapshotId": null,
+  "parentReportId": null,
+  "dataClassification": "SYNTHETIC"
+}
+```
+
+Это illustrative schema, а не актуальный production response. В API `analysis-plans/preview`, `analysis-runs` и `report` добавить `reportMode`, `coreStatus`, `mlStatus`, `reportRevision`, `parentReportId` и набор выполненных/пропущенных методик с причинами. `reportModeDelivered=CORE_WITH_ML` допустим **только** при выполненных квалифицированных ML-секциях. Если нет пригодных ML-моделей, не создавать пустую секцию, которая выглядит как результат ML.
+
+### 10.5. Дополнительные синтетические сценарии приёмки
+
+| Test | Input / event | Expected |
+|---|---|---|
+| SINGLE-01 | Approved fixture F01 current assets=400, current liabilities=200, mode CORE, ml disabled | Current ratio=2; CORE report success; no ML tasks created |
+| SINGLE-02 | Same revision and context, CORE_WITH_ML requested but no qualified model | CORE success; explicit ML `UNQUALIFIED/NOT_AVAILABLE`; no fake predictions |
+| SINGLE-03 | CORE_WITH_ML qualified ML model, 36-month synthetic series, authorized user | CORE numbers identical to SINGLE-01 if fact scope same; ML outputs separately labeled with version/holdout |
+| SINGLE-04 | CORE already published, ML later completes for same revision | New immutable report revision with `parentReportId`; original CORE report byte-for-byte stable |
+| SINGLE-05 | ML worker throws / runs out of memory | CORE remains available; mlStatus FAILED; resource cleanup/retry policy used |
+| SINGLE-06 | User submits forged client ML_ADVISORY status | Server rejects escalation; source and model status server-authoritative |
+| SINGLE-07 | ML run from revision r2 attempted to enrich CORE r1 | Rejected/version conflict; requires consistent rerun |
+| SINGLE-08 | Two identical requests with same tenant/key/fingerprint | One logical report/run, idempotent task scheduling |
+| SINGLE-09 | User denied ML access but has core access | CORE allowed, ML portion denied without tenant/model disclosure |
+| SINGLE-10 | 4 report languages | Same CORE numeric fingerprint and ML prediction fingerprint, localized labels only |
+
+В JUnit/Testcontainers/Playwright проверить переключение режима, отсутствие зависимостей CORE от ML, late enrichment, restatement, ABAC, failure isolation, source trace, report/export consistency. Golden expected фиксировать независимо от production executor. Ни один тест не отмечать PASS до реального запуска.
+
+### 10.6. План внедрения
+
+`SINGLE-R0` — аудит текущих точек входа, унификация контракта SingleExecutor (без создания второго расчётного ядра).  
+`SINGLE-R1` — CORE через один фасад + все применимые методы, preview/DAG/idempotency.  
+`SINGLE-R2` — `UnifiedReportSnapshot` для CORE + React/PDF/XLSX parity по мере готовности экспортов.  
+`SINGLE-R3` — ML adapter / `CORE_WITH_ML` по feature flag; failure isolation, позднее дополнение отчёта новой immutable ревизией.  
+`SINGLE-R4` — 10 synthetic golden E2E, S2 review, единый SHA CI.
+
+**Критерий:** без ML пользователь всегда может получить полноценный CORE-отчёт из доступных квалифицированных расчётов; при наличии ML — расширенную версию с явно маркированными ML-выводами и неизменными базовыми цифрами. Вся логика маршрутизации расчётов проходит через SingleExecutor.
