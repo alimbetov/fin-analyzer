@@ -10,6 +10,7 @@ import { createProject, readProject } from "./domain/project";
 import { generateBalanceTemplate, parseBalanceTemplate } from "./adapters/excel";
 import { SectorStudio } from "./sector/SectorStudio";
 import { RelationshipStudio } from "./diagnostics/RelationshipStudio";
+import { TrustedFinanceWorkspace } from "./diagnostics/TrustedFinanceWorkspace";
 import { createSectorState, type SectorState } from "./sector/state";
 
 function downloadFile(blob: Blob, filename: string): void {
@@ -205,7 +206,8 @@ export default function App() {
           <a href="#analysis">03 · Аналитика</a>
           <a href="#sector">04 · Отрасли</a>
           <a href="#graph">05 · Диагностический граф</a>
-          <a href="#project">06 · Проект</a>
+          <a href="#trusted-finance">06 · Проверенные источники</a>
+          <a href="#project">07 · Проект</a>
         </nav>
         <div className="side-note"><span className="status-dot"></span> Local-first · без Backend и БД</div>
         <p className="side-foot">FIN-R0 / R1A<br />Контролируемый Excel и первый аналитический отчёт</p>
@@ -328,8 +330,10 @@ export default function App() {
 
         <RelationshipStudio />
 
+        <TrustedFinanceWorkspace />
+
         <section className="panel project-panel" id="project">
-          <div><span className="eyebrow">06 / LOCAL STORAGE</span><h2>Локальный проект</h2>
+          <div><span className="eyebrow">07 / LOCAL STORAGE</span><h2>Локальный проект</h2>
             <p>Финансовые данные не передаются на сервер. Скачайте FIN-проект, чтобы восстановить работу позднее.</p>
             <small>Утверждённых версий: {revisions.length}. Автосохранение отсутствует.</small>
           </div>
