@@ -89,21 +89,21 @@
       "code": "CON-01",
       "group": "CON",
       "title": "Pareto",
-      "implementationStatus": "CON01_PURE_ENGINE_GOLDENS_AUTHORED",
+      "implementationStatus": "ONE_VARIANT_WIRED_UNQUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "ConcentrationAnalysisEngine (pure calculations, no trusted SKU adapter)",
-      "notes": "Only deterministic reconciliation/ratio/boundary logic and synthetic JUnit tests. No approved SKU source population, no SingleExecutor registration, no production/CORE qualification."
+      "candidateImplementation": "QualifiedSkuParetoAdapter → ReviewedSkuPopulationLoader → ConcentrationAnalysisEngine.pareto",
+      "notes": "Code-gated (fin.methods.con.enabled=false by default) one-variant SingleExecutor adapter. Requires separately reviewer-sealed immutable SKU journal, reconciliation to independently approved F02 REV_NET, strict period/currency/reversal/duplicate checks, and ACTUAL published fact revision. Source document hash is not external audit/authentication, and review must finish before event planning. Method family remains unqualified pending CI + finance S2."
     },
     {
       "code": "CON-02",
       "group": "CON",
       "title": "ABC Classification",
-      "implementationStatus": "CON02_PURE_ENGINE_GOLDENS_AUTHORED",
+      "implementationStatus": "ONE_VARIANT_WIRED_UNQUALIFIED",
       "releaseQualified": false,
       "autoRunAllowed": false,
-      "candidateImplementation": "ConcentrationAnalysisEngine (pure calculations, no trusted SKU adapter)",
-      "notes": "Only deterministic reconciliation/ratio/boundary logic and synthetic JUnit tests. No approved SKU source population, no SingleExecutor registration, no production/CORE qualification."
+      "candidateImplementation": "QualifiedSkuAbcAdapter → CON-01 DAG → ConcentrationAnalysisEngine.abc",
+      "notes": "Code-gated (fin.methods.con.enabled=false by default) one-variant SingleExecutor adapter. Requires separately reviewer-sealed immutable SKU journal, reconciliation to independently approved F02 REV_NET, strict period/currency/reversal/duplicate checks, and ACTUAL published fact revision. Source document hash is not external audit/authentication, and review must finish before event planning. Method family remains unqualified pending CI + finance S2."
     },
     {
       "code": "CON-03",
