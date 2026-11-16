@@ -38,6 +38,8 @@ class FactPublicationIntegrationTest {
     @Autowired FactAssertionJpaRepository repository;
     @Autowired FactSetPublicationService publicationService;
     @Autowired kz.fin.backend.execution.SingleExecutorScheduler scheduler;
+    @Autowired org.springframework.transaction.PlatformTransactionManager txManager;
+    @Autowired kz.fin.backend.execution.PublishedFactIntegrityAdapter integrityAdapter;
 
     record Fixture(UUID org, UUID entity, UUID scope, UUID sourceId,
                    UUID factId, UUID revisionId, String factHash) {
@@ -429,6 +431,61 @@ class FactPublicationIntegrationTest {
             UPDATE fin_exec.analysis_task SET result_json='{}'::jsonb
              WHERE id=? AND task_status='RUNNING' AND fencing_token=1
             """,task));
+    }
+
+
+    @Test void failedPlanningIsRetriedWithoutBlockingSubsequentOutboxEvents() {
+        var poisoned=fixture();
+        publish(poisoned);
+        kz.fin.backend.execution.MethodTaskAdapter failing =
+            new kz.fin.backend.execution.MethodTaskAdapter() {
+                @Override public String methodCode() {return "SYS/TEST_PLANNING_FAILURE";}
+                @Override public boolean autoEligible() {return true;}
+                @Override public boolean applicable(TrustedRevision revision) {
+                    if(poisoned.revisionId().equals(revision.factSetRevisionId()))
+                        throw new IllegalStateException("SYNTHETIC_PLAN_FAILURE");
+                    return false;
+                }
+                @Override public String execute(TrustedRevision revision) {
+                    throw new AssertionError("Must never execute synthetic poison adapter");
+                }
+            };
+        var worker=new kz.fin.backend.execution.SingleExecutorScheduler(
+            jdbc,txManager,List.of(integrityAdapter,failing),false);
+        for(int i=0;i<150;i++) {
+            worker.tick();
+            Long failures=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.outbox_planning_failure pf
+                JOIN fin_exec.fact_publication_outbox o ON o.event_id=pf.event_id
+                WHERE o.organization_id=? AND o.fact_set_revision_id=?
+                """,Long.class,poisoned.org(),poisoned.revisionId());
+            if(failures==1L) break;
+        }
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.outbox_planning_failure pf
+            JOIN fin_exec.fact_publication_outbox o ON o.event_id=pf.event_id
+            WHERE o.organization_id=? AND o.fact_set_revision_id=?
+            """,Long.class,poisoned.org(),poisoned.revisionId()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.outbox_delivery d
+            JOIN fin_exec.fact_publication_outbox o ON o.event_id=d.event_id
+            WHERE o.organization_id=? AND o.fact_set_revision_id=?
+            """,Long.class,poisoned.org(),poisoned.revisionId()));
+
+        var healthy=fixture();
+        publish(healthy);
+        for(int i=0;i<150;i++) {
+            worker.tick();
+            Long success=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.analysis_run
+                WHERE organization_id=? AND fact_set_revision_id=? AND run_status='COMPLETED'
+                """,Long.class,healthy.org(),healthy.revisionId());
+            if(success==1L) break;
+        }
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run
+            WHERE organization_id=? AND fact_set_revision_id=? AND run_status='COMPLETED'
+            """,Long.class,healthy.org(),healthy.revisionId()));
     }
 
     private boolean attemptPublish(Fixture candidate,UUID expected,
