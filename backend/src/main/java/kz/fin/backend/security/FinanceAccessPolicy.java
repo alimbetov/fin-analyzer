@@ -12,7 +12,7 @@ import java.util.*;
  */
 @Component
 public class FinanceAccessPolicy {
-    public enum Permission { FIN_SUBMIT, FIN_REVIEW, FIN_PUBLISH, FIN_READ }
+    public enum Permission { FIN_SUBMIT, FIN_REVIEW, FIN_PUBLISH, FIN_READ, FIN_ANALYZE }
     public String subject(Jwt jwt) {
         if(jwt==null || jwt.getSubject()==null || jwt.getSubject().isBlank())
             throw new AccessDeniedException("FIN_VERIFIED_SUBJECT_REQUIRED");
