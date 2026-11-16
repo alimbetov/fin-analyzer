@@ -112,7 +112,7 @@ public final class QualifiedCurrentRatioAdapter implements MethodTaskAdapter {
             revision.economicEntityId(),revision.businessScopeId());
         if(publication.size()!=1 ||
            !revision.snapshotHash().equals(publication.getFirst().hash()) ||
-           !revision.dataSpace().equals(publication.getFirst().space()))
+           !revision.dataSpace().equals(publication.getFirst().dataSpace()))
             return Optional.empty();
 
         var rows=jdbc.query("""
