@@ -380,6 +380,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                                 context, project.id(), context.amountScale(),
                                 confirmed.revisionId(), null), display);
                         assertEquals(confirmed.revisionId(), exported.sourceRevisionId());
+                        assertEquals(snapshot.contentFingerprintV2(), exported.contentFingerprintV2());
                         assertEquals(confirmed.draftId(), exported.sourceDraftId());
                         assertEquals(display, exported.displayLocale());
                         assertEquals(context.locale(), exported.sourceInputLocale());
@@ -457,6 +458,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                         exportProof.put("format", "XLSX");
                         exportProof.put("displayLocale", display);
                         exportProof.put("snapshotFingerprint", snapshot.normalizedFingerprint());
+                        exportProof.put("contentFingerprintV2", snapshot.contentFingerprintV2());
                         exportProof.put("sourceInputLocale", snapshot.sourceInputLocale());
                         exportProof.put("mode", definition.captureMode().name());
                         exportProof.put("sourceRevisionId", confirmed.revisionId().toString());
@@ -484,6 +486,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                         var view = renderModel.prepare(snapshot, display, fixedTime);
                         var html = htmlRenderer.render(view);
                         assertEquals(confirmed.revisionId(), html.sourceRevisionId());
+                        assertEquals(snapshot.contentFingerprintV2(), html.contentFingerprintV2());
                         var parsedHtml = Jsoup.parse(html.html());
                         assertEquals(display, parsedHtml.selectFirst("html").attr("lang"));
                         assertTrue(parsedHtml.select("script,iframe,form,link,img,object").isEmpty());
@@ -514,6 +517,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                         }
                         var pdf = pdfRenderer.render(view);
                         assertEquals(confirmed.revisionId(), pdf.sourceRevisionId());
+                        assertEquals(snapshot.contentFingerprintV2(), pdf.contentFingerprintV2());
                         assertTrue(pdf.pageCount() >= 1 && pdf.pageCount() <=
                                 FinancialReportPdfRenderer.MAX_PAGES);
                         assertTrue(pdf.bytes().length > 100);
@@ -549,6 +553,7 @@ class CatalogXlsxRoundTripIntegrationTest {
                             proof.put("sourceRevisionId", confirmed.revisionId().toString());
                             proof.put("sourceState", snapshot.sourceStatus());
                             proof.put("snapshotFingerprint", snapshot.normalizedFingerprint());
+                            proof.put("contentFingerprintV2", snapshot.contentFingerprintV2());
                             proof.put("rows", snapshot.rows().size());
                             proof.put("fields", fields.size());
                             proof.put("generated", true);
@@ -1359,6 +1364,9 @@ class CatalogXlsxRoundTripIntegrationTest {
                 context, project.id(), context.amountScale(), second.revisionId(), null));
         assertEquals(parsed.rows(), originalSnapshot.rows());
         assertEquals(reorderedParsed.rows(), reorderedSnapshot.rows());
+        assertNotEquals(originalSnapshot.contentFingerprintV2(),
+                reorderedSnapshot.contentFingerprintV2(),
+                "V2 content identity preserves source row order");
         assertEquals(first.revisionId(), originalSnapshot.sourceRevisionId());
         assertEquals(second.revisionId(), reorderedSnapshot.sourceRevisionId());
 
