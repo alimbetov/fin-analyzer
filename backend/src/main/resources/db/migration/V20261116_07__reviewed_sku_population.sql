@@ -112,6 +112,17 @@ BEGIN
      FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'SKU_POPULATION_NOT_FOUND_OR_FOREIGN'; END IF;
     IF p.submitted_by=NEW.reviewed_by THEN RAISE EXCEPTION 'SKU_SELF_REVIEW_FORBIDDEN'; END IF;
+    IF NOT EXISTS (
+       SELECT 1 FROM fin_fact.fact_set_publication f
+       WHERE f.fact_set_revision_id=p.fact_set_revision_id
+         AND f.organization_id=p.organization_id
+         AND f.economic_entity_id=p.economic_entity_id
+         AND f.business_scope_id=p.business_scope_id
+         AND f.reporting_basis=p.reporting_basis
+         AND f.data_space=p.data_space
+         AND f.snapshot_hash=p.published_snapshot_hash
+    ) THEN RAISE EXCEPTION 'SKU_FACT_SNAPSHOT_CONTEXT_MISMATCH'; END IF;
+    IF NEW.decision='REJECTED' THEN RETURN NEW; END IF;
 
     SELECT count(*),
            COALESCE(sum(CASE WHEN event_kind='SALE'
