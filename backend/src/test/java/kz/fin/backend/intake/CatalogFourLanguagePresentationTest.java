@@ -80,7 +80,7 @@ class CatalogFourLanguagePresentationTest {
                             var source = context(form.code(), "ru");
                             var view = presentation.present(source, language);
                             assertEquals(form.code(), view.formCode());
-                            assertEquals(form.code(), view.formTitle());
+                            assertEquals(form.code(), view.formTitle().label());
                             assertEquals(
                                     CatalogReportPresentationService.Status.MISSING,
                                     view.formTitle().status());
