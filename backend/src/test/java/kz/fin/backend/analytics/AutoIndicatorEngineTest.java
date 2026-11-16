@@ -116,6 +116,11 @@ class AutoIndicatorEngineTest {
         var usdPoint=aggregate(usd,interval(FEB),
                 List.of(stock(usd,FEB,"200")),Aggregation.STOCK_CLOSING);
         assertThrows(IllegalArgumentException.class,()->ratioOf(numerator,usdPoint));
+        SeriesKey foreignUnit=keyFor(ORG,FACTS,"CURRENT_LIABILITIES","FTE",null,
+                Map.of(),AnalysisContext.DataSpace.ACTUAL,MeasureKind.STOCK);
+        var units=aggregate(foreignUnit,interval(FEB),
+                List.of(stock(foreignUnit,FEB,"200")),Aggregation.STOCK_CLOSING);
+        assertThrows(IllegalArgumentException.class,()->ratioOf(numerator,units));
         var otherDate=aggregate(liabilities,interval(MAR),
                 List.of(stock(liabilities,MAR,"200")),Aggregation.STOCK_CLOSING);
         assertThrows(IllegalArgumentException.class,()->ratioOf(numerator,otherDate));
