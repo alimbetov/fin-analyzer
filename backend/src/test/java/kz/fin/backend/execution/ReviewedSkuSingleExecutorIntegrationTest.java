@@ -295,7 +295,10 @@ class ReviewedSkuSingleExecutorIntegrationTest {
         var abc=result(f,QualifiedSkuAbcAdapter.CODE);
         assertEquals("CALCULATED",pareto.path("status").asText());
         assertEquals("CON01_PARETO_V1",pareto.path("methodVersion").asText());
-        assertEquals("1000",pareto.path("reconciledNetRevenue").asText());
+        // PostgreSQL NUMERIC(38,12) preserves a decimal scale; test exact numeric
+        // equivalence without forcing a particular string formatting policy.
+        assertEquals(0,new BigDecimal(pareto.path("reconciledNetRevenue").asText())
+                .compareTo(new BigDecimal("1000")));
         assertEquals(List.of("A","B","C","D"),strings(pareto.path("rows"),"skuCode"));
         assertEquals(List.of("50","30","15","5"),numbers(pareto.path("rows"),"sharePercent"));
         assertEquals(List.of("50","80","95","100"),numbers(pareto.path("rows"),"cumulativePercent"));
