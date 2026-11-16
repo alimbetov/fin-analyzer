@@ -49,20 +49,22 @@ test("FIN V5: downloaded locale-specific XLSX rows 1/2/3+ round-trip to same pre
   sheet.getCell("D4").value=260;
   sheet.getCell("D5").value=90;
   const buffer=Buffer.from(await book.xlsx.writeBuffer());
-  await studio.getByLabel("Import Excel").setInputFiles({
+  // Source template language can differ from the language used to review it.
+  await studio.getByLabel("Template language").selectOption("ru");
+  await studio.getByLabel("Загрузить Excel").setInputFiles({
     name:"FIN_v5_F02_en.xlsx",
     mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer
   });
-  const preview=studio.getByRole("region",{name:"Data preview"});
+  const preview=studio.getByRole("region",{name:"Предпросмотр данных"});
   await expect(preview).toBeVisible();
-  await expect(preview.getByText("400.00")).toBeVisible();
-  await expect(preview.getByText("260.00")).toBeVisible();
-  await expect(preview.getByText("90.00")).toBeVisible();
+  await expect(preview.getByText("400,00")).toBeVisible();
+  await expect(preview.getByText("260,00")).toBeVisible();
+  await expect(preview.getByText("90,00")).toBeVisible();
   await page.screenshot({path:"test-results/fin-v5-xlsx-preview-"+test.info().project.name+".png",fullPage:true});
   sheet.getCell("A1").value="F01";
   const tampered=Buffer.from(await book.xlsx.writeBuffer());
-  await studio.getByLabel("Import Excel").setInputFiles({
+  await studio.getByLabel("Загрузить Excel").setInputFiles({
     name:"tampered.xlsx",
     mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer:tampered
