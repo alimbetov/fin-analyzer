@@ -28,7 +28,8 @@ public final class ReportingPeriodV5 {
         return year;
     }
     public static Period resolve(Type type,String code,Coverage coverage){
-        Objects.requireNonNull(type);Objects.requireNonNull(code);Objects.requireNonNull(coverage);
+        if(type==null||code==null||coverage==null)
+            throw new IllegalArgumentException("INVALID_PERIOD_INPUT");
         if((type==Type.AS_OF)!=(coverage==Coverage.AS_OF))
             throw new IllegalArgumentException("PERIOD_COVERAGE_MISMATCH");
         LocalDate start;LocalDate end;
