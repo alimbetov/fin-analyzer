@@ -60,6 +60,14 @@ class QualifiedCurrentRatioIntegrationTest {
                          String liabilities,boolean origins,boolean sameDate,
                          boolean sameCurrency,boolean useCurrentFields,
                          boolean additionalUnqualifiedFact) {
+        return seed(assets,liabilities,origins,sameDate,sameCurrency,
+                useCurrentFields,additionalUnqualifiedFact,false);
+    }
+
+    private Fixture seed(String assets,
+                         String liabilities,boolean origins,boolean sameDate,
+                         boolean sameCurrency,boolean useCurrentFields,
+                         boolean additionalUnqualifiedFact,boolean mismatchedIntakeCurrency) {
         for(String metric:List.of("CURRENT_ASSETS","CURRENT_LIABILITIES")) {
             jdbc.update("""
                 INSERT INTO fin_calc.metric_contract
@@ -90,11 +98,13 @@ class QualifiedCurrentRatioIntegrationTest {
             """,revision,org);
         insertBalance(org,entity,scope,revision,source,"1.0.0",
             useCurrentFields?"CURRENT_ASSETS":"ASSETS",
-            "currentAssets","assets",assets,AS_OF,"KZT",origins);
+            "currentAssets","assets",assets,AS_OF,
+            mismatchedIntakeCurrency?"USD":"KZT",origins);
         insertBalance(org,entity,scope,revision,source,"1.0.0",
             useCurrentFields?"CURRENT_LIABILITIES":"LIABILITIES",
             "currentLiabilities","liabilities",liabilities,
-            sameDate?AS_OF:AS_OF.minusDays(1),sameCurrency?"KZT":"USD",origins);
+            sameDate?AS_OF:AS_OF.minusDays(1),
+            mismatchedIntakeCurrency?"USD":sameCurrency?"KZT":"USD",origins);
         if(additionalUnqualifiedFact)
             insertBalance(org,entity,scope,revision,source,"1.0.0",
                 "UNRELATED_F01_TOTAL","notMapped","notMapped",
@@ -239,6 +249,12 @@ class QualifiedCurrentRatioIntegrationTest {
         var wrongCurrency=seed("400","200",true,true,false,true);
         executeToTerminal(wrongCurrency);
         assertEquals(0L,scheduled(wrongCurrency));
+    }
+
+    @Test void twoUsdBalancesMustNotPassKztReviewedSourceIntake() {
+        var f=seed("400","200",true,true,true,true,false,true);
+        executeToTerminal(f);
+        assertEquals(0L,scheduled(f));
     }
 
     @Test void totalAssetsAreNotAcceptedAsCurrentAssets() {
