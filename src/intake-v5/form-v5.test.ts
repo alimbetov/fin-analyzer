@@ -132,4 +132,38 @@ describe("FIN V5 localized XLSX",()=>{
       .rejects.toThrow("XLSX_V5_FORMULAS_FORBIDDEN");
     expect(()=>headers("zh-Hans")).toThrow("TRANSLATION_NOT_READY");
   });
+  it("rejects unexpected instructions or metadata placed at far-away rows",async()=>{
+    const book=await wb(await generateF02ExcelV5(ctx));
+    book.getWorksheet("Instructions")!.getCell("A900").value="unexpected instructions";
+    let bytes=await book.xlsx.writeBuffer();
+    await expect(parseF02ExcelV5(new Uint8Array(bytes as ArrayBuffer).buffer as ArrayBuffer,ctx))
+      .rejects.toThrow("XLSX_V5_INSTRUCTIONS_CHANGED");
+    book.getWorksheet("Instructions")!.getCell("A900").value=null;
+    book.getWorksheet("_FIN_Metadata")!.getCell("A900").value="INJECTED";
+    bytes=await book.xlsx.writeBuffer();
+    await expect(parseF02ExcelV5(new Uint8Array(bytes as ArrayBuffer).buffer as ArrayBuffer,ctx))
+      .rejects.toThrow("XLSX_V5_METADATA_CHANGED");
+  });
+  it("rejects extra columns, unsupported numeric precision and missing mandatory indicators",async()=>{
+    const book=await wb(await generateF02ExcelV5(ctx));
+    const sheet=book.getWorksheet("FIN_Data")!;
+    sheet.getCell("I3").value="injected";
+    let bytes=await book.xlsx.writeBuffer();
+    await expect(parseF02ExcelV5(new Uint8Array(bytes as ArrayBuffer).buffer as ArrayBuffer,ctx))
+      .rejects.toThrow("XLSX_V5_EXTRA_ROWS_OR_COLUMNS");
+    sheet.getCell("I3").value=null;
+    sheet.getCell("D3").value=1234567890123456;
+    bytes=await book.xlsx.writeBuffer();
+    await expect(parseF02ExcelV5(new Uint8Array(bytes as ArrayBuffer).buffer as ArrayBuffer,ctx))
+      .rejects.toThrow("XLSX_EXCEL_NUMERIC_PRECISION_UNSAFE");
+    sheet.getCell("D3").value="400";
+    bytes=await book.xlsx.writeBuffer();
+    const rows=await parseF02ExcelV5(new Uint8Array(bytes as ArrayBuffer).buffer as ArrayBuffer,ctx);
+    const validated=validateF02(ctx,rows,"XLSX");
+    expect(validated.valid).toBe(false);
+    expect(validated.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({code:"REQUIRED_FIELD_MISSING",fieldCode:"cogs",sourceCell:"FIN_Data!D4"}),
+      expect.objectContaining({code:"REQUIRED_FIELD_MISSING",fieldCode:"operatingExpenses",sourceCell:"FIN_Data!D5"})
+    ]));
+  });
 });
