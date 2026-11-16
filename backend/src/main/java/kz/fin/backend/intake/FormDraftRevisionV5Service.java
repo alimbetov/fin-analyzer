@@ -21,6 +21,10 @@ import java.util.*;
  */
 @Service
 public class FormDraftRevisionV5Service {
+    public static final class RevisionConflictException extends IllegalArgumentException {
+        public RevisionConflictException(){super("FIN_V5_REVISION_CONFLICT");}
+    }
+
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private static final TypeReference<List<FormSchemaV5.Input>> CELL_TYPE = new TypeReference<>() {};
@@ -233,12 +237,15 @@ public class FormDraftRevisionV5Service {
      * DUPLICATE without advancing the revision. A stale snapshot cannot overwrite.
      */
     @Transactional
-    public Confirmation confirm(UUID organizationId,UUID previewId,String digest,
+    public Confirmation confirm(UUID organizationId,UUID projectId,UUID previewId,String digest,
                                 int expectedRevision,String confirmedBy,String changeReason){
         actor(confirmedBy);Objects.requireNonNull(organizationId);Objects.requireNonNull(previewId);
         if(digest==null||!digest.matches("[a-f0-9]{64}"))
             throw new IllegalArgumentException("FIN_V5_CONFIRMATION_DIGEST_INVALID");
+        Objects.requireNonNull(projectId);
         PreviewRow p=lockedPreview(organizationId,previewId);
+        if(!p.projectId().equals(projectId))
+            throw new IllegalArgumentException("FIN_V5_PREVIEW_PROJECT_MISMATCH");
         if(!p.digest().equals(digest))
             throw new IllegalArgumentException("FIN_V5_CONFIRMATION_DIGEST_MISMATCH");
         if(!p.uploadedBy().equals(confirmedBy))
@@ -253,7 +260,7 @@ public class FormDraftRevisionV5Service {
           organizationId,previewId);
         if(!already.isEmpty())return already.getFirst();
         if(expectedRevision!=p.expectedRevision() || p.currentRevision()!=p.expectedRevision())
-            throw new IllegalArgumentException("FIN_V5_REVISION_CONFLICT");
+            throw new RevisionConflictException();
         RevisionRow prior=latest(p.slotId(),p.currentRevision());
         if(prior!=null && prior.fingerprint().equals(p.fingerprint()))
             return new Confirmation(previewId,prior.id(),prior.number(),
@@ -278,7 +285,7 @@ public class FormDraftRevisionV5Service {
           UPDATE fin_intake.form_slot_v5 SET latest_revision=?,changed_at=now()
           WHERE id=? AND organization_id=? AND latest_revision=?
           """,newRevision,p.slotId(),organizationId,p.currentRevision());
-        if(updated!=1)throw new IllegalStateException("FIN_V5_REVISION_CONFLICT");
+        if(updated!=1)throw new RevisionConflictException();
         return new Confirmation(previewId,revisionId,newRevision,"CREATED",
                 p.uploadedAt(),savedAt,p.fingerprint());
     }
