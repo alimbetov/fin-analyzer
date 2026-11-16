@@ -249,7 +249,9 @@ class ReviewedSkuSingleExecutorIntegrationTest {
         for(int i=0;i<4;i++) scheduler.tick();
         assertEquals(1L,planned(f,QualifiedSkuParetoAdapter.CODE));
         assertEquals(1L,planned(f,QualifiedSkuAbcAdapter.CODE));
-        assertFalse(coreReports.publishReady());
+        // Other test organizations can still have terminal runs to publish.
+        // Idempotency is checked only for this same source revision.
+        for(int i=0;i<5;i++) coreReports.publishReady();
         assertEquals(1L,jdbc.queryForObject("""
             SELECT count(*) FROM fin_exec.core_report_snapshot
             WHERE organization_id=? AND fact_set_revision_id=?
