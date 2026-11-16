@@ -207,8 +207,9 @@ export default function App() {
           <a href="#analysis">03 · Аналитика</a>
           <a href="#sector">04 · Отрасли</a>
           <a href="#graph">05 · Диагностический граф</a>
-          <a href="#trusted-finance">06 · Проверенные источники</a>
-          <a href="#project">07 · Проект</a>
+          <a href="#form-intake-v5">06 · Ввод форм V5 (пилот)</a>
+          <a href="#trusted-finance">07 · Проверенные источники</a>
+          <a href="#project">08 · Проект</a>
         </nav>
         <div className="side-note"><span className="status-dot"></span> Local-first · без Backend и БД</div>
         <p className="side-foot">FIN-R0 / R1A<br />Контролируемый Excel и первый аналитический отчёт</p>
