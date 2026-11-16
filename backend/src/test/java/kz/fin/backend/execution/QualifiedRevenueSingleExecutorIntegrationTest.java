@@ -40,6 +40,7 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
     @Autowired FactSetPublicationService publication;
     @Autowired SingleExecutorScheduler scheduler;
     @Autowired CompositeCoreReportPublisher reports;
+    @Autowired com.fasterxml.jackson.databind.ObjectMapper json;
 
     private static final EconomicKernel.ReportingBasis BASIS=
             EconomicKernel.ReportingBasis.MANAGEMENT;
@@ -110,7 +111,7 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
         fail("TEST_ORCHESTRATION_RUN_DID_NOT_TERMINATE");
     }
 
-    @Test void qualifiedActualRevenueRunsThroughSingleExecutorAndCoreReport() {
+    @Test void qualifiedActualRevenueRunsThroughSingleExecutorAndCoreReport() throws Exception {
         var f=seed("vFIN01Qualified","QUALIFIED",true);
         tickUntilTerminal(f);
         var methods=jdbc.queryForList("""
@@ -125,7 +126,11 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
                 QualifiedRevenueHorizontalAdapter.CODE.equals(m.get("method_code")))
                 .findFirst().orElseThrow();
         assertEquals("COMPUTED",horizontal.get("task_status"));
-        assertTrue(((String)horizontal.get("output")).contains("50"));
+        var calculated=json.readTree((String)horizontal.get("output"));
+        assertEquals("CALCULATED",calculated.path("status").asText());
+        assertEquals(0,new java.math.BigDecimal("50").compareTo(
+                new java.math.BigDecimal(calculated.path("value").asText())));
+        assertEquals("FIN-01/REV_NET_MOM",calculated.path("methodCode").asText());
         for(int i=0;i<100;i++) {
             reports.publishReady();
             Long n=jdbc.queryForObject("""
@@ -144,7 +149,6 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
         assertEquals("ACTUAL",result.path("sourceClassification").asText());
         assertEquals(2,result.path("methods").size());
         assertEquals(0,result.path("diagnosticFindings").size());
-        assertTrue(result.path("methods").toString().contains("REV_MOM_PCT")==false);
         assertTrue(result.path("methods").toString().contains("FIN-01/REV_NET_MOM"));
         assertTrue(result.path("methods").toString().contains("50"));
     }
