@@ -38,7 +38,12 @@ public class ReviewedFinancialIntakeService {
     }
     public record IntakeRequest(UUID organizationId,UUID economicEntityId,UUID businessScopeId,
                                 String formCode,String reportingBasis,String currencyCode,int amountScale,
-                                List<TrustedFinancialFormMapper.Cell> cells) {}
+                                List<TrustedFinancialFormMapper.Cell> cells,String formVersion) {
+        public IntakeRequest(UUID org,UUID entity,UUID scope,String form,String basis,
+                             String currency,int scale,List<TrustedFinancialFormMapper.Cell> cells){
+            this(org,entity,scope,form,basis,currency,scale,cells,"FIN-PILOT-V1");
+        }
+    }
     public record Submitted(UUID id,String fingerprint,String sourceDocumentHash,int cellCount,
                             String state) {}
     public record Reviewed(UUID sourceRevisionId,String decision,String fingerprint,int mappedFacts) {}
@@ -46,7 +51,7 @@ public class ReviewedFinancialIntakeService {
                                  EconomicKernel.ReportingBasis reportingBasis,
                                  List<UUID> approvedSourceIds,UUID expectedCurrentRevisionId) {}
     private record Submission(UUID id,UUID organizationId,UUID entityId,UUID scopeId,
-                              String form,String basis,String currency,int scale,String submitter,
+                              String form,String formVersion,String basis,String currency,int scale,String submitter,
                               String fingerprint,String sourceDigest,String cellsJson,int count,String sourceKind) {}
     public record SubmissionInfo(UUID id,String formCode,String formVersion,String reportingBasis,
                                  String currencyCode,int amountScale,String submittedBy,
@@ -95,7 +100,7 @@ public class ReviewedFinancialIntakeService {
         return submitSource(verifiedSubject,new IntakeRequest(
                 context.organizationId(),context.entityId(),context.businessScopeId(),
                 context.formCode(),context.reportingBasis(),context.currency(),
-                context.scale(),parsed),"XLSX",rawBytes);
+                context.scale(),parsed,context.formVersion()),"XLSX",rawBytes);
     }
     private Submitted submitSource(String verifiedSubject,IntakeRequest request,
                                    String kind,byte[] rawBytes){
@@ -106,6 +111,10 @@ public class ReviewedFinancialIntakeService {
         Objects.requireNonNull(request.businessScopeId());
         if(!FORMS.contains(request.formCode()))
             throw new IllegalArgumentException("INTAKE_UNSUPPORTED_PILOT_FORM");
+        if(!("FIN-PILOT-V1".equals(request.formVersion()) ||
+                ("F01".equals(request.formCode()) &&
+                 "FIN-LIQUIDITY-V1".equals(request.formVersion()))))
+            throw new IllegalArgumentException("INTAKE_UNSUPPORTED_FORM_VERSION");
         if(!Set.of("MANAGEMENT","SEPARATE","CONSOLIDATED").contains(request.reportingBasis())
                 || request.currencyCode()==null || !request.currencyCode().matches("[A-Z]{3}")
                 || request.amountScale()!=1 && request.amountScale()!=1000)
@@ -113,7 +122,7 @@ public class ReviewedFinancialIntakeService {
         List<TrustedFinancialFormMapper.Cell> cells=List.copyOf(Objects.requireNonNull(request.cells()));
         if(cells.isEmpty() || cells.size()>512)
             throw new IllegalArgumentException("INTAKE_CELL_COUNT_OUT_OF_BOUNDS");
-        validateForm(request.formCode(),cells);
+        validateForm(request.formCode(),request.formVersion(),cells);
         String fingerprint=TrustedFinancialFormMapper.fingerprint(cells);
         String cellsJson=serialize(cells);
         if(cellsJson.length()>128_000)throw new IllegalArgumentException("INTAKE_JSON_TOO_LARGE");
@@ -124,7 +133,7 @@ public class ReviewedFinancialIntakeService {
                 ?sha256(rawBytes)
                 :sha256("FIN-MANUAL-V1|"+request.organizationId()+"|"+
                     request.economicEntityId()+"|"+request.businessScopeId()+"|"+
-                    request.formCode()+"|FIN-PILOT-V1|"+request.reportingBasis()+"|"+
+                    request.formCode()+"|"+request.formVersion()+"|"+request.reportingBasis()+"|"+
                     request.currencyCode()+"|"+request.amountScale()+"|"+fingerprint);
         UUID id=UUID.randomUUID();
         jdbc.update("""
@@ -132,9 +141,9 @@ public class ReviewedFinancialIntakeService {
                 id,organization_id,economic_entity_id,business_scope_id,form_code,
                 form_version,reporting_basis,currency_code,amount_scale,intake_kind,
                 source_document_sha,normalized_fingerprint,cells,expected_cell_count,submitted_by)
-            VALUES (?,?,?,?,?,'FIN-PILOT-V1',?, ?,?,?,?,?,?::jsonb,?,?)
+            VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?::jsonb,?,?)
             """,id,request.organizationId(),request.economicEntityId(),request.businessScopeId(),
-                request.formCode(),request.reportingBasis(),request.currencyCode(),
+                request.formCode(),request.formVersion(),request.reportingBasis(),request.currencyCode(),
                 request.amountScale(),kind,documentHash,fingerprint,cellsJson,cells.size(),verifiedSubject);
         if(rawBytes!=null){
             jdbc.update("""
@@ -171,7 +180,7 @@ public class ReviewedFinancialIntakeService {
         if(subject==null || subject.isBlank() || subject.length()>200)
             throw new IllegalArgumentException("VERIFIED_ACTOR_REQUIRED");
     }
-    private static void validateForm(String form,List<TrustedFinancialFormMapper.Cell> cells) {
+    private static void validateForm(String form,String version,List<TrustedFinancialFormMapper.Cell> cells) {
         Map<YearMonth,List<TrustedFinancialFormMapper.Cell>> byMonth=new TreeMap<>();
         for(var c:cells)byMonth.computeIfAbsent(c.period(),ignore->new ArrayList<>()).add(c);
         if(byMonth.size()>24)throw new IllegalArgumentException("INTAKE_TOO_MANY_MONTHS");
@@ -191,7 +200,9 @@ public class ReviewedFinancialIntakeService {
                 if(!fields.add(cell.sourceField()) && !form.startsWith("DF-CSH-"))
                     throw new IllegalArgumentException("INTAKE_DUPLICATE_FORM_FIELD");
             }
-            Set<String> mandatory=REQUIRED.get(form);
+            Set<String> mandatory="F01".equals(form) && "FIN-LIQUIDITY-V1".equals(version)
+                    ? Set.of("assets","liabilities","equity","currentAssets","currentLiabilities")
+                    : REQUIRED.get(form);
             if(mandatory!=null && !fields.containsAll(mandatory))
                 throw new IllegalArgumentException("INTAKE_REQUIRED_FORM_FIELDS_MISSING");
             if(form.equals("F01")){
@@ -200,6 +211,13 @@ public class ReviewedFinancialIntakeService {
                 if(amounts.get("assets").subtract(amounts.get("liabilities"))
                         .subtract(amounts.get("equity")).signum()!=0)
                     throw new IllegalArgumentException("INTAKE_BALANCE_IDENTITY_FAILED");
+                if("FIN-LIQUIDITY-V1".equals(version)) {
+                    BigDecimal ca=amounts.get("currentAssets"),cl=amounts.get("currentLiabilities");
+                    if(ca.signum()<0 || cl.signum()<0 ||
+                       ca.compareTo(amounts.get("assets"))>0 ||
+                       cl.compareTo(amounts.get("liabilities"))>0)
+                        throw new IllegalArgumentException("INTAKE_CURRENT_BALANCE_OUT_OF_BOUNDS");
+                }
             }
         }
     }
@@ -242,7 +260,7 @@ public class ReviewedFinancialIntakeService {
             byte[] verifiedOriginal=readRawXlsx(organizationId,sourceRevision);
             var original=xlsx.parse(new PilotXlsxTemplateService.Context(
                     s.organizationId(),s.entityId(),s.scopeId(),s.form(),s.basis(),s.currency(),
-                    s.scale()),verifiedOriginal);
+                    s.scale(),s.formVersion()),verifiedOriginal);
             if(!TrustedFinancialFormMapper.fingerprint(original).equals(s.fingerprint()))
                 throw new IllegalArgumentException("INTAKE_XLSX_REVIEW_MISMATCH");
         }
@@ -256,8 +274,8 @@ public class ReviewedFinancialIntakeService {
         jdbc.update("""
             INSERT INTO fin_fact.approved_source_revision(
                 organization_id,source_revision_id,form_code,form_version,approved_at)
-            VALUES (?,?,?,'FIN-PILOT-V1',now())
-            """,organizationId,sourceRevision,s.form());
+            VALUES (?,?,?,?,now())
+            """,organizationId,sourceRevision,s.form(),s.formVersion());
         jdbc.update("""
             INSERT INTO fin_fact.approved_source_intake(
                 organization_id,source_revision_id,normalized_cell_fingerprint,source_document_hash,
@@ -274,16 +292,16 @@ public class ReviewedFinancialIntakeService {
     private Submission sourceForUpdate(UUID org,UUID source) {
         List<Submission> list=jdbc.query("""
             SELECT id,organization_id,economic_entity_id,business_scope_id,
-                   form_code,reporting_basis,currency_code,amount_scale,
+                   form_code,form_version,reporting_basis,currency_code,amount_scale,
                    submitted_by,normalized_fingerprint,source_document_sha,
                    cells::text,expected_cell_count,intake_kind
             FROM fin_intake.submission
             WHERE organization_id=? AND id=? FOR UPDATE
             """,(rs,n)->new Submission(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
                 rs.getObject(3,UUID.class),rs.getObject(4,UUID.class),rs.getString(5),
-                rs.getString(6),rs.getString(7),rs.getInt(8),rs.getString(9),
-                rs.getString(10),rs.getString(11),rs.getString(12),rs.getInt(13),
-                rs.getString(14)),org,source);
+                rs.getString(6),rs.getString(7),rs.getString(8),rs.getInt(9),
+                rs.getString(10),rs.getString(11),rs.getString(12),
+                rs.getString(13),rs.getInt(14),rs.getString(15)),org,source);
         if(list.size()!=1)throw new IllegalArgumentException("INTAKE_NOT_FOUND_OR_FORBIDDEN");
         return list.getFirst();
     }
