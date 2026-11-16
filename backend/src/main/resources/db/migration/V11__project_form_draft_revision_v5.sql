@@ -55,6 +55,12 @@ BEGIN
     OR NEW.created_at IS DISTINCT FROM OLD.created_at
     OR NEW.latest_revision <> OLD.latest_revision+1
   THEN RAISE EXCEPTION 'FIN_V5_SLOT_IDENTITY_OR_VERSION_IMMUTABLE'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM fin_intake.draft_revision_v5 d
+    WHERE d.slot_id=OLD.id AND d.revision_number=NEW.latest_revision
+  ) THEN
+    RAISE EXCEPTION 'FIN_V5_CURRENT_REVISION_MUST_EXIST';
+  END IF;
   RETURN NEW;
 END; $$;
 CREATE TRIGGER trg_fin_v5_slot_update BEFORE UPDATE OR DELETE ON fin_intake.form_slot_v5
