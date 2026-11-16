@@ -17,7 +17,7 @@
 
 ## Independent synthetic golden
 
-A human-reviewed synthetic F02 revenue for February 2026 is **1,000 KZT** (approved MANAGMENT basis). Its independently certified SKU ledger:
+A human-reviewed synthetic F02 revenue for February 2026 is **1,000 KZT** (approved MANAGEMENT basis). Its independently certified SKU ledger:
 
 | Event | SKU | Type | Gross amount | Net effect |
 |---|---|---|---:|---:|
