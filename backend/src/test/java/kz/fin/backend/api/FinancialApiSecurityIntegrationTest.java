@@ -281,6 +281,62 @@ class FinancialApiSecurityIntegrationTest {
                 SELECT count(*) FROM fin_intake.catalog_xlsx_export_receipt
                 WHERE project_id=?
                 """, Long.class, project.id()));
+
+        // X3/X4 must remain read-only FIN_READ operations using an exact,
+        // already resolved sourceRevisionId. A separate latest query per
+        // format would not guarantee cross-format source identity.
+        for (String suffix : List.of(".html", ".pdf")) {
+            String path = endpoint + "/latest" + suffix;
+            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                    .content(parameters)).andExpect(status().isUnauthorized());
+            mvc.perform(post(path)
+                    .with(user("other-org", UUID.randomUUID(), "FIN_READ"))
+                    .contentType(MediaType.APPLICATION_JSON).content(parameters))
+                    .andExpect(status().isForbidden());
+            mvc.perform(post(path)
+                    .with(user("submit-only", org, "FIN_SUBMIT"))
+                    .contentType(MediaType.APPLICATION_JSON).content(parameters))
+                    .andExpect(status().isForbidden());
+            String unpinned = parameters.replace(
+                    ",\"sourceRevisionId\":\"" + confirmed.revisionId() + "\"", "");
+            mvc.perform(post(path)
+                    .with(user("viewer", org, "FIN_READ"))
+                    .contentType(MediaType.APPLICATION_JSON).content(unpinned))
+                    .andExpect(status().isBadRequest());
+            var responseRead = mvc.perform(post(path)
+                    .with(user("viewer", org, "FIN_READ"))
+                    .contentType(MediaType.APPLICATION_JSON).content(parameters))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Cache-Control", "no-store"))
+                    .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                    .andExpect(header().string("X-FIN-Source-Revision",
+                            confirmed.revisionId().toString()))
+                    .andExpect(header().string("X-FIN-Source-State",
+                            "CONFIRMED_UNQUALIFIED_DRAFT"))
+                    .andReturn().getResponse();
+            byte[] output = responseRead.getContentAsByteArray();
+            assertTrue(output.length > 100);
+            if (suffix.equals(".html")) {
+                assertTrue(responseRead.getContentType().startsWith("text/html"));
+                assertTrue(responseRead.getHeader("Content-Security-Policy")
+                        .contains("default-src 'none'"));
+                assertTrue(new String(output, java.nio.charset.StandardCharsets.UTF_8)
+                        .contains(confirmed.revisionId().toString()));
+            } else {
+                assertEquals("application/pdf", responseRead.getContentType());
+                try (var parsed = org.apache.pdfbox.Loader.loadPDF(output)) {
+                    var extracted = new org.apache.pdfbox.text.PDFTextStripper().getText(parsed);
+                    assertTrue(extracted.contains(confirmed.revisionId().toString()));
+                    assertTrue(extracted.replaceAll("\\s+", "")
+                            .contains("12345678901234567890123456.123456789012"));
+                }
+            }
+        }
+        assertEquals(1L, x2Jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_export_receipt
+                WHERE project_id=?
+                """, Long.class, project.id()),
+                "Read-only HTML/PDF must not issue XLSX or mutate export receipts");
     }
 
 }
