@@ -67,7 +67,15 @@ test("FIN R6: 166 choices are classified, 44 unspecialized cannot be uploaded as
   await expect(studio.getByRole("alert")).toContainText("Документ/внешняя отчётность");
   await expect(studio.getByRole("button",{name:"Скачать Excel"})).toHaveCount(0);
   await selector.selectOption("F04");
-  await expect(studio.getByRole("alert")).toContainText("нет утверждённой");
+  await expect(studio.getByLabel("ROW-001 openingEquity")).toBeVisible();
+  await expect(studio.getByRole("button",{name:"Скачать Excel"})).toBeEnabled();
+  await studio.getByLabel("ROW-001 openingEquity").fill("100");
+  await studio.getByLabel("ROW-001 contributions").fill("20");
+  await studio.getByLabel("ROW-001 dividends").fill("10");
+  await studio.getByLabel("ROW-001 otherChanges").fill("0");
+  await studio.getByLabel("ROW-001 closingEquity").fill("110");
+  await studio.getByRole("button",{name:"Проверить ввод"}).click();
+  await expect(studio.locator(".fin-catalog-preview")).toContainText("UNQUALIFIED_DRAFT");
   await selector.selectOption("SF-C01");
   await expect(studio.getByLabel("ROW-001 plant")).toBeVisible();
   await expect(studio.getByLabel("ROW-001 unitsStarted")).toBeVisible();
