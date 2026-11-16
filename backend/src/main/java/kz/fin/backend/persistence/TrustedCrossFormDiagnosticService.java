@@ -11,6 +11,7 @@ import kz.fin.backend.diagnostics.DynamicDiagnosticPlanner;
 import kz.fin.backend.diagnostics.IndicatorRelationshipRegistry;
 import kz.fin.backend.diagnostics.CrossFormDiagnosticEngine.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,8 @@ import java.util.*;
 public class TrustedCrossFormDiagnosticService {
     private static final String RULE_SET_CODE="CROSS_FORM_PILOT";
     private static final String RULE_SET_VERSION="2.0.0";
+    private static final String PROVISIONAL_RULE_CODE="CROSS_FORM_ACTUAL_PREVIEW";
+    private static final String PROVISIONAL_RULE_VERSION="0.1.0";
     private static final Set<String> STOCK_METRICS;
     private static final Set<String> SUPPORTED_METRICS;
     static {
@@ -55,10 +58,13 @@ public class TrustedCrossFormDiagnosticService {
     }
     private final JdbcTemplate jdbc;
     private final TrustedFinancialPopulationService population;
+    private final boolean actualPreviewEnabled;
     private final ObjectMapper mapper=new ObjectMapper();
 
-    public TrustedCrossFormDiagnosticService(JdbcTemplate jdbc,TrustedFinancialPopulationService population){
-        this.jdbc=jdbc;this.population=population;
+    public TrustedCrossFormDiagnosticService(
+            JdbcTemplate jdbc,TrustedFinancialPopulationService population,
+            @Value("${fin.diagnostics.actual-preview-enabled:false}") boolean actualPreviewEnabled){
+        this.jdbc=jdbc;this.population=population;this.actualPreviewEnabled=actualPreviewEnabled;
     }
     private record Publication(UUID revision,UUID org,UUID entity,UUID businessScope,
                                String basis,AnalysisContext.DataSpace dataSpace) {}
@@ -77,9 +83,14 @@ public class TrustedCrossFormDiagnosticService {
 
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public Report evaluate(UUID authorizedOrg,UUID publishedRevision,YearMonth month) {
-        return assessInternal(authorizedOrg,publishedRevision,month);
+        return assessInternal(authorizedOrg,publishedRevision,month,false);
     }
-    private Report assessInternal(UUID org,UUID revision,YearMonth month){
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public Report evaluateProvisionalActual(UUID org,UUID revision,YearMonth month){
+        if(!actualPreviewEnabled)throw new IllegalArgumentException("FIN_ACTUAL_DIAGNOSTIC_S2_HOLD");
+        return assessInternal(org,revision,month,true);
+    }
+    private Report assessInternal(UUID org,UUID revision,YearMonth month,boolean actualPreview){
         Objects.requireNonNull(org);Objects.requireNonNull(revision);Objects.requireNonNull(month);
         List<Publication> publications=jdbc.query("""
             SELECT fact_set_revision_id,organization_id,economic_entity_id,
@@ -92,7 +103,8 @@ public class TrustedCrossFormDiagnosticService {
         if(publications.size()!=1)
             throw new IllegalArgumentException("CROSS_FORM_FACT_SET_NOT_PUBLISHED_OR_FOREIGN");
         Publication pub=publications.getFirst();
-        if(pub.dataSpace()!=AnalysisContext.DataSpace.SYNTHETIC)
+        if(actualPreview? !actualPreviewEnabled || pub.dataSpace()!=AnalysisContext.DataSpace.ACTUAL
+                : pub.dataSpace()!=AnalysisContext.DataSpace.SYNTHETIC)
             throw new IllegalArgumentException("CROSS_FORM_ACTUAL_NOT_QUALIFIED");
 
         // Parameterized server-owned registry metrics; no user-supplied SQL or
@@ -199,7 +211,8 @@ public class TrustedCrossFormDiagnosticService {
             List<TrustedFinancialPopulationService.RequiredGroup> required=validatedGroups.stream()
                     .map(g->new TrustedFinancialPopulationService.RequiredGroup(
                             g.source(),g.metric(),g.start(),g.end())).toList();
-            population.requireComplete(org,revision,required);
+            if(actualPreview)population.requireReviewedActual(org,revision,required);
+            else population.requireComplete(org,revision,required);
         }
         List<Evidence> evidences=new ArrayList<>();
         for(var group:groups.entrySet()){
@@ -227,7 +240,9 @@ public class TrustedCrossFormDiagnosticService {
             throw new IllegalArgumentException("CROSS_FORM_NO_RELEVANT_VERIFIED_EVIDENCE");
         Scope scope=new Scope(pub.org(),pub.entity(),pub.businessScope(),pub.revision(),
                 pub.dataSpace(),currency,pub.basis(),month);
-        return CrossFormDiagnosticEngine.evaluate(scope,evidences);
+        return actualPreview
+                ?CrossFormDiagnosticEngine.evaluateProvisionalActual(scope,evidences)
+                :CrossFormDiagnosticEngine.evaluate(scope,evidences);
     }
 
     @Transactional(isolation=Isolation.REPEATABLE_READ)
