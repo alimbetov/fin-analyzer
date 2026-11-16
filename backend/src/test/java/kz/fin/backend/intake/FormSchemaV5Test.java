@@ -49,6 +49,54 @@ class FormSchemaV5Test {
             .map(FormSchemaV5.Input::decimalText).toList());
         assertFalse(FormSchemaV5.normalizeF02(rows,"en").valid());
     }
+    @Test void manualUploadMalformedBodiesProduceControlledErrors() {
+        assertEquals("FIN_V5_CELLS_REQUIRED",
+            assertThrows(IllegalArgumentException.class,
+                ()->FormSchemaV5.normalizeF02(null,"ru")).getMessage());
+        assertEquals("INVALID_PERIOD_INPUT",
+            assertThrows(IllegalArgumentException.class,
+                ()->ReportingPeriodV5.resolve(ReportingPeriodV5.Type.MONTH,null,
+                    ReportingPeriodV5.Coverage.PERIOD_ONLY)).getMessage());
+        assertEquals("INVALID_PERIOD_INPUT",
+            assertThrows(IllegalArgumentException.class,
+                ()->ReportingPeriodV5.resolve(null,"2026.10",
+                    ReportingPeriodV5.Coverage.PERIOD_ONLY)).getMessage());
+        assertEquals("TRANSLATION_NOT_READY",
+            assertThrows(IllegalArgumentException.class,
+                ()->FormSchemaV5.normalizeF02(List.of(),"zh-Hans")).getMessage());
+    }
+    @Test void manualUploadRejectsUnknownDuplicateOverflowAndRetainsExplicitZero() {
+        var baseline=List.of(
+            new FormSchemaV5.Input("pnl","netRevenue","0"),
+            new FormSchemaV5.Input("pnl","cogs","260"),
+            new FormSchemaV5.Input("pnl","operatingExpenses","90"));
+        var valid=FormSchemaV5.normalizeF02(baseline);
+        assertTrue(valid.valid());
+        assertEquals("0",valid.cells().getFirst().decimalText());
+
+        var duplicate=FormSchemaV5.normalizeF02(List.of(
+            baseline.getFirst(),baseline.getFirst(),baseline.get(1),baseline.get(2)));
+        assertFalse(duplicate.valid());
+        assertTrue(duplicate.errors().stream().anyMatch(e->e.startsWith("DUPLICATE_SOURCE_FIELD:")));
+
+        var foreign=FormSchemaV5.normalizeF02(List.of(
+            new FormSchemaV5.Input("other","netRevenue","400"),
+            baseline.get(1),baseline.get(2)));
+        assertFalse(foreign.valid());
+        assertTrue(foreign.errors().contains("UNKNOWN_SOURCE_COORDINATE"));
+
+        var overflow=FormSchemaV5.normalizeF02(List.of(
+            new FormSchemaV5.Input("pnl","netRevenue","9".repeat(27)),
+            baseline.get(1),baseline.get(2)));
+        assertFalse(overflow.valid());
+        assertTrue(overflow.errors().contains("INVALID_DECIMAL:netRevenue"));
+
+        var malformed=FormSchemaV5.normalizeF02(List.of(
+            new FormSchemaV5.Input("pnl","netRevenue","1e6"),
+            baseline.get(1),baseline.get(2)));
+        assertFalse(malformed.valid());
+        assertTrue(malformed.errors().contains("INVALID_DECIMAL:netRevenue"));
+    }
     @Test void allTimeGranularitiesWithISOLeapYearAndYearRollover(){
         var week=ReportingPeriodV5.resolve(ReportingPeriodV5.Type.WEEK,"2026-W01",
             ReportingPeriodV5.Coverage.PERIOD_ONLY);
