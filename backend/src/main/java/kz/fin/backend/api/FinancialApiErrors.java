@@ -20,7 +20,11 @@ public class FinancialApiErrors {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Map<String,String>> invalid(IllegalArgumentException e){
         String message=e.getMessage()==null?"INVALID_FINANCIAL_REQUEST":e.getMessage();
-        if(message.equals("INTAKE_NOT_FOUND_OR_FORBIDDEN"))
+        if(message.equals("INTAKE_NOT_FOUND_OR_FORBIDDEN") ||
+           message.equals("FIN_V5_PROJECT_NOT_FOUND") ||
+           message.equals("FIN_V5_PREVIEW_NOT_FOUND") ||
+           message.equals("FIN_V5_REVISION_NOT_FOUND") ||
+           message.equals("FIN_V5_PREVIEW_PROJECT_MISMATCH"))
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("code","NOT_FOUND_OR_FORBIDDEN"));
         return ResponseEntity.badRequest().body(Map.of("code",message.matches("[A-Z_0-9]{3,100}")
