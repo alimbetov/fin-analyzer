@@ -21,7 +21,7 @@ The migration **does not insert or promote** `fin_calc.metric_contract` records.
 - `QualifiedCurrentRatioAdapter`: server-side `FIN-04/CURRENT_RATIO` adapter depending on `SYS/VERIFY_PUBLISHED_FACT_SET`. Uses existing `TrustedAutoReportService`; no duplicated ratio calculation.
 - Source gate: immutable `fin_fact.fact_set_publication`, pinned `organization + entity + scope + reportingBasis + dataSpace + factSetRevision + snapshotHash`, exact two **AS_OF** F01 current-balance assertions on a single date, same currency/version/source revision, empty dimensions, state PRESENT/EXPLICIT_ZERO, explicitly qualified metric contracts, immutable `fact_origin` linking to correct F01 fields, reviewed `approved_source_intake`, sealed `source_population_control` row count=1 and total=assertion value, matching source-document hash.
 - Fail closed on missing or ambiguous source data, estimated facts, mismatched reporting date/currency, total assets/liabilities as substitutes or mixed source revisions.
-- Automatic global scheduling remains `FIN_EXECUTION_ENABLED=false` by default; the methodology family registry retains `releaseQualified=false` and `autoRunAllowed=false`.
+- FIN-04 has a **second** explicit opt-in `fin.methods.fin04.enabled=false` by default (integration tests override it only for their isolated context). Automatic global scheduling also remains `FIN_EXECUTION_ENABLED=false` by default; the methodology family registry retains `releaseQualified=false` and `autoRunAllowed=false`.
 - Ratio result writes a traceable immutable `fin_calc.report_run` and can flow into the existing `CORE_PILOT_V1` immutable report as `PARTIAL`. This does **not** qualify the entire FIN-04 family, bank package or investor opinion.
 
 ## Independent tests authored (not claimed green)
@@ -36,6 +36,7 @@ The migration **does not insert or promote** `fin_calc.metric_contract` records.
 - approved F01 current amounts 400/200→2 in CORE PARTIAL;
 - 400/0→NOT_COMPUTABLE / ZERO_DENOMINATOR and no `value` field;
 - missing origin, mismatched date/currency→no FIN-04 task;
+- additional unrelated, unqualified F01 fact must **not** contaminate a qualified ratio: trusted report projection loads only the explicitly referenced metric keys;
 - F01 TOTAL assets/liabilities→no FIN-04 task;
 - tenant-scoped report reads and immutable snapshot UPDATE/DELETE blocking.
 
