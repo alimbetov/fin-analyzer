@@ -3,6 +3,8 @@ package kz.fin.backend.api;
 import kz.fin.backend.persistence.ReviewedFinancialIntakeService;
 import kz.fin.backend.persistence.TrustedFinancialFormMapper;
 import kz.fin.backend.persistence.PilotXlsxTemplateService;
+import kz.fin.backend.persistence.TrustedCrossFormDiagnosticService;
+import java.time.YearMonth;
 import kz.fin.backend.security.FinanceAccessPolicy;
 import kz.fin.backend.security.FinanceAccessPolicy.Permission;
 import kz.fin.backend.domain.EconomicKernel;
@@ -29,11 +31,13 @@ public class FinancialIntakeController {
     private final FinanceAccessPolicy access;
     private final ReviewedFinancialIntakeService workflow;
     private final PilotXlsxTemplateService xlsx;
+    private final TrustedCrossFormDiagnosticService diagnostic;
 
     public FinancialIntakeController(FinanceAccessPolicy access,
                                      ReviewedFinancialIntakeService workflow,
-                                     PilotXlsxTemplateService xlsx){
-        this.access=access;this.workflow=workflow;this.xlsx=xlsx;
+                                     PilotXlsxTemplateService xlsx,
+                                     TrustedCrossFormDiagnosticService diagnostic){
+        this.access=access;this.workflow=workflow;this.xlsx=xlsx;this.diagnostic=diagnostic;
     }
     public record SubmitBody(UUID economicEntityId,UUID businessScopeId,String formCode,
                              String reportingBasis,String currencyCode,int amountScale,
@@ -123,6 +127,27 @@ public class FinancialIntakeController {
         return workflow.review(access.subject(jwt),organizationId,submissionId,
                 body.approved(),body.reason());
     }
+    @PostMapping("/fact-sets/{revisionId}/assessments/{month}")
+    public TrustedCrossFormDiagnosticService.Stored provisionalActualAssessment(
+            @AuthenticationPrincipal Jwt jwt,@PathVariable UUID organizationId,
+            @PathVariable UUID revisionId,@PathVariable String month) {
+        access.require(jwt,organizationId,Permission.FIN_ANALYZE);
+        YearMonth evaluatedMonth;
+        try{evaluatedMonth=YearMonth.parse(month);}
+        catch(RuntimeException e){throw new IllegalArgumentException("INVALID_DIAGNOSTIC_MONTH",e);}
+        var receipt=diagnostic.assessAndPublishProvisionalActual(
+                organizationId,revisionId,evaluatedMonth);
+        return diagnostic.loadProvisionalActual(organizationId,receipt.id());
+    }
+
+    @GetMapping("/assessments/{assessmentId}")
+    public TrustedCrossFormDiagnosticService.Stored readProvisionalAssessment(
+            @AuthenticationPrincipal Jwt jwt,@PathVariable UUID organizationId,
+            @PathVariable UUID assessmentId) {
+        access.require(jwt,organizationId,Permission.FIN_READ);
+        return diagnostic.loadProvisionalActual(organizationId,assessmentId);
+    }
+
     @PostMapping("/fact-sets")
     public kz.fin.backend.persistence.FactSetPublicationService.Publication publish(
             @AuthenticationPrincipal Jwt jwt,@PathVariable UUID organizationId,
