@@ -677,6 +677,72 @@ class CatalogXlsxRoundTripIntegrationTest {
                 """, Long.class, c.organizationId()));
     }
 
+    @Test
+    void x2EditedExportCanCreateOnlyNewUnqualifiedDraftWithoutConfirmingRevision() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(), c.entityId(),
+                c.businessScopeId(), c.projectCode(), c.currency(), "author");
+        var first = xlsx.saveDraft(c, filled(c.formCode(), xlsx.generate(c)), null);
+        var confirmed = revisionService.confirm(c.organizationId(), project.id(), first.id(),
+                first.normalizedFingerprint(), 0, "author", "");
+        var exported = xlsxExportService.export(snapshotQuery(
+                c, project.id(), c.amountScale(), confirmed.revisionId(), null), "zh-Hans");
+        byte[] userEdited = edit(exported.workbook(), book -> book.getSheet("FIN_Data")
+                .getRow(1).getCell(0).setCellValue("CUSTOMER_EDITED_ROW"));
+        var uploaded = issuedService.upload(c.organizationId(), project.id(),
+                exported.issuedTemplateId(), userEdited, null);
+        assertNotEquals(first.id(), uploaded.id());
+        assertEquals("UNQUALIFIED_DRAFT", jdbc.queryForObject("""
+                SELECT state FROM fin_intake.catalog_xlsx_draft
+                 WHERE id=? AND organization_id=?
+                """, String.class, uploaded.id(), c.organizationId()));
+        assertEquals(exported.issuedTemplateId(), jdbc.queryForObject("""
+                SELECT issued_template_id FROM fin_intake.catalog_xlsx_draft WHERE id=?
+                """, UUID.class, uploaded.id()));
+        assertEquals(1, revisionService.history(c.organizationId(),
+                project.id(), confirmed.slotId()).size());
+        assertEquals(confirmed.revisionId(), reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), null, null)).sourceRevisionId());
+    }
+
+    @Test
+    void x2ReceiptAndManifestRollBackAtomicallyOnWrongProvenance() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(), c.entityId(),
+                c.businessScopeId(), c.projectCode(), c.currency(), "author");
+        var draft = xlsx.saveDraft(c, filled(c.formCode(), xlsx.generate(c)), null);
+        var confirmed = revisionService.confirm(c.organizationId(), project.id(), draft.id(),
+                draft.normalizedFingerprint(), 0, "author", "");
+        var real = reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), confirmed.revisionId(), null));
+        var incorrect = new CatalogIssuedTemplateService.ExportSource(
+                UUID.randomUUID(), real.sourceDraftId(), real.normalizedFingerprint(),
+                "ru", "actor");
+        assertThrows(IllegalStateException.class, () ->
+                issuedService.issuePopulated(project.id(), c, real.rows(),
+                        List.of("Source-bound export"), incorrect));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_issued_template
+                 WHERE organization_id=? AND project_id=?
+                """, Long.class, c.organizationId(), project.id()));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_export_receipt
+                 WHERE organization_id=? AND project_id=?
+                """, Long.class, c.organizationId(), project.id()));
+
+        var valid = xlsxExportService.export(snapshotQuery(
+                c, project.id(), c.amountScale(), confirmed.revisionId(), null), "kk");
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                UPDATE fin_intake.catalog_xlsx_export_receipt SET state=state WHERE id=?
+                """, valid.exportId()));
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                DELETE FROM fin_intake.catalog_xlsx_export_receipt WHERE id=?
+                """, valid.exportId()));
+        assertEquals("GENERATED", jdbc.queryForObject("""
+                SELECT state FROM fin_intake.catalog_xlsx_export_receipt WHERE id=?
+                """, String.class, valid.exportId()));
+    }
+
     @Test void everyDraftIsImmutableAndInvalidOriginalCannotBeStored() {
         var context = context("D01");
         byte[] populated = filled("D01", xlsx.generate(context));
