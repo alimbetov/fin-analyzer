@@ -1,6 +1,10 @@
 package kz.fin.backend.intake;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jsoup.Jsoup;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.text.PDFTextStripper;
+import java.time.Instant;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DynamicTest;
@@ -64,11 +68,15 @@ class CatalogXlsxRoundTripIntegrationTest {
     @Autowired CatalogIssuedTemplateService issuedService;
     @Autowired FinancialReportSnapshotService reportSnapshotService;
     @Autowired CatalogXlsxExportService xlsxExportService;
+    @Autowired FinancialReportRenderModel renderModel;
+    @Autowired FinancialReportHtmlRenderer htmlRenderer;
+    @Autowired FinancialReportPdfRenderer pdfRenderer;
     @Autowired FormDraftRevisionV5Service projectService;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
     private static final Map<String, Map<String,Object>> EVIDENCE = new ConcurrentHashMap<>();
     private static final Map<String, Map<String,Object>> X2_EXPORT_EVIDENCE = new ConcurrentHashMap<>();
+    private static final Map<String, Map<String,Object>> X3_X4_EVIDENCE = new ConcurrentHashMap<>();
 
     private static CatalogXlsxRoundTripService.Context context(String code) {
         return new CatalogXlsxRoundTripService.Context(
@@ -449,6 +457,94 @@ class CatalogXlsxRoundTripIntegrationTest {
                                 definition.code() + "|" + display, Map.copyOf(exportProof)));
                     }
 
+                    // X3/X4: real PostgreSQL selected revision -> one immutable
+                    // snapshot -> both renderers; no renderer queries for latest.
+                    Instant fixedTime = Instant.parse("2026-11-16T12:00:00Z");
+                    for (String display : CatalogReportLocale.DISPLAY) {
+                        var view = renderModel.prepare(snapshot, display, fixedTime);
+                        var html = htmlRenderer.render(view);
+                        assertEquals(confirmed.revisionId(), html.sourceRevisionId());
+                        var parsedHtml = Jsoup.parse(html.html());
+                        assertEquals(display, parsedHtml.selectFirst("html").attr("lang"));
+                        assertTrue(parsedHtml.select("script,iframe,form,link,img,object").isEmpty());
+                        assertEquals(0, parsedHtml.select("[onclick],[onload],[onerror]").size());
+                        assertTrue(html.html().contains("UNQUALIFIED"));
+                        assertTrue(parsedHtml.text().contains(confirmed.revisionId().toString()));
+                        var htmlRows = parsedHtml.select("tbody tr");
+                        assertEquals(snapshot.rows().size(), htmlRows.size());
+                        for (int rowNumber = 0; rowNumber < snapshot.rows().size(); rowNumber++) {
+                            var expected = snapshot.rows().get(rowNumber);
+                            var cells = htmlRows.get(rowNumber).select("td.value");
+                            assertEquals(fields.size(), cells.size());
+                            assertEquals(expected.rowId(),
+                                    htmlRows.get(rowNumber).selectFirst("th").text());
+                            for (int fieldNumber = 0; fieldNumber < fields.size(); fieldNumber++) {
+                                String expectedValue = expected.cells().get(
+                                        fields.get(fieldNumber).code());
+                                var cell = cells.get(fieldNumber);
+                                assertEquals(fields.get(fieldNumber).code(),
+                                        cell.attr("data-field"));
+                                if (expectedValue.isEmpty()) {
+                                    assertEquals("true", cell.selectFirst("[data-empty]")
+                                            .attr("data-empty"));
+                                } else {
+                                    assertEquals(expectedValue, cell.wholeText().trim());
+                                }
+                            }
+                        }
+                        var pdf = pdfRenderer.render(view);
+                        assertEquals(confirmed.revisionId(), pdf.sourceRevisionId());
+                        assertTrue(pdf.pageCount() >= 1 && pdf.pageCount() <=
+                                FinancialReportPdfRenderer.MAX_PAGES);
+                        assertTrue(pdf.bytes().length > 100);
+                        String pdfText;
+                        try (var parsedPdf = Loader.loadPDF(pdf.bytes())) {
+                            assertEquals(pdf.pageCount(), parsedPdf.getNumberOfPages());
+                            pdfText = new PDFTextStripper().getText(parsedPdf);
+                        }
+                        assertTrue(pdfText.contains(snapshot.sourceRevisionId().toString()));
+                        assertTrue(pdfText.contains(snapshot.formCode()));
+                        assertTrue(pdfText.contains("UNQUALIFIED"));
+                        String compactPdf = pdfText.replaceAll("\\s+", "");
+                        for (var row : snapshot.rows()) {
+                            assertTrue(compactPdf.contains(row.rowId()),
+                                    "PDF missing original row " + row.rowId());
+                            for (var field : fields) {
+                                String v = row.cells().get(field.code());
+                                if (!v.isBlank()) {
+                                    assertTrue(compactPdf.contains(
+                                            v.replaceAll("\\s+", "")),
+                                            "PDF lost " + definition.code() + "/" +
+                                            display + "/" + field.code() + "=" + v);
+                                }
+                            }
+                        }
+                        for (String fmt : List.of("HTML", "PDF")) {
+                            var proof = new LinkedHashMap<String,Object>();
+                            proof.put("formCode", definition.code());
+                            proof.put("displayLocale", display);
+                            proof.put("format", fmt);
+                            proof.put("testCaseId", "FIN-X-" + fmt + "-" + definition.code()
+                                    + "-" + display);
+                            proof.put("sourceRevisionId", confirmed.revisionId().toString());
+                            proof.put("sourceState", snapshot.sourceStatus());
+                            proof.put("snapshotFingerprint", snapshot.normalizedFingerprint());
+                            proof.put("rows", snapshot.rows().size());
+                            proof.put("fields", fields.size());
+                            proof.put("generated", true);
+                            proof.put("validated", true);
+                            proof.put("valuesEqual", true);
+                            proof.put("translationStatus", "PROVISIONAL_OR_MISSING_ONLY");
+                            proof.put("artifactDigest", fmt.equals("HTML")
+                                    ? html.sha256() : pdf.sha256());
+                            proof.put("pageCount", fmt.equals("PDF") ? pdf.pageCount() : 0);
+                            proof.put("verdict", "PASS");
+                            assertNull(X3_X4_EVIDENCE.putIfAbsent(
+                                    definition.code() + "|" + display + "|" + fmt,
+                                    Map.copyOf(proof)));
+                        }
+                    }
+
                     assertEquals("CONFIRMED_UNQUALIFIED_DRAFT",
                             revisionService.current(context.organizationId(),
                                     project.id(), confirmed.slotId()).state());
@@ -487,6 +583,37 @@ class CatalogXlsxRoundTripIntegrationTest {
                     proof.put("state", "PASSED_UNQUALIFIED_DRAFT");
                     EVIDENCE.put(definition.code(), Map.copyOf(proof));
                 }));
+    }
+
+    @AfterAll
+    static void writeX3X4Evidence() throws Exception {
+        assertEquals(166 * 4 * 2, X3_X4_EVIDENCE.size(),
+                "Every form/locale must genuinely render both HTML and parsed PDF");
+        var records = new ArrayList<Map<String,Object>>();
+        for (var form : CatalogCaptureRegistry.all()) {
+            for (var locale : CatalogReportLocale.DISPLAY) {
+                for (String format : List.of("HTML", "PDF")) {
+                    var row = X3_X4_EVIDENCE.get(form.code() + "|" + locale + "|" + format);
+                    assertNotNull(row, "FIN_X3_X4_MISSING " + form.code()
+                            + "/" + locale + "/" + format);
+                    records.add(row);
+                }
+            }
+        }
+        var manifest = new LinkedHashMap<String,Object>();
+        manifest.put("schemaVersion", "FIN_BE_R1_X3_X4_RENDERER_COVERAGE_V1");
+        manifest.put("gitSha", System.getenv().getOrDefault("GITHUB_SHA", "LOCAL_TEST"));
+        manifest.put("forms", 166);
+        manifest.put("displayLocales", CatalogReportLocale.DISPLAY);
+        manifest.put("formats", List.of("HTML", "PDF"));
+        manifest.put("casesPassed", records.size());
+        manifest.put("financialQualified", false);
+        manifest.put("cases", records);
+        Path root = Path.of(System.getProperty("basedir",
+                Files.exists(Path.of("backend/pom.xml")) ? "backend" : "."));
+        Path out = root.resolve("target/fin-evidence/fin-be-r1-x3-x4-render-coverage.json");
+        Files.createDirectories(out.getParent());
+        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(out.toFile(), manifest);
     }
 
     @AfterAll

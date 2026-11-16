@@ -5,6 +5,8 @@ import kz.fin.backend.intake.CatalogReportPresentationService;
 import kz.fin.backend.intake.CatalogXlsxExportService;
 import kz.fin.backend.intake.CatalogXlsxRoundTripService;
 import kz.fin.backend.intake.FinancialReportSnapshotService;
+import kz.fin.backend.intake.FinancialReportHtmlRenderer;
+import kz.fin.backend.intake.FinancialReportPdfRenderer;
 import kz.fin.backend.intake.ReportingPeriodV5;
 import kz.fin.backend.security.FinanceAccessPolicy;
 import kz.fin.backend.security.FinanceAccessPolicy.Permission;
@@ -17,6 +19,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -33,15 +36,21 @@ public class CatalogXlsxExportController {
     private final FinancialReportSnapshotService snapshots;
     private final CatalogReportPresentationService presentation;
     private final CatalogXlsxExportService xlsx;
+    private final FinancialReportHtmlRenderer html;
+    private final FinancialReportPdfRenderer pdf;
 
     public CatalogXlsxExportController(FinanceAccessPolicy access,
                                        FinancialReportSnapshotService snapshots,
                                        CatalogReportPresentationService presentation,
-                                       CatalogXlsxExportService xlsx) {
+                                       CatalogXlsxExportService xlsx,
+                                       FinancialReportHtmlRenderer html,
+                                       FinancialReportPdfRenderer pdf) {
         this.access = access;
         this.snapshots = snapshots;
         this.presentation = presentation;
         this.xlsx = xlsx;
+        this.html = html;
+        this.pdf = pdf;
     }
 
     public record Request(ReportingPeriodV5.Type periodType, String periodCode,
@@ -130,5 +139,75 @@ public class CatalogXlsxExportController {
                                 .filename(filename, StandardCharsets.UTF_8).build()))
                 .contentType(XLSX)
                 .body(report.workbook());
+    }
+
+    /**
+     * X3/X4 are read-only exports, gated by FIN_READ. Cross-format callers
+     * must pin the revision returned by /preview; otherwise independent
+     * "latest" requests could silently switch source between formats.
+     * Rendering never confirms a draft or issues an XLSX template.
+     */
+    private static void requirePinnedRead(Request request) {
+        if (request == null || request.sourceRevisionId() == null ||
+                request.expectedRevisionId() != null) {
+            throw new IllegalArgumentException("FIN_REPORT_EXACT_REVISION_REQUIRED");
+        }
+        CatalogReportLocale.requireDisplay(request.displayLocale());
+    }
+
+    @PostMapping(value = "/latest.html",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<byte[]> exportHtml(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID organizationId,
+            @PathVariable UUID projectId,
+            @PathVariable String formCode,
+            @RequestBody Request request) {
+        access.require(jwt, organizationId, Permission.FIN_READ);
+        requirePinnedRead(request);
+        var snapshot = snapshots.load(query(organizationId, projectId, formCode, request));
+        var result = html.render(snapshot, request.displayLocale(), Instant.now());
+        String filename = "FIN-" + snapshot.formCode() + "-"
+                + snapshot.periodCode() + "-" + request.displayLocale() + ".html";
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Referrer-Policy", "no-referrer")
+                .header("Content-Security-Policy", FinancialReportHtmlRenderer.CSP)
+                .header("X-FIN-Source-Revision", result.sourceRevisionId().toString())
+                .header("X-FIN-Content-SHA256", result.sha256())
+                .header("X-FIN-Source-State", snapshot.sourceStatus())
+                .headers(h -> h.setContentDisposition(ContentDisposition.attachment()
+                        .filename(filename, StandardCharsets.UTF_8).build()))
+                .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
+                .body(result.utf8());
+    }
+
+    @PostMapping(value = "/latest.pdf",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportPdf(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID organizationId,
+            @PathVariable UUID projectId,
+            @PathVariable String formCode,
+            @RequestBody Request request) {
+        access.require(jwt, organizationId, Permission.FIN_READ);
+        requirePinnedRead(request);
+        var snapshot = snapshots.load(query(organizationId, projectId, formCode, request));
+        var result = pdf.render(snapshot, request.displayLocale(), Instant.now());
+        String filename = "FIN-" + snapshot.formCode() + "-"
+                + snapshot.periodCode() + "-" + request.displayLocale() + ".pdf";
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("X-FIN-Source-Revision", result.sourceRevisionId().toString())
+                .header("X-FIN-Content-SHA256", result.sha256())
+                .header("X-FIN-Source-State", snapshot.sourceStatus())
+                .headers(h -> h.setContentDisposition(ContentDisposition.attachment()
+                        .filename(filename, StandardCharsets.UTF_8).build()))
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(result.bytes());
     }
 }
