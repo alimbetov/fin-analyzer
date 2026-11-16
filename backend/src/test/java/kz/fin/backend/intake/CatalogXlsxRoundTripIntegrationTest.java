@@ -808,6 +808,63 @@ class CatalogXlsxRoundTripIntegrationTest {
                         saved.id()));
     }
 
+    private static byte[] withExtraOOXMLPart(byte[] original, String name, byte[] content)
+            throws IOException {
+        var output = new ByteArrayOutputStream();
+        try (var input = new java.util.zip.ZipInputStream(
+                new ByteArrayInputStream(original));
+             var zipped = new java.util.zip.ZipOutputStream(output)) {
+            java.util.zip.ZipEntry existing;
+            while ((existing = input.getNextEntry()) != null) {
+                zipped.putNextEntry(new java.util.zip.ZipEntry(existing.getName()));
+                input.transferTo(zipped);
+                zipped.closeEntry();
+            }
+            zipped.putNextEntry(new java.util.zip.ZipEntry(name));
+            zipped.write(content);
+            zipped.closeEntry();
+        }
+        return output.toByteArray();
+    }
+
+    @Test
+    void activeOrExternallyLinkedOOXMLNeverReachesParserOrDraftPersistence()
+            throws Exception {
+        var c = context("DF-AST-01");
+        byte[] normal = filled(c.formCode(), xlsx.generate(c));
+        assertEquals(2, xlsx.parse(c, normal).rows().size());
+
+        for (String part : List.of(
+                "xl/vbaProject.bin",
+                "xl/externalLinks/externalLink1.xml",
+                "xl/embeddings/attachment.bin",
+                "xl/activeX/activeX1.bin",
+                "xl/connections.xml")) {
+            byte[] tainted = withExtraOOXMLPart(normal, part, new byte[] {1, 2, 3});
+            var blocked = assertThrows(IllegalArgumentException.class,
+                    () -> xlsx.saveDraft(c, tainted, null), part);
+            assertEquals("CATALOG_XLSX_ACTIVE_CONTENT_FORBIDDEN",
+                    blocked.getMessage(), part);
+        }
+        byte[] relationship = ("""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rExt" Type="http://example.org/relationship"
+                    Target="https://example.invalid/payload"
+                    TargetMode="External"/>
+                </Relationships>
+                """).getBytes(StandardCharsets.UTF_8);
+        byte[] withRemote = withExtraOOXMLPart(normal, "xl/_rels/untrusted.rels",
+                relationship);
+        assertEquals("CATALOG_XLSX_ACTIVE_CONTENT_FORBIDDEN",
+                assertThrows(IllegalArgumentException.class, () ->
+                        xlsx.saveDraft(c, withRemote, null)).getMessage());
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_draft
+                 WHERE organization_id=?
+                """, Long.class, c.organizationId()));
+    }
+
     @Test void duplicateSourceRowAndHeaderMutationAreRejected() {
         var context = context("DF-AST-01");
         byte[] populated = filled("DF-AST-01", xlsx.generate(context));
