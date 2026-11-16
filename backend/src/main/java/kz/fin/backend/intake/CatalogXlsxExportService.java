@@ -108,11 +108,13 @@ public class CatalogXlsxExportService {
                 + " | " + words.labelWarning());
         if (snapshot.documentSha256() != null)
             instructions.add(words.evidenceNotice());
-        instructions.add("FIN_SNAPSHOT_CONTENT_V2: " + snapshot.contentFingerprintV2());
         for (var field : localized.fields()) {
             instructions.add(field.fieldCode() + ": " + field.label()
                     + " [" + field.status() + "]");
         }
+        // Append after legacy field captions to preserve all existing fixed
+        // Instructions row indices in FIN-BE-CATALOG-XLSX-V2 consumers.
+        instructions.add("FIN_SNAPSHOT_CONTENT_V2: " + snapshot.contentFingerprintV2());
 
         var issuedReport = issued.issuePopulated(snapshot.projectId(), sourceContext,
                 snapshot.rows(), instructions,
