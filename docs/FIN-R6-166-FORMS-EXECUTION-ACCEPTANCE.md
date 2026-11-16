@@ -1,3 +1,5 @@
+> **UPDATED:** R6.0 baseline only. The implementation now includes 32 specialized draft candidates, local evidence preflight for 12 documents, Excel passport V2 and 794 form-field translation review slots. Current requirements, limitations and release gates: [FIN-R6-1-TO-R6-4-166-FORM-READINESS-AND-EXCEL-UX.md](./FIN-R6-1-TO-R6-4-166-FORM-READINESS-AND-EXCEL-UX.md). Neither 166 financial methodologies nor four-language production coverage are approved yet.
+
 # FIN R6 — разработка всех 166 форм: техническое исполнение и критерии приёмки
 
 Дата: 2026-11-16. Репозиторий: alimbetov/fin-analyzer. Ветка: feat/fin-r0-r1a, PR #2 Draft; main не изменять.
