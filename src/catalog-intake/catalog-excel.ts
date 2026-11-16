@@ -271,7 +271,9 @@ export async function parseTypedCatalogExcel(
     if(rowIndex<0||colIndex<0)return f;
     return {...f,sourceCell:SHEET+"!"+String.fromCharCode(66+colIndex)+(rowIndex+4)};
   });
-  return {...preview,findings,valid:findings.length===0};
+  // Non-blocking methodology warnings (e.g. F06 debit/credit side not qualified)
+  // must not mutate the source validator verdict. Publication still stays false.
+  return {...preview,findings,valid:preview.valid};
 }
 
 /** Registry supports 166 classifications, but only typed-hint forms are XLSX-editable. */
