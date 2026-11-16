@@ -133,7 +133,7 @@ export function normalizeTypedValue(type:FieldType,raw:string):string {
       fail("INVALID_TEXT");
     return value.normalize("NFC");
   }
-  if(value.length>120||!/^[\p{L}\p{N}_./:@-]+$/u.test(value)||
+  if(value.length>120||!/^[\p{L}\p{N}_./:-]+$/u.test(value)||
      /^[=+@-]/.test(value))fail("INVALID_REFERENCE");
   // Field values are not identities. No implicit transliteration or classification.
   return value.normalize("NFC");
