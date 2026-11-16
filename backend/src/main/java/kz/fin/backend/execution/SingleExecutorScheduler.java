@@ -74,7 +74,7 @@ public final class SingleExecutorScheduler {
             rs.getObject(5,UUID.class),rs.getString(6),rs.getString(7)));
         if(pending.isEmpty()) return false;
         var event=pending.getFirst();
-        var revision=event.revision();
+        var revision=event.trustedRevision();
         var methods=adapters.values().stream().filter(MethodTaskAdapter::autoEligible)
                 .filter(a->a.applicable(revision))
                 .sorted(Comparator.comparing(MethodTaskAdapter::methodCode)).toList();
@@ -231,7 +231,7 @@ public final class SingleExecutorScheduler {
 
     private record Event(UUID eventId,UUID org,UUID entity,UUID scope,
                          UUID revision,String hash,String dataSpace) {
-        MethodTaskAdapter.TrustedRevision revision() {
+        MethodTaskAdapter.TrustedRevision trustedRevision() {
             return new MethodTaskAdapter.TrustedRevision(org,entity,scope,revision,hash,dataSpace);
         }
     }
