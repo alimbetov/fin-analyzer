@@ -80,6 +80,15 @@ export async function parseSectorTemplate(input: ArrayBuffer, context: SectorTem
     }
   }
   const sheet=book.getWorksheet("Sector")!;
+  // Counted rows are not the maximum row index; A900 must fail even when
+  // the number of populated rows stays within the form's expected length.
+  sheet.eachRow(row => {
+    if (row.number > fieldsForForm(context.formCode).length + 4)
+      throw new Error("SECTOR_XLSX_EXTRA_ROW: " + row.number);
+    row.eachCell({ includeEmpty: false }, (_cell, col) => {
+      if (col > 3) throw new Error("SECTOR_XLSX_EXTRA_COLUMN: " + col);
+    });
+  });
   if(literal(sheet.getCell("A1").value)!=="FIN SECTOR PILOT" ||
      literal(sheet.getCell("A2").value)!==safeExcelText(context.company) ||
      literal(sheet.getCell("A3").value)!==context.formCode ||
