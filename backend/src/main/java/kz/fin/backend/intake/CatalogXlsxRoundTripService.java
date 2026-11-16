@@ -67,10 +67,13 @@ public class CatalogXlsxRoundTripService {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
+    private final CatalogDocumentPreflight documentPreflight;
 
-    public CatalogXlsxRoundTripService(JdbcTemplate jdbc, ObjectMapper json) {
+    public CatalogXlsxRoundTripService(JdbcTemplate jdbc, ObjectMapper json,
+                                       CatalogDocumentPreflight documentPreflight) {
         this.jdbc = Objects.requireNonNull(jdbc);
         this.json = Objects.requireNonNull(json);
+        this.documentPreflight = Objects.requireNonNull(documentPreflight);
     }
 
     public record Context(UUID organizationId, UUID entityId, UUID businessScopeId,
@@ -342,7 +345,7 @@ public class CatalogXlsxRoundTripService {
                     !parsed.rows().getFirst().cells().get("attachmentRef").equals(document.fileName())) {
                 throw new IllegalArgumentException("CATALOG_XLSX_DOCUMENT_ORIGINAL_REQUIRED");
             }
-            requireOriginalPdf(document);
+            documentPreflight.requireRecognizedOriginal(document);
         } else if (document != null) {
             throw new IllegalArgumentException("CATALOG_XLSX_UNEXPECTED_DOCUMENT");
         }
@@ -437,17 +440,6 @@ public class CatalogXlsxRoundTripService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA256_UNAVAILABLE", e);
         }
-    }
-
-    private static void requireOriginalPdf(OriginalDocument document) {
-        if (document.fileName() == null || !document.fileName().matches("[A-Za-z0-9_-]{1,80}\\.pdf") ||
-                !"application/pdf".equals(document.mediaType()) ||
-                document.bytes().length < 16 || document.bytes().length > MAX_XLSX_BYTES ||
-                !new String(document.bytes(), 0, 5, StandardCharsets.US_ASCII).equals("%PDF-")) {
-            throw new IllegalArgumentException("CATALOG_XLSX_DOCUMENT_UNSUPPORTED_OR_INVALID");
-        }
-        // Signature and checksum verify a format marker and bytes, not document
-        // authenticity or malware-free status. No external publication is allowed.
     }
 
     private static void inspectZip(byte[] bytes) {

@@ -123,6 +123,16 @@ jobs:
           cache-dependency-path: backend/pom.xml
       - name: JUnit 5 and PostgreSQL Testcontainers (real Docker)
         run: mvn -B -ntp -f backend/pom.xml verify
+      - name: Require 166 real Java XLSX PostgreSQL and revision case proofs
+        run: python3 backend/scripts/verify_fin_be_r1_evidence.py
+      - name: Archive 166-form Java/PostgreSQL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-be-r1-166-postgres-evidence-${{ github.job }}
+          path: backend/target/fin-evidence/fin-be-r1-form-upload-coverage.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Fail closed if diagnostic or PostgreSQL integration test evidence is missing
         if: success()
         shell: bash

@@ -2,6 +2,7 @@ package kz.fin.backend.intake;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -19,8 +20,19 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -48,8 +60,11 @@ class CatalogXlsxRoundTripIntegrationTest {
     }
 
     @Autowired CatalogXlsxRoundTripService xlsx;
+    @Autowired CatalogXlsxRevisionService revisionService;
+    @Autowired FormDraftRevisionV5Service projectService;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
+    private static final Map<String, Map<String,Object>> EVIDENCE = new ConcurrentHashMap<>();
 
     private static CatalogXlsxRoundTripService.Context context(String code) {
         return new CatalogXlsxRoundTripService.Context(
@@ -199,6 +214,32 @@ class CatalogXlsxRoundTripIntegrationTest {
                     assertThrows(IllegalArgumentException.class,
                             () -> xlsx.loadDraft(UUID.randomUUID(), saved.id()));
 
+                    // Reuse the existing immutable V5 project, but keep catalog
+                    // confirmation separate from F02 review and FACT publication.
+                    var project = projectService.createProject(
+                            context.organizationId(), context.entityId(),
+                            context.businessScopeId(), context.projectCode(),
+                            context.currency(), "catalog-author");
+                    var confirmed = revisionService.confirm(
+                            context.organizationId(), project.id(), saved.id(),
+                            parsed.normalizedFingerprint(), 0, "catalog-author", "");
+                    assertEquals(1, confirmed.revisionNumber());
+                    assertEquals(saved.id(), confirmed.draftId());
+                    assertEquals(confirmed.revisionId(),
+                            revisionService.current(context.organizationId(),
+                                    project.id(), confirmed.slotId()).revisionId());
+                    assertEquals(1, revisionService.history(context.organizationId(),
+                            project.id(), confirmed.slotId()).size());
+                    assertEquals("CONFIRMED_UNQUALIFIED_DRAFT",
+                            revisionService.current(context.organizationId(),
+                                    project.id(), confirmed.slotId()).state());
+                    assertThrows(IllegalArgumentException.class,
+                            () -> revisionService.confirm(context.organizationId(),
+                                    project.id(), saved.id(), parsed.normalizedFingerprint(),
+                                    0, "catalog-author", "duplicate"));
+                    assertTrue(revisionService.history(UUID.randomUUID(),
+                            project.id(), confirmed.slotId()).isEmpty());
+
                     // Each of the 166 codes proves fail-closed workbook context
                     // and absence of partial persistence.
                     byte[] tampered = edit(populated, book -> book.getSheet("_FIN_Metadata")
@@ -209,7 +250,45 @@ class CatalogXlsxRoundTripIntegrationTest {
                             SELECT count(*) FROM fin_intake.catalog_xlsx_draft
                             WHERE organization_id=? AND form_code=?
                             """, Long.class, context.organizationId(), definition.code()));
+                    Map<String,Object> proof = new LinkedHashMap<>();
+                    proof.put("formCode", definition.code());
+                    proof.put("mode", definition.captureMode().name());
+                    proof.put("fieldCount", fields.size());
+                    proof.put("testCaseId", "BE-R1-ALL-" + definition.code());
+                    proof.put("generated", true);
+                    proof.put("poiOpened", true);
+                    proof.put("filledRoundTrip", true);
+                    proof.put("postgresPersisted", true);
+                    proof.put("negativeContextRejected", true);
+                    proof.put("revisionConfirmed", true);
+                    proof.put("documentOriginalPersisted", evidence);
+                    proof.put("state", "PASSED_UNQUALIFIED_DRAFT");
+                    EVIDENCE.put(definition.code(), Map.copyOf(proof));
                 }));
+    }
+
+    @AfterAll
+    static void writeMandatoryCoverageEvidence() throws Exception {
+        assertEquals(166, EVIDENCE.size(),
+                "Every catalog form must have passed the full XLSX/PostgreSQL/confirm proof");
+        var all = CatalogCaptureRegistry.all().stream()
+                .map(form -> EVIDENCE.get(form.code())).toList();
+        assertFalse(all.contains(null));
+        int fields = all.stream().mapToInt(x -> (Integer)x.get("fieldCount")).sum();
+        assertEquals(794 + 12 * CatalogXlsxRoundTripService.fields("D01").size(), fields);
+        var evidence = new LinkedHashMap<String,Object>();
+        evidence.put("schemaVersion", "FIN_BE_R1_166_POSTGRES_ROUNDTRIP_V1");
+        evidence.put("gitSha", System.getenv().getOrDefault("GITHUB_SHA", "LOCAL_TEST"));
+        evidence.put("expectedFormCount", 166);
+        evidence.put("passedFormCount", EVIDENCE.size());
+        evidence.put("typedFields", 794);
+        evidence.put("catalogVersion", CatalogCaptureRegistry.VERSION);
+        evidence.put("forms", all);
+        Path basedir = Path.of(System.getProperty("basedir",
+                Files.exists(Path.of("backend/pom.xml")) ? "backend" : "."));
+        Path destination = basedir.resolve("target/fin-evidence/fin-be-r1-form-upload-coverage.json");
+        Files.createDirectories(destination.getParent());
+        new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(destination.toFile(), evidence);
     }
 
     @Test void everyDraftIsImmutableAndInvalidOriginalCannotBeStored() {
@@ -259,5 +338,165 @@ class CatalogXlsxRoundTripIntegrationTest {
         assertThrows(IllegalArgumentException.class, () -> xlsx.parse(context, oldTemplate));
         byte[] newTemplate = xlsx.generate(context);
         assertThrows(IllegalArgumentException.class, () -> legacy.parse(old, newTemplate));
+    }
+
+    @Test void confirmedDraftCreatesImmutableHistoryAndRejectsStaleRevision() {
+        var context = context("DF-AST-01");
+        var project = projectService.createProject(
+                context.organizationId(), context.entityId(), context.businessScopeId(),
+                context.projectCode(), context.currency(), "author");
+        byte[] template = xlsx.generate(context);
+        byte[] populated = filled("DF-AST-01", template);
+        var firstDraft = xlsx.saveDraft(context, populated, null);
+        var first = revisionService.confirm(context.organizationId(), project.id(),
+                firstDraft.id(), firstDraft.normalizedFingerprint(), 0, "author", "");
+        assertNull(first.parentRevisionId());
+
+        byte[] updated = edit(populated, b -> b.getSheet("FIN_Data")
+                .getRow(1).getCell(2).setCellValue("UPDATED_CODE"));
+        var secondDraft = xlsx.saveDraft(context, updated, null);
+        var second = revisionService.confirm(context.organizationId(), project.id(),
+                secondDraft.id(), secondDraft.normalizedFingerprint(), 1,
+                "author", "Corrected the recorded field");
+        assertEquals(2, second.revisionNumber());
+        assertEquals(first.slotId(), second.slotId());
+        assertEquals(first.revisionId(), second.parentRevisionId());
+        assertEquals(second.revisionId(), revisionService.current(
+                context.organizationId(), project.id(), second.slotId()).revisionId());
+        var history = revisionService.history(context.organizationId(),
+                project.id(), second.slotId());
+        assertEquals(2, history.size());
+        assertEquals(first.revisionId(), history.getFirst().revisionId());
+        assertEquals("CONFIRMED_UNQUALIFIED_DRAFT", history.getFirst().state());
+        assertEquals(second.revisionId(), history.get(1).revisionId());
+        assertThrows(IllegalArgumentException.class, () -> revisionService.confirm(
+                context.organizationId(), project.id(), firstDraft.id(),
+                firstDraft.normalizedFingerprint(), 0, "author", "stale"));
+        assertThrows(IllegalArgumentException.class, () -> revisionService.confirm(
+                context.organizationId(), project.id(), firstDraft.id(),
+                "0".repeat(64), 2, "author", "wrong fingerprint"));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "DELETE FROM fin_intake.catalog_xlsx_revision WHERE id=?",
+                first.revisionId()));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE fin_intake.catalog_xlsx_revision SET state=state WHERE id=?",
+                second.revisionId()));
+    }
+
+    @Test void twoConcurrentConfirmationsHaveExactlyOneWinner() throws Exception {
+        var context = context("DF-AST-02");
+        var project = projectService.createProject(
+                context.organizationId(), context.entityId(), context.businessScopeId(),
+                context.projectCode(), context.currency(), "author");
+        byte[] populated = filled("DF-AST-02", xlsx.generate(context));
+        var initial = xlsx.saveDraft(context, populated, null);
+        var first = revisionService.confirm(context.organizationId(), project.id(),
+                initial.id(), initial.normalizedFingerprint(), 0, "author", "");
+
+        var draftA = xlsx.saveDraft(context, populated, null);
+        var draftB = xlsx.saveDraft(context, populated, null);
+        var start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var futureA = executor.submit(() -> {
+                start.await();
+                try {
+                    revisionService.confirm(context.organizationId(), project.id(),
+                            draftA.id(), draftA.normalizedFingerprint(), 1,
+                            "authorA", "new revision A");
+                    return true;
+                } catch (IllegalArgumentException conflict) {
+                    return false;
+                }
+            });
+            var futureB = executor.submit(() -> {
+                start.await();
+                try {
+                    revisionService.confirm(context.organizationId(), project.id(),
+                            draftB.id(), draftB.normalizedFingerprint(), 1,
+                            "authorB", "new revision B");
+                    return true;
+                } catch (IllegalArgumentException conflict) {
+                    return false;
+                }
+            });
+            start.countDown();
+            int successes = (futureA.get(30, TimeUnit.SECONDS) ? 1 : 0)
+                    + (futureB.get(30, TimeUnit.SECONDS) ? 1 : 0);
+            assertEquals(1, successes);
+        }
+        var history = revisionService.history(context.organizationId(),
+                project.id(), first.slotId());
+        assertEquals(2, history.size());
+        assertEquals(2, revisionService.current(
+                context.organizationId(), project.id(), first.slotId()).revisionNumber());
+    }
+
+    @Test void documentEvidenceSupportsSixOfflineFormatsAndRejectsMismatches() throws Exception {
+        var context = context("D01");
+        var candidate = new java.util.ArrayList<CatalogXlsxRoundTripService.OriginalDocument>();
+        candidate.add(original());
+        try (var doc = new XWPFDocument(); var out = new ByteArrayOutputStream()) {
+            doc.createParagraph().createRun().setText("Synthetic document");
+            doc.write(out);
+            candidate.add(new CatalogXlsxRoundTripService.OriginalDocument(
+                    "evidence.docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    out.toByteArray()));
+        }
+        candidate.add(new CatalogXlsxRoundTripService.OriginalDocument(
+                "evidence.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                xlsx.generate(context)));
+        candidate.add(new CatalogXlsxRoundTripService.OriginalDocument(
+                "evidence.xml", "application/xml",
+                "<?xml version=\"1.0\"?><evidence>synthetic</evidence>"
+                        .getBytes(StandardCharsets.UTF_8)));
+        BufferedImage img = new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB);
+        try (var out = new ByteArrayOutputStream()) {
+            assertTrue(ImageIO.write(img, "png", out));
+            candidate.add(new CatalogXlsxRoundTripService.OriginalDocument(
+                    "evidence.png", "image/png", out.toByteArray()));
+        }
+        try (var out = new ByteArrayOutputStream()) {
+            assertTrue(ImageIO.write(img, "jpeg", out));
+            candidate.add(new CatalogXlsxRoundTripService.OriginalDocument(
+                    "evidence.jpg", "image/jpeg", out.toByteArray()));
+        }
+        byte[] template = xlsx.generate(context);
+        for (var originalFile : candidate) {
+            byte[] populated = edit(filled("D01", template), book ->
+                    book.getSheet("FIN_Data").getRow(1).getCell(6)
+                            .setCellValue(originalFile.fileName()));
+            var saved = xlsx.saveDraft(context, populated, originalFile);
+            assertNotNull(saved.documentSha256());
+            assertEquals(originalFile.mediaType(), jdbc.queryForObject(
+                    "SELECT document_media_type FROM fin_intake.catalog_xlsx_draft WHERE id=?",
+                    String.class, saved.id()));
+            assertArrayEquals(originalFile.bytes(), jdbc.queryForObject(
+                    "SELECT document_original FROM fin_intake.catalog_xlsx_draft WHERE id=?",
+                    byte[].class, saved.id()));
+        }
+        assertEquals(6L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_draft
+                WHERE organization_id=? AND capture_mode='EVIDENCE_ONLY'
+                """, Long.class, context.organizationId()));
+
+        byte[] pdfWorkbook = filled("D01", template);
+        for (var bad : List.of(
+                new CatalogXlsxRoundTripService.OriginalDocument(
+                        "evidence.pdf", "application/pdf",
+                        "NOT_PDF_MALFORMED___".getBytes(StandardCharsets.US_ASCII)),
+                new CatalogXlsxRoundTripService.OriginalDocument(
+                        "evidence.pdf", "application/pdf",
+                        "%PDF-1.4\nmissing EOF\n".getBytes(StandardCharsets.US_ASCII)),
+                new CatalogXlsxRoundTripService.OriginalDocument(
+                        "evidence.pdf", "application/xml", pdf()),
+                new CatalogXlsxRoundTripService.OriginalDocument(
+                        "evidence.pdf", "application/pdf",
+                        "<!DOCTYPE x [<!ENTITY a SYSTEM 'file:///etc/passwd'>]><x>&a;</x>"
+                                .getBytes(StandardCharsets.US_ASCII)))) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> xlsx.saveDraft(context, pdfWorkbook, bad));
+        }
     }
 }
