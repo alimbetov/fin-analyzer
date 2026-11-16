@@ -108,6 +108,15 @@ class FormDraftRevisionV5IntegrationTest {
         assertEquals("Corrected source revenue",history.getFirst().reason());
         assertEquals("kk",history.getFirst().inputLocale());
         assertFalse(history.getFirst().savedAt().isBefore(history.getFirst().uploadedAt()));
+        var older=ledger.readRevision(scope.org,p.id(),"2026.10",1);
+        var current=ledger.readRevision(scope.org,p.id(),"2026.10",2);
+        assertEquals("400",older.cells().getFirst().decimalText());
+        assertEquals("420",current.cells().getFirst().decimalText());
+        assertEquals(1,older.revisionNumber());
+        assertEquals(2,current.revisionNumber());
+        assertEquals("kk",current.inputLocale());
+        assertThrows(IllegalArgumentException.class,()->
+            ledger.readRevision(scope.org,UUID.randomUUID(),"2026.10",1));
         assertEquals(r1.revisionId(),jdbc.queryForObject("""
           SELECT parent_revision_id FROM fin_intake.draft_revision_v5 WHERE id=?
           """,UUID.class,r2.revisionId()));
@@ -140,6 +149,12 @@ class FormDraftRevisionV5IntegrationTest {
             ()->ledger.confirm(foreign.org,p.id(),current.id(),current.confirmationDigest(),1,"author","x"));
         assertThrows(IllegalArgumentException.class,
             ()->ledger.confirm(x.org,p.id(),current.id(),"0".repeat(64),1,"author","x"));
+        assertThrows(IllegalArgumentException.class,
+            ()->ledger.confirm(x.org,UUID.randomUUID(),current.id(),
+                current.confirmationDigest(),1,"author","x"));
+        assertThrows(IllegalArgumentException.class,
+            ()->ledger.confirm(x.org,p.id(),current.id(),
+                current.confirmationDigest(),1,"intruder","x"));
     }
 
     @Test void periodScaleAndSourceIdentityArePinnedAcrossRepeats(){
