@@ -456,7 +456,7 @@ public class CatalogXlsxRoundTripService {
         return cell.getStringCellValue();
     }
 
-    private static String normalizedFingerprint(Context context,
+    static String normalizedFingerprint(Context context,
             List<CatalogCaptureRegistry.EntryRow> rows) {
         StringBuilder builder = new StringBuilder(schemaFingerprint(context.formCode()))
                 .append('|').append(context.organizationId())

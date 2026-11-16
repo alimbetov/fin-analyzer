@@ -62,6 +62,7 @@ class CatalogXlsxRoundTripIntegrationTest {
     @Autowired CatalogXlsxRoundTripService xlsx;
     @Autowired CatalogXlsxRevisionService revisionService;
     @Autowired CatalogIssuedTemplateService issuedService;
+    @Autowired FinancialReportSnapshotService reportSnapshotService;
     @Autowired FormDraftRevisionV5Service projectService;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
@@ -72,6 +73,16 @@ class CatalogXlsxRoundTripIntegrationTest {
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROJECT_R1",
                 code, "MANAGEMENT", ReportingPeriodV5.Type.MONTH, "2026.10",
                 ReportingPeriodV5.Coverage.PERIOD_ONLY, "KZT", 1, "ru");
+    }
+
+    private static FinancialReportSnapshotService.Query snapshotQuery(
+            CatalogXlsxRoundTripService.Context context, UUID projectId,
+            Integer scale, UUID exactRevisionId, UUID expectedLatestRevisionId) {
+        return new FinancialReportSnapshotService.Query(
+                context.organizationId(), projectId, context.formCode(),
+                context.periodType(), context.periodCode(), context.reportingBasis(),
+                context.coverage(), context.currency(), scale,
+                exactRevisionId, expectedLatestRevisionId);
     }
 
     private static String value(CatalogCaptureRegistry.Field field) {
@@ -309,6 +320,29 @@ class CatalogXlsxRoundTripIntegrationTest {
                                     project.id(), confirmed.slotId()).revisionId());
                     assertEquals(1, revisionService.history(context.organizationId(),
                             project.id(), confirmed.slotId()).size());
+                    // X1: prove the SQL snapshot resolves the actual confirmed
+                    // revision and the original canonical rows for all 166 codes.
+                    var snapshot = reportSnapshotService.load(snapshotQuery(
+                            context, project.id(), context.amountScale(), null, null));
+                    assertEquals(confirmed.revisionId(), snapshot.sourceRevisionId());
+                    assertEquals(confirmed.draftId(), snapshot.sourceDraftId());
+                    assertEquals(confirmed.normalizedFingerprint(),
+                            snapshot.normalizedFingerprint());
+                    assertEquals(context.locale(), snapshot.sourceInputLocale());
+                    assertEquals(context.currency(), snapshot.currency());
+                    assertEquals(context.amountScale(), snapshot.amountScale());
+                    assertEquals(parsed.rows().size(), snapshot.rows().size());
+                    assertEquals(json.valueToTree(parsed.rows()),
+                            json.valueToTree(snapshot.rows()));
+                    assertEquals("CONFIRMED_UNQUALIFIED_DRAFT", snapshot.sourceStatus());
+                    assertThrows(UnsupportedOperationException.class, () ->
+                            snapshot.rows().getFirst().cells().put("injected", "123"));
+                    for (var display : CatalogReportLocale.DISPLAY) {
+                        var selection = new CatalogReportLocale.Selection(
+                                snapshot.sourceInputLocale(), display);
+                        assertEquals(context.locale(), selection.sourceInputLocale());
+                    }
+
                     assertEquals("CONFIRMED_UNQUALIFIED_DRAFT",
                             revisionService.current(context.organizationId(),
                                     project.id(), confirmed.slotId()).state());
@@ -371,6 +405,77 @@ class CatalogXlsxRoundTripIntegrationTest {
         Path destination = basedir.resolve("target/fin-evidence/fin-be-r1-form-upload-coverage.json");
         Files.createDirectories(destination.getParent());
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(destination.toFile(), evidence);
+    }
+
+    @Test
+    void snapshotSelectsLatestConfirmedNotNewestDraftAndCanPinHistoricalRevision() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(), c.entityId(),
+                c.businessScopeId(), c.projectCode(), c.currency(), "author");
+        byte[] populated = filled(c.formCode(), xlsx.generate(c));
+        var savedFirst = xlsx.saveDraft(c, populated, null);
+        var first = revisionService.confirm(c.organizationId(), project.id(), savedFirst.id(),
+                savedFirst.normalizedFingerprint(), 0, "author", "");
+        var initial = reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), null, null));
+        assertEquals(first.revisionId(), initial.sourceRevisionId());
+
+        byte[] updated = edit(populated, b -> b.getSheet("FIN_Data")
+                .getRow(1).getCell(0).setCellValue("NEW-ROW"));
+        var pending = xlsx.saveDraft(c, updated, null);
+        assertEquals(first.revisionId(), reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), null, null)).sourceRevisionId());
+        var second = revisionService.confirm(c.organizationId(), project.id(), pending.id(),
+                pending.normalizedFingerprint(), 1, "author", "revised row");
+        var latest = reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), null, null));
+        assertEquals(second.revisionId(), latest.sourceRevisionId());
+        assertEquals("NEW-ROW", latest.rows().getFirst().rowId());
+
+        var historical = reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), first.revisionId(), null));
+        assertEquals(first.revisionId(), historical.sourceRevisionId());
+        assertEquals(initial.normalizedFingerprint(), historical.normalizedFingerprint());
+        assertNotEquals(latest.normalizedFingerprint(), historical.normalizedFingerprint());
+        assertThrows(IllegalArgumentException.class, () ->
+                reportSnapshotService.load(snapshotQuery(
+                        c, project.id(), c.amountScale(), null, first.revisionId())));
+        assertEquals(second.revisionId(), reportSnapshotService.load(snapshotQuery(
+                c, project.id(), c.amountScale(), null, second.revisionId()))
+                .sourceRevisionId());
+        assertThrows(IllegalArgumentException.class, () ->
+                reportSnapshotService.load(new FinancialReportSnapshotService.Query(
+                        UUID.randomUUID(), project.id(), c.formCode(), c.periodType(),
+                        c.periodCode(), c.reportingBasis(), c.coverage(),
+                        c.currency(), c.amountScale(), first.revisionId(), null)));
+        assertThrows(IllegalArgumentException.class, () ->
+                reportSnapshotService.load(new FinancialReportSnapshotService.Query(
+                        c.organizationId(), UUID.randomUUID(), c.formCode(), c.periodType(),
+                        c.periodCode(), c.reportingBasis(), c.coverage(),
+                        c.currency(), c.amountScale(), first.revisionId(), null)));
+    }
+
+    @Test
+    void snapshotRejectsAmbiguousSlotsUnlessCoordinatesAreComplete() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(), c.entityId(),
+                c.businessScopeId(), c.projectCode(), c.currency(), "author");
+        for (int scale : List.of(1, 1000)) {
+            var selected = new CatalogXlsxRoundTripService.Context(
+                    c.organizationId(), c.entityId(), c.businessScopeId(),
+                    c.projectCode(), c.formCode(), c.reportingBasis(), c.periodType(),
+                    c.periodCode(), c.coverage(), c.currency(), scale, c.locale());
+            var saved = xlsx.saveDraft(selected,
+                    filled(selected.formCode(), xlsx.generate(selected)), null);
+            revisionService.confirm(c.organizationId(), project.id(), saved.id(),
+                    saved.normalizedFingerprint(), 0, "author", "");
+        }
+        assertThrows(IllegalArgumentException.class, () ->
+                reportSnapshotService.load(snapshotQuery(c, project.id(), null, null, null)));
+        assertEquals(1000, reportSnapshotService.load(snapshotQuery(
+                c, project.id(), 1000, null, null)).amountScale());
+        assertEquals(1, reportSnapshotService.load(snapshotQuery(
+                c, project.id(), 1, null, null)).amountScale());
     }
 
     @Test void everyDraftIsImmutableAndInvalidOriginalCannotBeStored() {
