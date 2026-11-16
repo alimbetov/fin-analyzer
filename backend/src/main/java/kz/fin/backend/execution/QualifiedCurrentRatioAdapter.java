@@ -7,6 +7,7 @@ import kz.fin.backend.analytics.AutoReportProjection;
 import kz.fin.backend.domain.EconomicKernel;
 import kz.fin.backend.persistence.TrustedAutoReportService;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -25,15 +26,18 @@ public final class QualifiedCurrentRatioAdapter implements MethodTaskAdapter {
     private final JdbcTemplate jdbc;
     private final TrustedAutoReportService reports;
     private final ObjectMapper json;
+    private final boolean explicitlyEnabled;
 
     public QualifiedCurrentRatioAdapter(JdbcTemplate jdbc,
                                         TrustedAutoReportService reports,
-                                        ObjectMapper json) {
+                                        ObjectMapper json,
+                                        @Value("${fin.methods.fin04.enabled:false}") boolean explicitlyEnabled) {
         this.jdbc=jdbc; this.reports=reports; this.json=json;
+        this.explicitlyEnabled=explicitlyEnabled;
     }
 
     @Override public String methodCode(){return CODE;}
-    @Override public boolean autoEligible(){return true;}
+    @Override public boolean autoEligible(){return explicitlyEnabled;}
     @Override public List<String> dependsOn(){
         return List.of("SYS/VERIFY_PUBLISHED_FACT_SET");
     }
