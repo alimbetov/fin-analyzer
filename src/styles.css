@@ -270,7 +270,7 @@ footer { text-align: center; color: #536c87; font-size: 11px; margin: 28px 0; }
 
 
 /* FIN R6 — catalog-wide typed intake (122 evidence-unqualified forms). */
-.fin-catalog-studio {font-family:Inter,system-ui,-apple-system,"Segoe UI","Noto Sans",sans-serif;}
+.fin-catalog-studio {font-family:Inter,system-ui,-apple-system,"Segoe UI","Noto Sans",sans-serif;min-width:0;max-width:100%;width:100%;box-sizing:border-box;overflow:hidden;}
 .fin-catalog-warning {font-size:12px;line-height:1.7;color:#bfd8ed;}
 .fin-catalog-controls {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0;}
 .fin-catalog-controls label {display:flex;flex-direction:column;gap:8px;min-width:0;color:#bdd3e9;font-size:12px;font-weight:600;}
@@ -283,7 +283,7 @@ footer { text-align: center; color: #536c87; font-size: 11px; margin: 28px 0; }
 .fin-catalog-context {color:#93bddb;font-size:12px;line-height:1.6;overflow-wrap:anywhere;}
 .fin-catalog-blocked,.fin-catalog-error {padding:12px 14px;border:1px solid #a87380;border-radius:8px;
   color:#ffe2e5;background:#422a38;font-size:13px;line-height:1.6;}
-.fin-catalog-table-wrap {width:100%;overflow:auto;border:1px solid #405c76;border-radius:12px;margin:12px 0;}
+.fin-catalog-table-wrap {width:100%;max-width:100%;min-width:0;overflow:auto;border:1px solid #405c76;border-radius:12px;margin:12px 0;}
 .fin-catalog-table {min-width:max(750px,100%);border-collapse:separate;border-spacing:0;font-size:12px;}
 .fin-catalog-table caption {padding:12px 15px;text-align:left;font-weight:600;color:#c3d8ee;}
 .fin-catalog-table thead th {position:sticky;top:0;z-index:1;padding:14px 12px;background:#254767;color:#f0f7ff;
