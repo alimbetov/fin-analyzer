@@ -12,8 +12,12 @@ export interface ReportingPeriod {
   asOfDate?: string;
 }
 function utc(y: number, m: number, d: number): Date {
-  const date = new Date(Date.UTC(0, m, d));
-  date.setUTCFullYear(y);
+  // Normalize the month before assigning the year: setUTCFullYear alone loses
+  // the carry from month 12 (2026-12 + 1 must be 2027-01, not 2026-01).
+  const yearCarry = Math.floor(m / 12);
+  const normalizedMonth = ((m % 12) + 12) % 12;
+  const date = new Date(Date.UTC(2000, normalizedMonth, d));
+  date.setUTCFullYear(y + yearCarry);
   return date;
 }
 function iso(date: Date): string { return date.toISOString().slice(0,10); }
