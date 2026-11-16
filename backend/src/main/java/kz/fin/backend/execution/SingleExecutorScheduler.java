@@ -130,13 +130,13 @@ public final class SingleExecutorScheduler {
 
     private void recordPlanningFailure(UUID eventId) {
         jdbc.update("""
-            INSERT INTO fin_exec.outbox_planning_failure
+            INSERT INTO fin_exec.outbox_planning_failure AS f
                 (event_id,attempt_count,next_retry_at,dead_letter,last_error_code)
             VALUES (?,1,now()+interval '10 seconds',false,'PLANNING_FAILED')
             ON CONFLICT(event_id) DO UPDATE SET
-                attempt_count=fin_exec.outbox_planning_failure.attempt_count+1,
+                attempt_count=f.attempt_count+1,
                 next_retry_at=now()+interval '10 seconds',
-                dead_letter=(fin_exec.outbox_planning_failure.attempt_count+1>=5),
+                dead_letter=(f.attempt_count+1>=5),
                 updated_at=now()
             """,eventId);
     }
