@@ -148,7 +148,7 @@ describe("FIN catalog typed workbook integration, per form code",()=>{
   });
   it("specialized F02 generates an UNQUALIFIED candidate layout; documents D01 do not masquerade as numeric forms",async()=>{
     const book=await readBook(await generateTypedCatalogExcel({...ctx,formCode:"F02"}));
-    expect(book.getWorksheet("FIN_Catalog")!.getCell("B2").value).toBe("netRevenue");
+    expect(book.getWorksheet("FIN_Catalog")!.getCell("B2").value).toBe("Чистая выручка");
     expect(book.getWorksheet("Instructions")!.getCell("B14").value).toBe("UNQUALIFIED_DRAFT");
     await expect(generateTypedCatalogExcel({...ctx,formCode:"D01"}))
       .rejects.toThrow("CATALOG_SCHEMA_NOT_QUALIFIED");
