@@ -91,7 +91,7 @@ class QualifiedCurrentRatioIntegrationTest {
         insertBalance(org,entity,scope,revision,source,"1.0.0",
             useCurrentFields?"CURRENT_ASSETS":"ASSETS",
             "currentAssets","assets",assets,AS_OF,"KZT",origins);
-        insertBalance(org,entity,scope,revision,source,contractVersion,
+        insertBalance(org,entity,scope,revision,source,"1.0.0",
             useCurrentFields?"CURRENT_LIABILITIES":"LIABILITIES",
             "currentLiabilities","liabilities",liabilities,
             sameDate?AS_OF:AS_OF.minusDays(1),sameCurrency?"KZT":"USD",origins);
