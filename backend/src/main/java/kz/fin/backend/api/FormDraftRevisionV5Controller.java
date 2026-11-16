@@ -71,6 +71,15 @@ public class FormDraftRevisionV5Controller {
         return service.history(organizationId,projectId,periodCode);
     }
 
+    @GetMapping("/{projectId}/forms/F02/history/{revisionNumber}")
+    public FormDraftRevisionV5Service.RevisionDetail revision(
+            @AuthenticationPrincipal Jwt jwt,@PathVariable UUID organizationId,
+            @PathVariable UUID projectId,@PathVariable int revisionNumber,
+            @RequestParam String periodCode) {
+        access.require(jwt,organizationId,Permission.FIN_READ);
+        return service.readRevision(organizationId,projectId,periodCode,revisionNumber);
+    }
+
     @GetMapping("/{projectId}/forms/F02/uploads")
     public List<FormDraftRevisionV5Service.UploadHistory> uploads(
             @AuthenticationPrincipal Jwt jwt,@PathVariable UUID organizationId,
