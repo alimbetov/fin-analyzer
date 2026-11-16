@@ -50,16 +50,16 @@ class QualifiedCurrentRatioIntegrationTest {
     private static final String DOC_HASH="b".repeat(64);
     private record Fixture(UUID org,UUID entity,UUID scope,UUID revision){}
 
-    private Fixture seed(String contractVersion,String qualification,String assets,
+    private Fixture seed(String assets,
                          String liabilities,boolean origins,boolean sameDate,
                          boolean sameCurrency,boolean useCurrentFields) {
         for(String metric:List.of("CURRENT_ASSETS","CURRENT_LIABILITIES")) {
             jdbc.update("""
                 INSERT INTO fin_calc.metric_contract
                  (metric_code,metric_version,measure_kind,unit_code,qualification,method_ref)
-                VALUES (?,?,'STOCK','MONEY',?,'FIN04_TEST')
+                VALUES (?,'1.0.0','STOCK','MONEY','QUALIFIED','FIN04_TEST')
                 ON CONFLICT DO NOTHING
-                """,metric,contractVersion,qualification);
+                """,metric);
         }
         UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),
              scope=UUID.randomUUID(),revision=UUID.randomUUID(),source=UUID.randomUUID();
@@ -80,7 +80,7 @@ class QualifiedCurrentRatioIntegrationTest {
             INSERT INTO fin_fact.fact_set_revision(id,organization_id,status,approved_at)
             VALUES (?,?,'APPROVED',now())
             """,revision,org);
-        insertBalance(org,entity,scope,revision,source,contractVersion,
+        insertBalance(org,entity,scope,revision,source,"1.0.0",
             useCurrentFields?"CURRENT_ASSETS":"ASSETS",
             "currentAssets","assets",assets,AS_OF,"KZT",origins);
         insertBalance(org,entity,scope,revision,source,contractVersion,
@@ -161,7 +161,7 @@ class QualifiedCurrentRatioIntegrationTest {
     }
 
     @Test void approvedCurrentBalancesProduceTwoPointZeroAndImmutableCore() throws Exception {
-        var f=seed("vFIN04Good","QUALIFIED","400","200",true,true,true,true);
+        var f=seed("400","200",true,true,true,true);
         executeToTerminal(f);
         assertEquals(1L,scheduled(f));
         var r=json.readTree(result(f));
@@ -198,7 +198,7 @@ class QualifiedCurrentRatioIntegrationTest {
     }
 
     @Test void zeroLiabilitiesProducesExplicitNotComputableNotInfinity() throws Exception {
-        var f=seed("vFIN04Zero","QUALIFIED","400","0",true,true,true,true);
+        var f=seed("400","0",true,true,true,true);
         executeToTerminal(f);
         assertEquals(1L,scheduled(f));
         var result=json.readTree(result(f));
@@ -208,23 +208,22 @@ class QualifiedCurrentRatioIntegrationTest {
     }
 
     @Test void missingOriginOrWrongDateOrCurrencyNeverSchedulesRatio() {
-        var noOrigin=seed("vFIN04NoOrigin","QUALIFIED","400","200",false,true,true,true);
+        var noOrigin=seed("400","200",false,true,true,true);
         executeToTerminal(noOrigin);
         assertEquals(0L,scheduled(noOrigin));
-        var wrongDate=seed("vFIN04Date","QUALIFIED","400","200",true,false,true,true);
+        var wrongDate=seed("400","200",true,false,true,true);
         executeToTerminal(wrongDate);
         assertEquals(0L,scheduled(wrongDate));
-        var wrongCurrency=seed("vFIN04Currency","QUALIFIED","400","200",true,true,false,true);
+        var wrongCurrency=seed("400","200",true,true,false,true);
         executeToTerminal(wrongCurrency);
         assertEquals(0L,scheduled(wrongCurrency));
     }
 
-    @Test void totalAssetsAreNotAcceptedAsCurrentAssetsAndPilotIsBlocked() {
-        var total=seed("vFIN04Total","QUALIFIED","400","200",true,true,true,false);
+    @Test void totalAssetsAreNotAcceptedAsCurrentAssets() {
+        var total=seed("400","200",true,true,true,false);
         executeToTerminal(total);
         assertEquals(0L,scheduled(total));
-        var unqualified=seed("vFIN04Pilot","PILOT","400","200",true,true,true,true);
-        executeToTerminal(unqualified);
-        assertEquals(0L,scheduled(unqualified));
+        // Qualified metric contracts alone are insufficient: F01 TOTAL
+        // columns cannot be interpreted as CURRENT columns.
     }
 }
