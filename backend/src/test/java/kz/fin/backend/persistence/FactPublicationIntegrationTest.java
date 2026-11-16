@@ -37,6 +37,7 @@ class FactPublicationIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired FactAssertionJpaRepository repository;
     @Autowired FactSetPublicationService publicationService;
+    @Autowired kz.fin.backend.execution.SingleExecutorScheduler scheduler;
 
     record Fixture(UUID org, UUID entity, UUID scope, UUID sourceId,
                    UUID factId, UUID revisionId, String factHash) {
@@ -343,6 +344,91 @@ class FactPublicationIntegrationTest {
             SELECT count(*) FROM fin_exec.fact_publication_outbox
              WHERE organization_id=? AND fact_set_revision_id=?
             """,Long.class,f.org(),f.revisionId()));
+    }
+
+
+    @Test void consumerSchedulesAndExecutesOneLogicalRunForPublishedRevision() {
+        var f=fixture();
+        publish(f);
+        for(int i=0;i<150;i++) {
+            scheduler.tick();
+            Long complete=jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.analysis_run
+                 WHERE organization_id=? AND fact_set_revision_id=?
+                   AND run_status='COMPLETED'
+                """,Long.class,f.org(),f.revisionId());
+            if(complete==1L) break;
+        }
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_task t
+            JOIN fin_exec.analysis_run r ON r.id=t.run_id
+            WHERE r.organization_id=? AND r.fact_set_revision_id=?
+              AND t.method_code='SYS/VERIFY_PUBLISHED_FACT_SET'
+              AND t.task_status='COMPUTED'
+            """,Long.class,f.org(),f.revisionId()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.outbox_delivery d
+            JOIN fin_exec.fact_publication_outbox o ON o.event_id=d.event_id
+            WHERE o.organization_id=? AND o.fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+        // Redelivery/polling must not create a duplicate logical run.
+        scheduler.tick();
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,Long.class,f.org(),f.revisionId()));
+    }
+
+    @Test void crashedWorkerLeaseIsRecoveredWithFreshFencingToken() {
+        var f=fixture();
+        publish(f);
+        UUID event=jdbc.queryForObject("""
+            SELECT event_id FROM fin_exec.fact_publication_outbox
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,UUID.class,f.org(),f.revisionId());
+        String hash=jdbc.queryForObject("""
+            SELECT snapshot_hash FROM fin_fact.fact_set_publication
+             WHERE organization_id=? AND fact_set_revision_id=?
+            """,String.class,f.org(),f.revisionId());
+        UUID run=UUID.randomUUID(), task=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO fin_exec.analysis_run
+              (id,event_id,organization_id,fact_set_revision_id,snapshot_hash,profile_code,run_status)
+            VALUES (?,?,?,?,?,'AUTO_CORE_V1','RUNNING')
+            """,run,event,f.org(),f.revisionId(),hash);
+        jdbc.update("""
+            INSERT INTO fin_exec.outbox_delivery(event_id,analysis_run_id) VALUES (?,?)
+            """,event,run);
+        jdbc.update("""
+            INSERT INTO fin_exec.analysis_task
+              (id,run_id,method_code,task_status,attempt,fencing_token,lease_until)
+            VALUES (?,?,'SYS/VERIFY_PUBLISHED_FACT_SET','RUNNING',1,1,now()-interval '5 seconds')
+            """,task,run);
+        for(int i=0;i<150;i++) {
+            scheduler.tick();
+            String state=jdbc.queryForObject("""
+                SELECT task_status FROM fin_exec.analysis_task WHERE id=?
+                """,String.class,task);
+            if("COMPUTED".equals(state)) break;
+        }
+        assertEquals("COMPUTED",jdbc.queryForObject("""
+            SELECT task_status FROM fin_exec.analysis_task WHERE id=?
+            """,String.class,task));
+        assertEquals(2L,jdbc.queryForObject("""
+            SELECT fencing_token FROM fin_exec.analysis_task WHERE id=?
+            """,Long.class,task));
+        assertEquals("COMPLETED",jdbc.queryForObject("""
+            SELECT run_status FROM fin_exec.analysis_run WHERE id=?
+            """,String.class,run));
+        // A late/stale attempt cannot overwrite already committed output.
+        assertEquals(0,jdbc.update("""
+            UPDATE fin_exec.analysis_task SET result_json='{}'::jsonb
+             WHERE id=? AND task_status='RUNNING' AND fencing_token=1
+            """,task));
     }
 
     private boolean attemptPublish(Fixture candidate,UUID expected,
