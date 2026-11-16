@@ -126,12 +126,12 @@ public final class SingleExecutorScheduler {
             """);
         // A failed predecessor blocks descendants instead of leaving them pending forever.
         jdbc.update("""
-            UPDATE fin_exec.analysis_task t SET task_status='BLOCKED',
+            UPDATE fin_exec.analysis_task t SET task_status='FAILED_FINAL',
                    result_error='PREREQUISITE_FAILED',updated_at=now()
              WHERE t.task_status='PENDING' AND EXISTS (
                  SELECT 1 FROM fin_exec.analysis_dependency d
                  JOIN fin_exec.analysis_task p ON p.id=d.prerequisite_task_id
-                 WHERE d.task_id=t.id AND p.task_status IN ('BLOCKED','FAILED_FINAL'))
+                 WHERE d.task_id=t.id AND p.task_status IN ('FAILED_FINAL','BLOCKED_MISSING','BLOCKED_CONFLICT'))
             """);
         jdbc.update("""
             UPDATE fin_exec.analysis_task t SET task_status='READY',updated_at=now()
