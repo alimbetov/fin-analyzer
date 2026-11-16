@@ -68,6 +68,89 @@ class ReviewedFinancialIntakeIntegrationTest {
                 x.scope(),EconomicKernel.ReportingBasis.MANAGEMENT,sources,parent);
     }
 
+    private static List<Cell> liquidityF01(YearMonth period,String assets,
+                                             String debt,String equity,
+                                             String currentAssets,String currentLiabilities){
+        return List.of(
+            c(period,"balance","assets",assets),
+            c(period,"balance","liabilities",debt),
+            c(period,"balance","equity",equity),
+            c(period,"balance","cash","100"),
+            c(period,"balance","receivables","80"),
+            c(period,"balance","currentAssets",currentAssets),
+            c(period,"balance","currentLiabilities",currentLiabilities)
+        );
+    }
+
+    private ReviewedFinancialIntakeService.Submitted liquiditySubmission(
+            Context x,List<Cell> cells){
+        return intake.submitManual("author",
+            new ReviewedFinancialIntakeService.IntakeRequest(
+                x.org(),x.entity(),x.scope(),"F01","MANAGEMENT","KZT",1,
+                cells,"FIN-LIQUIDITY-V1"));
+    }
+
+    @Test void independentlyReviewedF01LiquidityPublishesExactlyMappedCurrentBalances(){
+        var x=ctx();
+        var submitted=liquiditySubmission(
+            x,liquidityF01(OCT,"1000","600","400","400","200"));
+        var pending=intake.read(x.org(),submitted.id());
+        assertEquals("FIN-LIQUIDITY-V1",pending.formVersion());
+        assertEquals("PENDING",pending.reviewStatus());
+        assertThrows(IllegalArgumentException.class,
+            ()->intake.review("author",x.org(),submitted.id(),true,"self approval forbidden"));
+        var approved=intake.review("finance-reviewer",x.org(),submitted.id(),true,
+                "Reconciled current balances to approved F01 statement");
+        assertEquals("APPROVED",approved.decision());
+        assertEquals(7,approved.mappedFacts());
+        var published=intake.publishReviewedActual(
+            publishRequest(x,List.of(submitted.id()),null));
+        assertEquals(1,published.currentVersion());
+        var facts=jdbc.queryForList("""
+            SELECT a.metric_code,a.numeric_value,a.start_inclusive,
+                   a.end_exclusive,sr.form_version,o.source_field
+            FROM fin_fact.fact_selection sel
+            JOIN fin_fact.fact_assertion a ON a.id=sel.fact_assertion_id
+            JOIN fin_fact.fact_origin o ON o.fact_assertion_id=a.id
+            JOIN fin_fact.approved_source_revision sr
+                ON sr.organization_id=a.organization_id
+               AND sr.source_revision_id=a.source_revision_id
+            WHERE sel.organization_id=? AND sel.fact_set_revision_id=?
+              AND a.metric_code IN ('CURRENT_ASSETS','CURRENT_LIABILITIES')
+            ORDER BY a.metric_code
+            """,x.org(),published.revisionId());
+        assertEquals(2,facts.size());
+        assertEquals("CURRENT_ASSETS",facts.get(0).get("metric_code"));
+        assertEquals(0,new BigDecimal("400").compareTo(
+            (BigDecimal)facts.get(0).get("numeric_value")));
+        assertEquals("currentAssets",facts.get(0).get("source_field"));
+        assertEquals("CURRENT_LIABILITIES",facts.get(1).get("metric_code"));
+        assertEquals(0,new BigDecimal("200").compareTo(
+            (BigDecimal)facts.get(1).get("numeric_value")));
+        assertEquals("currentLiabilities",facts.get(1).get("source_field"));
+        assertEquals("FIN-LIQUIDITY-V1",facts.get(1).get("form_version"));
+        assertEquals(OCT.atEndOfMonth(),facts.get(0).get("start_inclusive"));
+        assertThrows(IllegalArgumentException.class,
+            ()->intake.read(UUID.randomUUID(),submitted.id()));
+    }
+
+    @Test void f01LiquidityIntakeRejectsMissingOrMisclassifiedCurrentBalances(){
+        var x=ctx();
+        var missing=liquidityF01(OCT,"1000","600","400","400","200")
+                .stream().filter(f->!f.sourceField().equals("currentLiabilities")).toList();
+        assertThrows(IllegalArgumentException.class,()->liquiditySubmission(x,missing));
+        assertThrows(IllegalArgumentException.class,()->liquiditySubmission(x,
+            liquidityF01(OCT,"1000","600","400","1001","200")));
+        assertThrows(IllegalArgumentException.class,()->liquiditySubmission(x,
+            liquidityF01(OCT,"1000","600","400","400","601")));
+        assertThrows(IllegalArgumentException.class,()->liquiditySubmission(x,
+            liquidityF01(OCT,"1000","600","400","-1","200")));
+        assertThrows(IllegalArgumentException.class,()->intake.submitManual("author",
+            new ReviewedFinancialIntakeService.IntakeRequest(
+                x.org(),x.entity(),x.scope(),"F02","MANAGEMENT","KZT",1,
+                f02(),"FIN-LIQUIDITY-V1")));
+    }
+
     @Test void independentReviewerPublishesActualFactsButUnqualifiedDiagnosticStaysBlocked(){
         var x=ctx();
         var sources=List.of(
