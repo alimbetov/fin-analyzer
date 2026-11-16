@@ -50,6 +50,6 @@ describe("FIN R6.3/R6.4 — exhaustively enumerated field method/i18n readiness"
     expect(()=>parsePresentationInventory(lines.slice(0,-1).join("\n")))
       .toThrow("R6_FIELD_TRANSLATION_COVERAGE_DRIFT");
     expect(()=>parsePresentationInventory(raw.replace("PENDING_TRANSLATION","PROVISIONAL_NOT_S2")))
-      .not.toThrow();
+      .toThrow("R6_FIELD_TRANSLATION_DRAFT_WITHOUT_LABEL");
   });
 });
