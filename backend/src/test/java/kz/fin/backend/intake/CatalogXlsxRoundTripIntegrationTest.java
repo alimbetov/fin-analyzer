@@ -403,6 +403,17 @@ class CatalogXlsxRoundTripIntegrationTest {
                         assertEquals(snapshot.rows(), reimported.parsed().rows());
                         assertEquals(snapshot.normalizedFingerprint(),
                                 reimported.parsed().normalizedFingerprint());
+                        String storedReceiptSha = jdbc.queryForObject("""
+                                SELECT workbook_sha
+                                  FROM fin_intake.catalog_xlsx_export_receipt
+                                 WHERE id=? AND source_revision_id=?
+                                   AND source_draft_id=? AND organization_id=?
+                                   AND project_id=? AND display_locale=?
+                                   AND state='GENERATED'
+                                """, String.class, exported.exportId(),
+                                confirmed.revisionId(), confirmed.draftId(),
+                                context.organizationId(), project.id(), display);
+                        assertEquals(exported.workbookSha256(), storedReceiptSha);
                         String storedManifestSha = jdbc.queryForObject("""
                                 SELECT original_template_sha
                                   FROM fin_intake.catalog_xlsx_issued_template
@@ -425,6 +436,8 @@ class CatalogXlsxRoundTripIntegrationTest {
                         exportProof.put("manifestDigestVerified", true);
                         exportProof.put("sourceStatus", "CONFIRMED_UNQUALIFIED_DRAFT");
                         exportProof.put("artifactSha256", exported.workbookSha256());
+                        exportProof.put("exportId", exported.exportId().toString());
+                        exportProof.put("receiptVerified", true);
                         assertNull(X2_EXPORT_EVIDENCE.putIfAbsent(
                                 definition.code() + "|" + display, Map.copyOf(exportProof)));
                     }

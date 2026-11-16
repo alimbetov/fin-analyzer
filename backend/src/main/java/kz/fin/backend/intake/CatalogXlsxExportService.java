@@ -26,7 +26,7 @@ public class CatalogXlsxExportService {
         this.issued = Objects.requireNonNull(issued);
     }
 
-    public record Exported(UUID issuedTemplateId, UUID sourceRevisionId, UUID sourceDraftId,
+    public record Exported(UUID exportId, UUID issuedTemplateId, UUID sourceRevisionId, UUID sourceDraftId,
                            int revisionNumber, String formCode, String periodCode,
                            String sourceInputLocale, String displayLocale, String currency,
                            int amountScale, String sourceState, String normalizedFingerprint,
@@ -37,9 +37,16 @@ public class CatalogXlsxExportService {
         @Override public byte[] workbook() { return workbook.clone(); }
     }
 
+    // Internal package-only helper for existing PostgreSQL integration tests.
+    Exported export(FinancialReportSnapshotService.Query query, String displayLocale) {
+        return export(query, displayLocale, "INTERNAL_TEST");
+    }
+
     public Exported export(FinancialReportSnapshotService.Query query,
-                           String displayLocale) {
+                           String displayLocale, String verifiedActor) {
         CatalogReportLocale.requireDisplay(displayLocale);
+        if (verifiedActor == null || verifiedActor.isBlank() || verifiedActor.length() > 200)
+            throw new IllegalArgumentException("FIN_EXPORT_ACTOR_REQUIRED");
         var snapshot = reports.load(Objects.requireNonNull(query));
         var sourceContext = new CatalogXlsxRoundTripService.Context(
                 snapshot.organizationId(), snapshot.economicEntityId(),
@@ -72,12 +79,17 @@ public class CatalogXlsxExportService {
                     + " [" + field.status() + "]");
         }
 
-        var workbook = issued.issuePopulated(snapshot.projectId(), sourceContext,
-                snapshot.rows(), instructions);
-        return new Exported(workbook.templateId(), snapshot.sourceRevisionId(),
-                snapshot.sourceDraftId(), snapshot.revisionNumber(), snapshot.formCode(),
-                snapshot.periodCode(), snapshot.sourceInputLocale(), displayLocale,
-                snapshot.currency(), snapshot.amountScale(), snapshot.sourceStatus(),
+        var issuedReport = issued.issuePopulated(snapshot.projectId(), sourceContext,
+                snapshot.rows(), instructions,
+                new CatalogIssuedTemplateService.ExportSource(
+                        snapshot.sourceRevisionId(), snapshot.sourceDraftId(),
+                        snapshot.normalizedFingerprint(), displayLocale, verifiedActor));
+        var workbook = issuedReport.issued();
+        return new Exported(issuedReport.exportId(), workbook.templateId(),
+                snapshot.sourceRevisionId(), snapshot.sourceDraftId(),
+                snapshot.revisionNumber(), snapshot.formCode(), snapshot.periodCode(),
+                snapshot.sourceInputLocale(), displayLocale, snapshot.currency(),
+                snapshot.amountScale(), snapshot.sourceStatus(),
                 snapshot.normalizedFingerprint(), workbook.templateSha256(),
                 workbook.workbook());
     }

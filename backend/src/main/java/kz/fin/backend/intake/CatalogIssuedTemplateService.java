@@ -41,6 +41,23 @@ public class CatalogIssuedTemplateService {
     public record Preview(UUID templateId, UUID projectId,
                           CatalogXlsxRoundTripService.Parsed parsed) {}
 
+    /** Source provenance must originate from an X1 snapshot and a trusted actor. */
+    public record ExportSource(UUID revisionId, UUID draftId, String normalizedSha,
+                               String displayLocale, String actor) {
+        public ExportSource {
+            Objects.requireNonNull(revisionId);
+            Objects.requireNonNull(draftId);
+            if (normalizedSha == null || !normalizedSha.matches("[0-9a-f]{64}")
+                    || actor == null || actor.isBlank() || actor.length() > 200)
+                throw new IllegalArgumentException("FIN_EXPORT_INVALID_PROVENANCE");
+            CatalogReportLocale.requireDisplay(displayLocale);
+        }
+    }
+
+    public record PopulatedIssue(UUID exportId, Issued issued) {}
+
+
+
     private record Stored(UUID projectId, CatalogXlsxRoundTripService.Context context,
                           String schemaFingerprint, String templateSha256) {}
 
@@ -76,11 +93,12 @@ public class CatalogIssuedTemplateService {
      * This transaction never inserts a catalog draft or confirms a revision.
      */
     @Transactional
-    public Issued issuePopulated(UUID projectId, CatalogXlsxRoundTripService.Context context,
+    public PopulatedIssue issuePopulated(UUID projectId, CatalogXlsxRoundTripService.Context context,
                                  List<CatalogCaptureRegistry.EntryRow> rows,
-                                 List<String> reportInstructions) {
+                                 List<String> reportInstructions, ExportSource source) {
         Objects.requireNonNull(projectId);
         Objects.requireNonNull(context);
+        Objects.requireNonNull(source);
         requireProjectMatches(projectId, context);
         UUID id = UUID.randomUUID();
         byte[] bytes = xlsx.generatePopulatedIssued(context, id, rows, reportInstructions);
@@ -101,8 +119,35 @@ public class CatalogIssuedTemplateService {
                 context.reportingBasis(), context.periodType().name(), context.periodCode(),
                 context.coverage().name(), context.currency(), context.amountScale(),
                 context.locale(), CatalogXlsxRoundTripService.ISSUED_FORMAT, fp, rawHash);
-        return new Issued(id, projectId, context.formCode(), context.periodCode(),
-                fp, rawHash, bytes);
+        // Both the filled issued-template manifest and source-bound receipt
+        // participate in one transaction. A mismatch must roll back both.
+        UUID exportId = UUID.randomUUID();
+        int recorded = jdbc.update("""
+            INSERT INTO fin_intake.catalog_xlsx_export_receipt(
+                id,organization_id,project_id,source_revision_id,source_draft_id,
+                issued_template_id,form_code,source_normalized_sha,workbook_sha,
+                source_input_locale,display_locale,generated_by)
+            SELECT ?,?,?,?,?,?,?,?,?,?,?,?
+              FROM fin_intake.catalog_xlsx_revision r
+              JOIN fin_intake.catalog_xlsx_slot s
+                ON s.id=r.slot_id AND s.organization_id=r.organization_id
+             WHERE r.id=? AND r.draft_id=? AND r.normalized_sha=?
+               AND r.state='CONFIRMED_UNQUALIFIED_DRAFT'
+               AND s.organization_id=? AND s.project_id=? AND s.form_code=?
+               AND s.reporting_basis=? AND s.period_type=? AND s.period_code=?
+               AND s.coverage=? AND s.currency=? AND s.amount_scale=?
+            """, exportId, context.organizationId(), projectId,
+                source.revisionId(), source.draftId(), id, context.formCode(),
+                source.normalizedSha(), rawHash, context.locale(), source.displayLocale(),
+                source.actor(), source.revisionId(), source.draftId(), source.normalizedSha(),
+                context.organizationId(), projectId, context.formCode(),
+                context.reportingBasis(), context.periodType().name(), context.periodCode(),
+                context.coverage().name(), context.currency(), context.amountScale());
+        if (recorded != 1)
+            throw new IllegalStateException("FIN_EXPORT_SOURCE_PROVENANCE_MISMATCH");
+        return new PopulatedIssue(exportId,
+                new Issued(id, projectId, context.formCode(), context.periodCode(),
+                        fp, rawHash, bytes));
     }
 
     /** Returns the exact normalization to be persisted, without writing a draft. */
