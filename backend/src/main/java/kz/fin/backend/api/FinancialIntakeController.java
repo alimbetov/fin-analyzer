@@ -41,7 +41,12 @@ public class FinancialIntakeController {
     }
     public record SubmitBody(UUID economicEntityId,UUID businessScopeId,String formCode,
                              String reportingBasis,String currencyCode,int amountScale,
-                             List<TrustedFinancialFormMapper.Cell> cells) {}
+                             List<TrustedFinancialFormMapper.Cell> cells,String formVersion) {
+        public SubmitBody(UUID entity,UUID scope,String form,String basis,String currency,
+                          int scale,List<TrustedFinancialFormMapper.Cell> cells){
+            this(entity,scope,form,basis,currency,scale,cells,"FIN-PILOT-V1");
+        }
+    }
     public record ReviewBody(boolean approved,String reason) {}
     public record PublishBody(UUID economicEntityId,UUID businessScopeId,
                               EconomicKernel.ReportingBasis reportingBasis,
@@ -57,7 +62,8 @@ public class FinancialIntakeController {
                 new ReviewedFinancialIntakeService.IntakeRequest(
                         organizationId,body.economicEntityId(),body.businessScopeId(),
                         body.formCode(),body.reportingBasis(),body.currencyCode(),
-                        body.amountScale(),body.cells()));
+                        body.amountScale(),body.cells(),
+                        body.formVersion()==null?"FIN-PILOT-V1":body.formVersion()));
     }
     @GetMapping(value="/templates/{formCode}",
                 produces="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -66,13 +72,14 @@ public class FinancialIntakeController {
             @RequestParam UUID economicEntityId,@RequestParam UUID businessScopeId,
             @RequestParam(defaultValue="MANAGEMENT") String reportingBasis,
             @RequestParam(defaultValue="KZT") String currencyCode,
-            @RequestParam(defaultValue="1") int amountScale) {
+            @RequestParam(defaultValue="1") int amountScale,
+            @RequestParam(defaultValue="FIN-PILOT-V1") String formVersion) {
         access.require(jwt,organizationId,Permission.FIN_SUBMIT);
         byte[] file=xlsx.template(new PilotXlsxTemplateService.Context(
                 organizationId,economicEntityId,businessScopeId,formCode,
-                reportingBasis,currencyCode,amountScale));
+                reportingBasis,currencyCode,amountScale,formVersion));
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"FIN-"+formCode+"-FIN-PILOT-V1.xlsx\"")
+                "attachment; filename=\"FIN-"+formCode+"-"+formVersion+".xlsx\"")
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(file);
@@ -85,6 +92,7 @@ public class FinancialIntakeController {
             @RequestParam String formCode,@RequestParam(defaultValue="MANAGEMENT") String reportingBasis,
             @RequestParam(defaultValue="KZT") String currencyCode,
             @RequestParam(defaultValue="1") int amountScale,
+            @RequestParam(defaultValue="FIN-PILOT-V1") String formVersion,
             @RequestPart("file") MultipartFile file) throws IOException {
         access.require(jwt,organizationId,Permission.FIN_SUBMIT);
         if(file==null || file.isEmpty() || file.getSize()>2_000_000)
@@ -94,7 +102,7 @@ public class FinancialIntakeController {
             throw new IllegalArgumentException("XLSX_EXTENSION_REQUIRED");
         return workflow.submitXlsx(access.subject(jwt),
                 new PilotXlsxTemplateService.Context(organizationId,economicEntityId,
-                        businessScopeId,formCode,reportingBasis,currencyCode,amountScale),
+                        businessScopeId,formCode,reportingBasis,currencyCode,amountScale,formVersion),
                 file.getBytes());
     }
 
