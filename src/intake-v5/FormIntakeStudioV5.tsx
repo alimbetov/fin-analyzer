@@ -8,7 +8,7 @@ import { generateF02ExcelV5, parseF02ExcelV5 } from "./excel-v5";
 
 const UI: Record<ActiveLocale, {
   title:string;sub:string;project:string;language:string;period:string;scale:string;
-  download:string;upload:string;check:string;save:string;
+  download:string;upload:string;check:string;save:string;apply:string;
   code:string;indicator:string;amount:string;currency:string;status:string;
   preview:string;missing:string;valid:string;invalid:string;local:string
 }> = {
@@ -16,6 +16,7 @@ const UI: Record<ActiveLocale, {
     project:"Код проекта (локальный черновик)",language:"Язык шаблона",period:"Отчётный месяц",
     scale:"Масштаб сумм",download:"Скачать Excel",upload:"Загрузить Excel",
     check:"Проверить и показать Preview",save:"Скачать локальный черновик JSON",
+    apply:"Перенести данные в редактор",
     code:"Код показателя",indicator:"Наименование",amount:"Значение",
     currency:"Валюта",status:"Проверка",preview:"Предпросмотр данных",
     missing:"Не заполнено",valid:"Проверено",invalid:"Требуется исправление",
@@ -24,6 +25,7 @@ const UI: Record<ActiveLocale, {
     project:"Жоба коды (жергілікті нобай)",language:"Үлгі тілі",period:"Есепті ай",
     scale:"Сома масштабы",download:"Excel жүктеп алу",upload:"Excel жүктеу",
     check:"Тексеру және алдын ала қарау",save:"Жергілікті JSON нобайын жүктеп алу",
+    apply:"Деректерді редакторға көшіру",
     code:"Көрсеткіш коды",indicator:"Атауы",amount:"Мәні",
     currency:"Валюта",status:"Тексеру",preview:"Деректерді алдын ала қарау",
     missing:"Толтырылмаған",valid:"Тексерілді",invalid:"Түзету қажет",
@@ -32,6 +34,7 @@ const UI: Record<ActiveLocale, {
     project:"Project code (local draft)",language:"Template language",period:"Reporting month",
     scale:"Amount scale",download:"Download Excel",upload:"Import Excel",
     check:"Validate and preview",save:"Download local draft JSON",
+    apply:"Copy values into editor",
     code:"Indicator code",indicator:"Indicator",amount:"Amount",
     currency:"Currency",status:"Validation",preview:"Data preview",
     missing:"Not entered",valid:"Validated",invalid:"Corrections required",
@@ -203,7 +206,9 @@ export function FormIntakeStudioV5() {
         setError("XLSX_V5_IMPORT_CONTEXT_CHANGED");
         return;
       }
-      setRows(next);setPreview(validateF02(requestedContext,next,"XLSX"));
+      // Parsing only prepares a preview: never overwrite unsaved editor values
+      // until the user explicitly chooses to apply the imported rows.
+      setPreview(validateF02(requestedContext,next,"XLSX"));
     }catch(e){setError(e instanceof Error?e.message:"XLSX_IMPORT_ERROR");}
     finally{setBusy(false);}
   }
@@ -255,6 +260,8 @@ export function FormIntakeStudioV5() {
     {preview && <>
       <FormPreviewTable entry={preview}/>
       <div className="action-row fin-v5-actions">
+        <button type="button" className="button secondary"
+          onClick={()=>updateRows(preview.rows.map(row=>({...row})))}>{labels.apply}</button>
         <button type="button" className="button secondary" disabled={!preview.valid}
           onClick={saveLocalDraft}>{labels.save}</button>
       </div>
