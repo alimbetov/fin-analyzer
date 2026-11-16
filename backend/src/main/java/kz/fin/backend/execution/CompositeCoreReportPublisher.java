@@ -45,6 +45,10 @@ public final class CompositeCoreReportPublisher {
                        r.snapshot_hash,r.run_status,o.data_space
                 FROM fin_exec.analysis_run r
                 JOIN fin_exec.fact_publication_outbox o ON o.event_id=r.event_id
+                JOIN fin_fact.fact_set_publication p
+                  ON p.fact_set_revision_id=r.fact_set_revision_id
+                 AND p.organization_id=r.organization_id
+                 AND p.snapshot_hash=r.snapshot_hash
                 WHERE r.run_status IN ('COMPLETED','PARTIAL','FAILED')
                   AND NOT EXISTS (
                     SELECT 1 FROM fin_exec.core_report_snapshot s WHERE s.run_id=r.id)
@@ -63,16 +67,22 @@ public final class CompositeCoreReportPublisher {
                     rs.getString(3),rs.getString(4)),run.id());
             var methods=new ArrayList<Map<String,Object>>();
             var findings=new ArrayList<JsonNode>();
+            long computedMethods=tasks.stream().filter(t->"COMPUTED".equals(t.status())).count();
+            boolean blocked="FAILED".equals(run.status()) || computedMethods==0;
+            String readiness=blocked ? "BLOCKED" : "PARTIAL";
             for(var task:tasks) {
                 var method=new LinkedHashMap<String,Object>();
                 method.put("methodCode",task.code());
                 method.put("executionStatus",task.status());
-                method.put("qualification","PILOT_UNQUALIFIED");
+                method.put("qualification",task.code().startsWith("SYS/")
+                        ? "INTERNAL_OR_SYNTHETIC_PILOT" : "METHOD_FAMILY_NOT_YET_APPROVED");
                 if(task.error()!=null) method.put("reason",task.error());
                 if(task.result()!=null) {
                     try {
                         JsonNode result=json.readTree(task.result());
                         method.put("result",result);
+                        if(result.hasNonNull("qualification"))
+                            method.put("qualification",result.get("qualification").asText());
                         if(SyntheticBusinessDiagnosticAdapter.CODE.equals(task.code())) {
                             String assessment=result.path("assessmentId").asText();
                             if(!assessment.isBlank()) {
@@ -97,27 +107,29 @@ public final class CompositeCoreReportPublisher {
             var report=new LinkedHashMap<String,Object>();
             report.put("schemaVersion","CORE_PILOT_V1");
             report.put("reportMode","CORE");
-            report.put("coreReadiness","PARTIAL");
+            report.put("coreReadiness",readiness);
             report.put("mlReadiness","NOT_REQUESTED");
             report.put("sourceClassification",run.dataSpace());
             report.put("sourceRevisionId",run.revision().toString());
             report.put("sourceFingerprint",run.hash());
             report.put("executionRunId",run.id().toString());
             report.put("executionStatus",run.status());
-            report.put("qualification","PILOT_UNQUALIFIED");
+            report.put("qualification","METHOD_FAMILY_QUALIFICATION_PENDING");
             report.put("methods",methods);
+            report.put("computedTaskCount",computedMethods);
+            report.put("plannedTaskCount",tasks.size());
             report.put("diagnosticFindings",findings);
             report.put("limitations",List.of(
                 "NOT_A_QUALIFIED_FINANCIAL_OR_AUDIT_OPINION",
-                synthetic ? "SYNTHETIC_TEST_DATA" : "NO_QUALIFIED_FINANCIAL_METHOD_EXECUTED",
+                synthetic ? "SYNTHETIC_TEST_DATA" : "COMPLETE_METHOD_FAMILY_QUALIFICATION_PENDING",
                 "ML_NOT_EXECUTED"));
             try {
                 jdbc.update("""
                     INSERT INTO fin_exec.core_report_snapshot
-                        (id,run_id,organization_id,fact_set_revision_id,snapshot)
-                    VALUES (?,?,?,?,CAST(? AS jsonb))
+                        (id,run_id,organization_id,fact_set_revision_id,core_readiness,snapshot)
+                    VALUES (?,?,?,?,?,CAST(? AS jsonb))
                     ON CONFLICT(run_id) DO NOTHING
-                    """,UUID.randomUUID(),run.id(),run.org(),run.revision(),
+                    """,UUID.randomUUID(),run.id(),run.org(),run.revision(),readiness,
                     json.writeValueAsString(report));
             }catch(Exception e){throw new IllegalStateException("CORE_REPORT_PUBLISH_FAILED",e);}
             return true;
