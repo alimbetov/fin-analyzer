@@ -18,7 +18,7 @@ import java.util.UUID;
  * validates installed bytes, dependency lock and an authorized Ed25519 signature.
  */
 @Service
-public final class HtapFin01EvidenceBindingService {
+public class HtapFin01EvidenceBindingService {
     public record Evidence(UUID planId, UUID configId, UUID s2ReviewId,
                            String artifactSha256, String dependencyLockSha256,
                            String buildManifestJson, String signerKeyId,
