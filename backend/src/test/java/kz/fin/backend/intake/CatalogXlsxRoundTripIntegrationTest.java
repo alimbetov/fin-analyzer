@@ -1407,6 +1407,54 @@ class CatalogXlsxRoundTripIntegrationTest {
                 project.id(), second.slotId()).size());
     }
 
+    @Test void oldCatalogSchemaDraftCannotBeConfirmedAfterSchemaRollout() {
+        var context = context("DF-AST-01");
+        var project = projectService.createProject(context.organizationId(),
+                context.entityId(), context.businessScopeId(),
+                context.projectCode(), context.currency(), "schema-author");
+        var saved = xlsx.saveDraft(context,
+                filled(context.formCode(), xlsx.generate(context)), null);
+        UUID staleDraftId = UUID.randomUUID();
+
+        // Simulate an immutable draft created by an older catalog deployment:
+        // its shape/hash no longer matches the currently approved server
+        // catalog. No historical draft is modified or deleted.
+        assertEquals(1, jdbc.update("""
+                INSERT INTO fin_intake.catalog_xlsx_draft(
+                    id,organization_id,economic_entity_id,business_scope_id,
+                    project_code,form_code,capture_mode,reporting_basis,
+                    period_type,period_code,coverage,currency,amount_scale,
+                    locale,schema_fingerprint,original_xlsx,original_sha,
+                    normalized_rows,normalized_sha,document_original,
+                    document_sha,document_media_type,issued_template_id)
+                SELECT ?,organization_id,economic_entity_id,business_scope_id,
+                       project_code,form_code,capture_mode,reporting_basis,
+                       period_type,period_code,coverage,currency,amount_scale,
+                       locale,?,original_xlsx,original_sha,
+                       normalized_rows,normalized_sha,document_original,
+                       document_sha,document_media_type,issued_template_id
+                FROM fin_intake.catalog_xlsx_draft WHERE id=?
+                """, staleDraftId, "f".repeat(64), saved.id()));
+        var invalid = assertThrows(IllegalArgumentException.class,
+                () -> revisionService.confirm(context.organizationId(),
+                        project.id(), staleDraftId, saved.normalizedFingerprint(),
+                        0, "schema-author", "obsolete catalog schema"));
+        assertEquals("FIN_CATALOG_SCHEMA_VERSION_STALE", invalid.getMessage());
+
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_revision
+                WHERE draft_id=?
+                """, Long.class, staleDraftId));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.form_change_journal
+                WHERE organization_id=?
+                """, Long.class, context.organizationId()));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_slot
+                WHERE organization_id=? AND project_id=?
+                """, Long.class, context.organizationId(), project.id()));
+    }
+
     @Test void tenantFormChangeJournalIsImmutableTenantBoundAndNotAComputePermit() {
         var c = context("DF-AST-01");
         var project = projectService.createProject(c.organizationId(),
