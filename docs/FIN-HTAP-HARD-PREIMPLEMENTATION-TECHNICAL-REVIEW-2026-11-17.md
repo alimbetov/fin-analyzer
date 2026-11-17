@@ -132,6 +132,10 @@ R2.B for **one single published FactSet** need not wait for the **multi-FactSet*
 
 **Evidence rule:** each test is `PLANNED` until code/fixture, observed output and exact SHA+workflow are linked. A green CI does not imply a test that has not been authored; the first three should be checked independently after code integration. Never record S2 APPROVED without actual external reviewer authority.
 
+### Дополнение: предсказуемые комбинации в редакциях FIN-MR-R2.3
+
+[Редакционные presets](FIN-MR-R2.3-EDITORIAL-PRESETS-AND-METHODOLOGY-EDITIONS.md) дают максимум десять валидных комбинаций на одну неизменяемую редакцию `methodCode/variantCode/contractId`. Предложения скрыты от читателей до заморозки набора с SHA; после неё варианты и политика шага не меняются. Это **read-only editorial metadata**: `method_s2_qualified=false`, `execution_permitted=false`. Никакие 259 unreviewed параметров, несуществующие методы и клиентские дефолты не могут превращаться в готовые решения. Перенос выбранного варианта в `method_config_version` и модерация требуют отдельного R2.2 authorization gate.
+
 ## 6. Readiness decisions
 
 | Milestone | Decision | Evidence/exit criterion |

@@ -73,6 +73,10 @@ New semantics:
 - published source changes => newly sealed comparison set and recalculation of **qualified descendants**, never old result UPDATE.
 - same content hash across two tenants or currencies cannot share access, event or result solely by digest equality.
 
+## Редакционные варианты перед модерацией — FIN-MR-R2.3
+
+[FIN-MR-R2.3](FIN-MR-R2.3-EDITORIAL-PRESETS-AND-METHODOLOGY-EDITIONS.md) — независимый **неисполняемый** редакционный слой, который можно проверить параллельно R2.2 и W1.2.A: typed `method_variant_edition`, максимум 10 уникальных вариантов на редакцию, явные шаги и server-computed SHA каждого варианта/набора. Это **не** отдельный этап автоматического расчёта. Выбранный вариант не становится `method_config_version` / active pointer / method S2 без R2.2; no R2.B PLAN_ONLY becomes runnable from preset presence. Начальные варианты поддерживаются только для CON-01 и CON-02.
+
 ## 3.A. Cross-roadmap sequence — method PlanCommit cannot wait until W4
 
 ```text

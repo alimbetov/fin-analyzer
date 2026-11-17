@@ -17,6 +17,10 @@
 
 **R2.2 decisions still open:** authored/reviewed-by strings are not authenticated identities; config review has one decision per config and no general revision/revocation state machine; config parent links do not yet freeze branch-vs-linear policy. Freeze those rules before a moderator write API or new ExecutionPermit. The source PeriodCalendar/mapping epoch and populated-schema upgrade plus DB grants remain separate W1.2.A/W0 gates. Stage W6 performance SLO/OLTP reserve thresholds must be owner-defined **before** optimizing or freezing physical W4 partition DDL, not invented at acceptance.
 
+## Методические редакции и 10 вариантов — не исполняющая функция FIN HTAP
+
+[FIN-MR-R2.3 редакционные комбинации](FIN-MR-R2.3-EDITORIAL-PRESETS-AND-METHODOLOGY-EDITIONS.md) позволяют фиксировать на каждую версию конкретной `methodCode/variantCode` от 1 до 10 предварительных наборов **реально поддерживаемых** параметров, с явной политикой шага, серверным SHA-256 каждого набора и полной `optionsSha256` редакции. Каждый набор является **кандидатом**, не новой финансовой методикой и не системой автоматического перебора 259 неподтверждённых параметров. Выбор опубликованной редакции может приводить к новой `method_config_version` только после отдельного R2.2 trust/moderation workflow. Этот каталог не разрешает ACTUAL и не создаёт PlanCommit.
+
 ## Post-R2.1 readiness decision and controlling references (2026-11-17)
 
 **Normative audit:** [FIN HTAP — Technical Specification Readiness Audit after R2.1](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) is the current change-control and stop/go matrix. It reconciles this specification, the W0–W8 strategy, ADR-R2-12, FIN-BE-R2 and F166. Historical reviews remain evidence at their own earlier SHA, not evidence of current implementation.

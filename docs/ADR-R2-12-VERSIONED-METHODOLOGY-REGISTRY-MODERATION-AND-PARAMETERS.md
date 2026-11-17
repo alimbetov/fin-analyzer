@@ -130,6 +130,12 @@ These updates are **non-financial hardening**, not S2, ACTUAL authorization, ful
 
 **Evidence:** [FIN CI #44037588595](https://github.com/alimbetov/fin-analyzer/actions/runs/44037588595) and [Backend Domain #44037588533](https://github.com/alimbetov/fin-analyzer/actions/runs/44037588533): success, 1,972 backend tests on the same SHA; financial S2 and production release remain HOLD.
 
+## 5.D. FIN-MR-R2.3 — ограниченные редакционные комбинации
+
+[FIN-MR-R2.3 — Editorial Parameter Presets](FIN-MR-R2.3-EDITORIAL-PRESETS-AND-METHODOLOGY-EDITIONS.md) добавляет будущему редактору **не более десяти** валидных предварительных комбинаций к **неизменяемой редакции** методики. `editionId + editionNo + contractId`, вариант `optionNo + paramsSha256` и свёртка `optionsSha256` фиксируются до любых действий модератора. Редакционная заморозка **не** является Method S2/ExecutionPermit/выбором рабочей конфигурации. Новый выбор впоследствии создаёт самостоятельную `method_config_version`, подчинённую существующему R2.2 CAS/approval; старые версии/хеши не меняются.
+
+Только типизированные CON-01 (один фиксированный набор) и CON-02 (до 10, явно заданная сетка A/B) допускаются на первом этапе. Шаг в 5 процентных пунктов — **пример**, не нормативный default. `NOT_EXECUTABLE`, непроверенные 259 кандидатов и `sourceParetoVersion` как параметр не участвуют в генерации. Read-only каталог редакций всегда возвращает `executionPermitted=false`.
+
 ## 6. Mandatory follow-up tests and blockers
 
 | ID | Required proof | Gate |
