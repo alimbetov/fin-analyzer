@@ -105,6 +105,16 @@ The Java entity model is `kz.fin.backend.methodology.persistence.MethodologyEnti
 
 **Minimum acceptance:** real PostgreSQL 16 Flyway upgrade, JPA `ddl-auto=validate`, 60 methods, 259 parameters, 60 represented methods, no duplicate candidates, FK integrity, irreversible parameter rows, correct FIN-01 and CON-02 parent-child association, single view row per method with nested candidate arrays, zero new `ACTUAL` or `releaseQualified`. Exact SHA of CI required. A future moderation stage will add typed versioned **approved** parameter contracts and safely display candidate-vs-approved status per variant; no arbitrary string parameter should reach Java/SQL executors.
 
+## 5.C. Hard review: active-config audit and Java/SQL read-model parity
+
+The [FIN HTAP S1 hard review](FIN-HTAP-HARD-PREIMPLEMENTATION-TECHNICAL-REVIEW-2026-11-17.md) establishes three forward-only W0 precautions:
+
+- `MethodologyCatalogReadService` previously rendered immutable `method_family.implementation_status`, ignoring newer `method_implementation_evidence`. Reading the evidence-aware `methodology_catalog_view` status in a single read transaction ensures one consistent engineering **display**; no status grants method S2.
+- `MethodConfigVersionEntity.getParameters()` previously copied only the top-level JSON object. The new defensive recursive snapshot rejects mutable nested output and preserves JSON null; the database's server-computed SHA-256 remains authoritative.
+- The original `method_active_config` triggers were only on `INSERT/UPDATE`, leaving `DELETE` unlogged. New additive `V20261117_08__method_active_config_delete_safety.sql` rejects this unaudited transition. **No implicit config deactivation** is implemented: authenticated revocation, backdated race handling, re-review and branch/parent version rules are separate R2.2 prerequisites. Existing S2 method review revocation ledger does not substitute for a configuration lifecycle decision.
+
+These updates are **non-financial hardening**, not S2, ACTUAL authorization, full 60-method implementation or a runtime `ExecutionPermit`.
+
 ## 5.B. Post MR-R2.0 / R2.0.1 / R2.1 code-backed addendum (2026-11-17)
 
 **Normative consistency decision:** see [FIN HTAP post-R2.1 readiness audit](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) and the [updated W0–W8 sequence](FIN-HTAP-IMPLEMENTATION-STRATEGY-W0-W8.md). The §5 statement that only CON-02 numeric boundaries were executable is a correct **historic description of V02**, not the current total validation surface.

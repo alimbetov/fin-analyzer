@@ -169,6 +169,16 @@ Keep separate statuses: `ENGINEERING_TESTED`, `ARCHITECTURE_S2_APPROVED`, `METHO
 
 No approval is presumed here. Use existing branch only, no main merge, no frontend/Keycloak expansion or production flags.
 
+## 7.A. Subsequent S1 adversarial findings
+
+After the R2.1 readiness audit, the [S1 hard pre-implementation review](FIN-HTAP-HARD-PREIMPLEMENTATION-TECHNICAL-REVIEW-2026-11-17.md) inspected SQL active-pointer delete semantics, mutable nested JPA JSON, read-side implementation evidence parity, method artifact pinning, and independent R1 report/CORE publication paths. These are additional actionable **gate-relative** findings, not a retroactive claim that current FIN Backend CI failed.
+
+- **W0.A:** code `6b543f2` makes method status evidence-aware and nested JSON snapshots immutable.
+- **W0.B:** forward-only V20261117_08 blocks unaudited active pointer `DELETE`; config revocation remains to be designed, not silently disabled or deleted.
+- **R2.2:** strict authenticated review, config re-review/revoke and parent version lineage, method-S2/config+algorithm artifact binding remain blocked.
+- **R2.B/W2:** never reuse `TrustedAutoReportService` or `CompositeCoreReportPublisher` as a permit-free HTAP result path. `MethodVariantRegistry.requireExecutablePlanBinding` intentionally rejects unpinned methods.
+- **W0→W6:** freeze dataset shape and performance SLO owner before making irreversible physical partition design decisions.
+
 ## 8. Final readiness disposition
 
 | Scope | Decision | Allowed immediately |

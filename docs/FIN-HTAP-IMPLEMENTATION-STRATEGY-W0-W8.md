@@ -10,6 +10,14 @@
 
 **Additional acceptance gate MR-R0:** PostgreSQL 16 Testcontainers prove 60 exact catalogue rows, duplicate and immutability protection, invalid thresholds, SHA-256 on input change, moderator separation of duties, rejection/no-review block, pointer CAS/activation audit, and zero method execution. Cross-tenant/form/period/currency ResultKey and regeneration remain W3/W4. S2 and code-level access control remain HOLD.
 
+## Hard pre-implementation audit / W0 safety corrections
+
+[HTAP S1 hard technical review](FIN-HTAP-HARD-PREIMPLEMENTATION-TECHNICAL-REVIEW-2026-11-17.md) is the controlling supplemental RED/GO/HOLD register after the post-R2.1 readiness audit. W0.A code now removes a Java/SQL method evidence status disagreement and returns deep immutable JSON configuration snapshots (`6b543f2`); W0.B forward-only V20261117_08 closes unaudited active-config pointer DELETE. Neither patch authorizes calculation or qualifies method S2.
+
+**Before R2.B PlanCommit:** authenticated moderator actor, exact method-S2 effectiveConfig binding, vetted algorithm artifact manifest, branch/re-review/revocation policy, and published FactSet source pins. Current `MethodVariantRegistry.requireExecutablePlanBinding()` always blocks unpinned variants. The existing R1 report writer and CORE publisher are separate write paths and MUST NOT be used as generic HTAP result promoters. Only distinct `FormImpactPreview` from unqualified drafts and `MethodologyPlanPreview` from published facts are eligible for early read-only work.
+
+**Before W4 physical design:** define numeric, owner-approved OLTP p95/p99 impact, WAL/bytes/retention thresholds and compare DIRECT/AGG/HASH/RANGE on a realistic fixture. W4.2 DDL remains independently HOLD even if a synthetic SQL method runs.
+
 ## Current engineering baseline and approved work boundary (2026-11-17)
 
 **Readiness audit:** [FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) supersedes outdated assumptions about method config validation, legacy execution and R2.A/B timing. Checked code SHA `45d3f37a895ae73d3934ae9979495d28c1b1626b`; FIN CI #44037588595 and FIN Backend Domain #44037588533 succeeded with 1,972 backend tests. This is **engineering** proof, not architecture S2 or financial qualification.

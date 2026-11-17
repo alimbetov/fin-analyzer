@@ -255,6 +255,21 @@ class MethodologyConfigurationRegistryIntegrationTest {
                 SELECT pointer_version FROM fin_calc.method_active_config
                 WHERE method_code='CON-02' AND variant_code='ABC_SALES'
                 """,Long.class));
+        // FIN HTAP W0 hard gate: active pointer deletion must never bypass
+        // the immutable activation audit. Revocation requires a future
+        // explicitly versioned, authenticated disable operation instead.
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                DELETE FROM fin_calc.method_active_config
+                WHERE method_code='CON-02' AND variant_code='ABC_SALES'
+                """));
+        assertEquals(2L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_calc.method_config_activation
+                WHERE method_code='CON-02' AND variant_code='ABC_SALES'
+                """, Long.class));
+        assertEquals(2L, jdbc.queryForObject("""
+                SELECT pointer_version FROM fin_calc.method_active_config
+                WHERE method_code='CON-02' AND variant_code='ABC_SALES'
+                """, Long.class));
         assertEquals(60L, jdbc.queryForObject(
                 "SELECT count(*) FROM fin_calc.methodology_catalog_view",Long.class));
         assertEquals(1L, jdbc.queryForObject("""
