@@ -41,6 +41,8 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
     @Autowired SingleExecutorScheduler scheduler;
     @Autowired CompositeCoreReportPublisher reports;
     @Autowired com.fasterxml.jackson.databind.ObjectMapper json;
+    @Autowired QualifiedRevenueHorizontalAdapter legacyRevenue;
+    @Autowired kz.fin.backend.methodology.Fin01RevenueMomSqlModule fin01Sql;
 
     private static final EconomicKernel.ReportingBasis BASIS=
             EconomicKernel.ReportingBasis.MANAGEMENT;
@@ -48,6 +50,11 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
     private record Fixture(UUID org,UUID entity,UUID scope,UUID revision) {}
 
     private Fixture seed(String methodVersion,String qualification,boolean twoMonths) {
+        return seed(methodVersion,qualification,twoMonths,AnalysisContext.DataSpace.ACTUAL);
+    }
+
+    private Fixture seed(String methodVersion,String qualification,boolean twoMonths,
+                         AnalysisContext.DataSpace space) {
         jdbc.update("""
             INSERT INTO fin_calc.metric_contract
               (metric_code,metric_version,measure_kind,unit_code,qualification,method_ref)
@@ -74,7 +81,7 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
         put(org,entity,scope,revision,source,methodVersion,
                 YearMonth.of(2026,2),"150");
         publication.publish(new FactSetPublicationService.Request(
-                org,entity,scope,BASIS,AnalysisContext.DataSpace.ACTUAL,revision,null));
+                org,entity,scope,BASIS,space,revision,null));
         return new Fixture(org,entity,scope,revision);
     }
 
@@ -182,5 +189,60 @@ class QualifiedRevenueSingleExecutorIntegrationTest {
             WHERE r.organization_id=? AND r.fact_set_revision_id=?
               AND t.method_code='FIN-01/REV_NET_MOM'
             """,Long.class,incomplete.org(),incomplete.revision()));
+    }
+
+    @Test void sqlFin01MatchesJavaOnSameSyntheticPublishedPopulation() throws Exception {
+        var fixture=seed("vFIN01SqlParityA","QUALIFIED",true,
+                AnalysisContext.DataSpace.SYNTHETIC);
+        var hash=jdbc.queryForObject("""
+            SELECT snapshot_hash FROM fin_fact.fact_set_publication
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,String.class,fixture.org(),fixture.revision());
+        var source=new MethodTaskAdapter.TrustedRevision(
+                fixture.org(),fixture.entity(),fixture.scope(),fixture.revision(),
+                hash,"SYNTHETIC");
+
+        var sql=fin01Sql.calculate(source);
+        var javaResult=json.readTree(legacyRevenue.execute(source));
+        assertEquals("FIN-01/REV_NET_MOM",sql.input().methodCode());
+        assertEquals(kz.fin.backend.methodology.CalculationEngine.SQL,sql.engine());
+        assertEquals(2,sql.input().facts().size());
+        assertEquals("CALCULATED",sql.computationStatus());
+        assertEquals(javaResult.path("status").asText(),sql.computationStatus());
+        assertEquals(0,sql.value().compareTo(
+                new java.math.BigDecimal(javaResult.path("value").asText())));
+        assertEquals(0,sql.value().compareTo(new java.math.BigDecimal("50")));
+        assertFalse(sql.executionQualified());
+        assertEquals("SYNTHETIC",sql.input().source().dataSpace());
+    }
+
+    @Test void sqlFin01FailsClosedForActualWrongSourceOrIncompleteInputs() {
+        var actual=seed("vFIN01SqlHold","QUALIFIED",true);
+        var actualHash=jdbc.queryForObject("""
+            SELECT snapshot_hash FROM fin_fact.fact_set_publication
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,String.class,actual.org(),actual.revision());
+        var actualSource=new MethodTaskAdapter.TrustedRevision(
+                actual.org(),actual.entity(),actual.scope(),actual.revision(),actualHash,"ACTUAL");
+        assertEquals("R2_FIN01_SQL_ACTUAL_HOLD",assertThrows(
+                IllegalStateException.class,()->fin01Sql.calculate(actualSource)).getMessage());
+
+        var incomplete=seed("vFIN01SqlMissing","QUALIFIED",false,
+                AnalysisContext.DataSpace.SYNTHETIC);
+        var hash=jdbc.queryForObject("""
+            SELECT snapshot_hash FROM fin_fact.fact_set_publication
+            WHERE organization_id=? AND fact_set_revision_id=?
+            """,String.class,incomplete.org(),incomplete.revision());
+        var source=new MethodTaskAdapter.TrustedRevision(incomplete.org(),
+                incomplete.entity(),incomplete.scope(),incomplete.revision(),hash,"SYNTHETIC");
+        assertEquals("R2_FIN01_SQL_EXACT_TWO_MONTHS_REQUIRED",assertThrows(
+                IllegalStateException.class,()->fin01Sql.calculate(source)).getMessage());
+        var wrongHash=new MethodTaskAdapter.TrustedRevision(incomplete.org(),
+                incomplete.entity(),incomplete.scope(),incomplete.revision(),"a".repeat(64),
+                "SYNTHETIC");
+        assertThrows(IllegalStateException.class,()->fin01Sql.calculate(wrongHash));
+        var foreignTenant=new MethodTaskAdapter.TrustedRevision(UUID.randomUUID(),
+                incomplete.entity(),incomplete.scope(),incomplete.revision(),hash,"SYNTHETIC");
+        assertThrows(IllegalStateException.class,()->fin01Sql.calculate(foreignTenant));
     }
 }
