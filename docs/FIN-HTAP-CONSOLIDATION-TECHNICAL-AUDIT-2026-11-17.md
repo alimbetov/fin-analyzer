@@ -37,9 +37,20 @@
 | HTAP-REV-15 | P1 | No single entrypoint making prior ADR/TZ precedence explicit. | Consolidated TZ is **normative implementation entrypoint**; ADR-05..09 remain historical rationale, stricter safety prevails, outdated execution cleanup/physical choices explicitly superseded, old docs are retained. |
 | HTAP-REV-16 | P1 | R2 safety gates and financial readiness are separate, but terminology HTAP could imply finished product. | Correctness/engineering vs financial S2 vs ACTUAL authorization vs release are independent; `RELEASE_HOLD` remains. |
 
+## Additional cross-period correctness findings (re-review of consolidated v1.0)
+
+The initial 16-finding audit was extended after validating the data model and existing Java/SQL pilot:
+
+| ID | Priority | Additional correctness defect | v1.1 resolution and required RED |
+|---|---|---|---|
+| HTAP-REV-17 | **P0** | A report period can use a different approved `source_revision_id` than the prior month. The first consolidated text inadvertently pinned the per-point revision in the **series grouping**, which would reject valid monthly history or tempt unsafe bypass. Several months may be within one published FactSet; a separately approved history can span multiple published FactSets. Current `Fin01RevenueMomSqlModule` explicitly requires sourceRevisionId equality, so its old pilot must **not** silently be generalized. | `TrustedComparisonSet` (single published snapshot first; multi-published mode separately gated) fixes selected-point lineage and one canonical value per period; series pins complete comparison-set hash, not individual source-revision IDs. Tests `HTAP-HISTORY-01..05`; FIN-01 widening requires a separately versioned method and Java parity. |
+| HTAP-REV-18 | **P0** | Existing `time_kind=AS_OF` stock snapshots can be monthly end-of-month observations. If `PeriodType=AS_OF_DATE` is treated as the only stock type, a legitimate monthly closing-balance moving average becomes ill-defined. | A `MONTH/AS_OF` qualified closing sample retains its month cadence and exact AS_OF closing date. Never treat it as FLOW or sum STOCK; arbitrary AS_OF_DATE requires a separate alignment policy. Tests `HTAP-CLOSE-01..04`. |
+
+**Current review count:** **18 issues (13 P0, 5 P1)**. All have **specification-level dispositions** in [Consolidated TZ v1.1](FIN-HTAP-CONSOLIDATED-TZ.md). This does not mean any P0 **runtime defect is fixed**: schema/code implementation, test evidence and independent S2 remain open. In particular, existing FIN-01 pilot's source-revision constraint is preserved pending method-specific versioned proof.
+
 ## Design closure matrix
 
-**Resolved at specification level:** logical vs physical partition, five-axis key and complete source extension, period-aware math, currency, ordinary vs multi-form calculations, exclusive-cohort DROP model, one scheduler/admission, stage ordering and tests.  
+**Resolved at specification level:** logical vs physical partition, five-axis key and per-point lineage vs versioned comparison-set identity, monthly AS_OF closing cadence, period-aware math, currency, ordinary vs multi-form calculations, exclusive-cohort DROP model, one scheduler/admission, stage ordering and tests.  
 **Open until independently tested:** actual PeriodCalendar mapping/DDL, archive/replay retention and date bucket size, tenant/DB privileges RLS, physical table design and choice by benchmark, pooled-connection security, capacity claims, autoindicator SQL/Java parity, DETACH reaper, real loads, independent financial S2.  
 **No claim:** code implementation of the consolidated design, finished 60 methodologies, production enablement, any observed speedup or completion of independent S2.
 
