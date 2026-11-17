@@ -47,9 +47,28 @@ curl -X POST http://127.0.0.1:8086/api/v1/drafts \
   }'
 ```
 
+## Catalog management — R7.A (local presentation edits only)
+
+Current backend supports a **versioned presentation edit workflow** without React:
+
+| Route | Purpose |
+|---|---|
+| `POST /api/v1/catalog-admin/forms/{formCode}/drafts` | Clone current form version with an explicit `expectedActiveVersionId` |
+| `GET /api/v1/catalog-admin/drafts/{id}` | Read draft sections, fields and translations |
+| `PUT /api/v1/catalog-admin/drafts/{id}/translations/{locale}` | Edit form/section/field title and description for ru, kk, en, zh-Hans |
+| `PUT /api/v1/catalog-admin/drafts/{id}/fields/order` | Reorder existing indicators inside a section |
+| `PUT /api/v1/catalog-admin/drafts/{id}/sections/order` | Reorder existing sections |
+| `POST /api/v1/catalog-admin/drafts/{id}/publish` | Validate unchanged schema/mapping semantics and switch current catalog version |
+| `POST /api/v1/catalog-admin/drafts/{id}/discard` | Close draft without publication |
+| `GET /api/v1/catalog-admin/drafts/{id}/events` | View editing event hashes and actor labels |
+
+**Publishing this catalog revision is not financial approval**. Existing finance metric codes and field semantics are immutable in R7.A. Field creation/retyping, financial metric management, currency metadata edits and independent reviewer approval are **not implemented**. Supplied `actor` is not authenticated; this API must remain on localhost.
+
+Specification: [FIN-FORM-LIB-R7.A](docs/FIN-FORM-LIB-R7A-CATALOG-MANAGEMENT.md).
+
 ## Boundaries
 
-- H2 is volatile: restart deletes all drafts. Liquibase creates 12 `lib_*` tables across `fin_lib` and `fin_intake`.
+- H2 is volatile: restart deletes all drafts. Liquibase creates 30 `lib_*` tables across `fin_lib` and `fin_intake` (001–007 migrations).
 - Seed 166 identities + candidate fields from original TSV. Their status is **CANDIDATE_UNQUALIFIED**, not financial approval.
 - F02 fields are based on the original FIN-FORM-V2 pilot. ROWSET supports ordered row IDs and positions.
 - The draft REST API does **not** approve an external financial source or publish `fin_fact`. Trusted financial authorization and FIN HTAP must remain in original project.
