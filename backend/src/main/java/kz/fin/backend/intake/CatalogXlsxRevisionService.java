@@ -32,11 +32,11 @@ public class CatalogXlsxRevisionService {
 
     private record Draft(String formCode, String basis, String periodType, String periodCode,
                          String coverage, String currency, int scale, String fingerprint,
-                         String documentSha) {}
+                         String documentSha, String schemaFingerprint) {}
 
     private record Prior(UUID id, UUID draftId, UUID parentId,
                          String fingerprint, String documentSha,
-                         boolean sameOrderedRows) {}
+                         boolean sameOrderedRows, String schemaFingerprint) {}
 
     private record Slot(UUID id, int current) {}
 
@@ -92,7 +92,7 @@ public class CatalogXlsxRevisionService {
         var drafts = jdbc.query("""
             SELECT d.form_code,d.reporting_basis,d.period_type,d.period_code,
                    d.coverage,d.currency,d.amount_scale,d.normalized_sha,
-                   d.document_sha
+                   d.document_sha,d.schema_fingerprint
               FROM fin_intake.catalog_xlsx_draft d
               JOIN fin_intake.project_v5 p
                 ON p.organization_id=d.organization_id
@@ -106,11 +106,21 @@ public class CatalogXlsxRevisionService {
             """, (rs, i) -> new Draft(
                     rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4),
                     rs.getString(5), rs.getString(6), rs.getInt(7),
-                    rs.getString(8), rs.getString(9)),
+                    rs.getString(8), rs.getString(9), rs.getString(10)),
                 draftId, organizationId, projectId, organizationId);
         if (drafts.size() != 1)
             throw new IllegalArgumentException("FIN_CATALOG_DRAFT_PROJECT_MISMATCH");
         Draft draft = drafts.getFirst();
+
+        // An older issued/draft workbook may still be stored after catalog
+        // schema rollout. Refuse to confirm it under a changed server schema;
+        // a matching row digest alone is not schema compatibility proof.
+        // Financial mapping-version activation has a SEPARATE W1.2 gate and
+        // is not implied by this structural schema check.
+        if (!CatalogXlsxRoundTripService.schemaFingerprint(draft.formCode())
+                .equals(draft.schemaFingerprint()))
+            throw new IllegalArgumentException("FIN_CATALOG_SCHEMA_VERSION_STALE");
+
         if (!draft.fingerprint().equals(expectedFingerprint))
             throw new IllegalArgumentException("FIN_CATALOG_STALE_FINGERPRINT");
 
@@ -147,7 +157,8 @@ public class CatalogXlsxRevisionService {
             var previousRows = jdbc.query("""
                 SELECT r.id,r.draft_id,r.parent_revision_id,r.normalized_sha,
                        d.document_sha,
-                       (d.normalized_rows = candidate.normalized_rows) AS same_ordered_rows
+                       (d.normalized_rows = candidate.normalized_rows) AS same_ordered_rows,
+                       d.schema_fingerprint
                   FROM fin_intake.catalog_xlsx_revision r
                   JOIN fin_intake.catalog_xlsx_draft d
                     ON d.id=r.draft_id AND d.organization_id=r.organization_id
@@ -158,7 +169,7 @@ public class CatalogXlsxRevisionService {
                 """, (rs, i) -> new Prior(
                     rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                     rs.getObject(3, UUID.class), rs.getString(4), rs.getString(5),
-                    rs.getBoolean(6)),
+                    rs.getBoolean(6), rs.getString(7)),
                     draftId, organizationId, slot.id(), slot.current());
             if (previousRows.size() != 1)
                 throw new IllegalStateException("FIN_CATALOG_REVISION_HISTORY_BROKEN");
@@ -173,6 +184,7 @@ public class CatalogXlsxRevisionService {
             // Require BOTH equality checks; never silently suppress an
             // ordered-row revision nor change stored V1 hash semantics.
             if (prior.fingerprint().equals(draft.fingerprint())
+                    && Objects.equals(prior.schemaFingerprint(), draft.schemaFingerprint())
                     && prior.sameOrderedRows()
                     && Objects.equals(prior.documentSha(), draft.documentSha())) {
                 return new Confirmed(prior.id(), slot.id(), prior.draftId(),
