@@ -96,18 +96,28 @@ class FormLibraryIntegrationTest {
   }
   @Test void reorderingRowsetChangesPresentationButNotFinancialContentHash() throws Exception {
     UUID org=UUID.randomUUID(), a=UUID.randomUUID(), b=UUID.randomUUID();
-    String va="{\\"paymentRef\\":\\"P-A\\",\\"postedAt\\":\\"2026-02-01\\",\\"amount\\":\\"100\\",\\"purpose\\":\\"RECEIPT\\",\\"invoiceRef\\":\\"I-A\\"}";
-    String vb="{\\"paymentRef\\":\\"P-B\\",\\"postedAt\\":\\"2026-02-02\\",\\"amount\\":\\"200\\",\\"purpose\\":\\"RECEIPT\\",\\"invoiceRef\\":\\"I-B\\"}";
-    String initial="[{\\"rowId\\":\\""+a+"\\",\\"rowPosition\\":10,\\"values\\":"+va+
-      "},{\\"rowId\\":\\""+b+"\\",\\"rowPosition\\":20,\\"values\\":"+vb+"}]";
+    String va="""
+      {"paymentRef":"P-A","postedAt":"2026-02-01","amount":"100",
+       "purpose":"RECEIPT","invoiceRef":"I-A"}
+      """.trim();
+    String vb="""
+      {"paymentRef":"P-B","postedAt":"2026-02-02","amount":"200",
+       "purpose":"RECEIPT","invoiceRef":"I-B"}
+      """.trim();
+    String initial="""
+      [{"rowId":"%s","rowPosition":10,"values":%s},
+       {"rowId":"%s","rowPosition":20,"values":%s}]
+      """.formatted(a,va,b,vb);
     String created=web.perform(post("/api/v1/drafts").header("Idempotency-Key","first-"+org)
       .contentType(MediaType.APPLICATION_JSON)
       .content(request(null,org,"DF-CSH-01",0,Map.of(),initial)))
       .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
     JsonNode receipt=json.readTree(created);
     UUID instanceId=UUID.fromString(receipt.get("instanceId").asText());
-    String reordered="[{\\"rowId\\":\\""+a+"\\",\\"rowPosition\\":20,\\"values\\":"+va+
-      "},{\\"rowId\\":\\""+b+"\\",\\"rowPosition\\":10,\\"values\\":"+vb+"}]";
+    String reordered="""
+      [{"rowId":"%s","rowPosition":20,"values":%s},
+       {"rowId":"%s","rowPosition":10,"values":%s}]
+      """.formatted(a,va,b,vb);
     String updated=web.perform(post("/api/v1/drafts").header("Idempotency-Key","second-"+org)
       .contentType(MediaType.APPLICATION_JSON)
       .content(request(instanceId,org,"DF-CSH-01",1,Map.of(),reordered)))
