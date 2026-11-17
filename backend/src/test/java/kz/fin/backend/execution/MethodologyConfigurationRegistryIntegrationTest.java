@@ -1,6 +1,8 @@
 package kz.fin.backend.execution;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,9 +40,35 @@ class MethodologyConfigurationRegistryIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+    @PersistenceContext EntityManager entityManager;
     @Autowired kz.fin.backend.methodology.persistence.MethodologyCatalogReadService methodReadService;
     @Autowired kz.fin.backend.methodology.persistence.MethodologyRepository methodRepository;
     private static final String ZERO_SHA = "a".repeat(64);
+
+    /**
+     * FIN-MR-R2.0: Flyway uses PostgreSQL bpchar for all three digests.
+     * Hibernate schema validation is enabled during Spring context bootstrap,
+     * so even an empty method configuration table must be queryable through JPA.
+     */
+    @Test void sha256JpaMappingsMatchFlywayFixedCharColumns() {
+        for (String column : java.util.List.of(
+                "algorithm_sha256", "params_sha256", "effective_sha256")) {
+            var metadata = jdbc.queryForMap("""
+                SELECT data_type, character_maximum_length
+                  FROM information_schema.columns
+                 WHERE table_schema = 'fin_calc'
+                   AND table_name = 'method_config_version'
+                   AND column_name = ?
+                """, column);
+            assertEquals("character", metadata.get("data_type"), column);
+            assertEquals(64, ((Number) metadata.get("character_maximum_length"))
+                    .intValue(), column);
+        }
+        Number rows = (Number) entityManager.createQuery(
+                "select count(v) from MethodConfigVersionEntity v")
+                .getSingleResult();
+        assertTrue(rows.longValue() >= 0L);
+    }
 
     private UUID contract(String code, String variant, String profile) {
         UUID id = UUID.randomUUID();
