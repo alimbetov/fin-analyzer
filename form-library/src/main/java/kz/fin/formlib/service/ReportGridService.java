@@ -22,7 +22,7 @@ public class ReportGridService {
       List<String> metricCodes,String timeAxis) {}
   public record CreateReceipt(UUID reportId,String reportCode,int metricCount,
                               int periodCount,String timeAxis) {}
-  public record CellInput(String metricCode,String periodCode,String state,String value) {}
+  public record CellInput(String metricCode,String periodCode,String state,String value,String formattedValue) {}
   public record SaveReport(UUID organizationId,int expectedRevision,
       List<CellInput> cells,String createdBy,String changeReason,String sourceKind) {}
   public record SaveReceipt(UUID reportId,UUID revisionId,int revisionNo,
@@ -36,7 +36,7 @@ public class ReportGridService {
                          int revisionNo,String contentSha256,String qualificationState,
                          String currencyCode,String periodType,String timeAxis,
                          int layoutVersion,List<AxisItem> rowHeaders,List<AxisItem> columnHeaders,
-                         List<MatrixCell> cells) {}
+                         List<MatrixCell> cells,int formatVersion) {}
 
   private record Pair(String metric,String period) {}
   private record Value(String state,String value) {}
@@ -59,6 +59,7 @@ public class ReportGridService {
   private final FormFieldRepository fields;
   private final LibCurrencyRepository currencies;
   private final ObjectMapper json;
+  private final ReportFormatService formatService;
 
   public ReportGridService(LibReportDefinitionRepository reports,
        LibReportMetricRepository reportMetrics,LibReportPeriodRepository reportPeriods,
@@ -66,11 +67,13 @@ public class ReportGridService {
        LibReportCommandReceiptRepository receipts,LibMetricDefinitionRepository metrics,
        LibMetricTranslationRepository metricTranslations,FormDefinitionRepository forms,
        FormVersionRepository versions,FormFieldRepository fields,
-       LibCurrencyRepository currencies,ObjectMapper json) {
+       LibCurrencyRepository currencies,ObjectMapper json,
+       ReportFormatService formatService) {
     this.reports=reports;this.reportMetrics=reportMetrics;this.reportPeriods=reportPeriods;
     this.revisions=revisions;this.revisionCells=revisionCells;this.receipts=receipts;
     this.metrics=metrics;this.metricTranslations=metricTranslations;this.forms=forms;
     this.versions=versions;this.fields=fields;this.currencies=currencies;this.json=json;
+    this.formatService=formatService;
   }
   private static ResponseStatusException invalid(String error) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,error);
@@ -197,7 +200,8 @@ public class ReportGridService {
     report.setId(UUID.randomUUID());report.setOrganizationId(org);
     report.setReportCode(code);report.setTitle(title);report.setCurrencyCode(currency.getCode());
     report.setPeriodType(periodType);report.setTimeAxis(timeAxis);
-    report.setLayoutVersion(1);report.setLatestRevisionNo(0);
+    report.setLayoutVersion(1);report.setFormatVersion(1);
+    report.setLatestRevisionNo(0);
     report.setCreatedAt(Instant.now());
     reports.saveAndFlush(report);
     int rank=0;
@@ -218,6 +222,7 @@ public class ReportGridService {
       reportPeriods.save(dimension);
     }
     reportMetrics.flush();reportPeriods.flush();
+    formatService.initialize(report);
     return new CreateReceipt(report.getId(),code,selectedMetrics.size(),
        selectedPeriods.size(),timeAxis);
   }
@@ -325,8 +330,21 @@ public class ReportGridService {
   @Transactional(readOnly=true)
   public GridView grid(UUID reportId,UUID org,String requestedAxis,
                        String requestedLocale,Integer revisionNo){
+    return grid(reportId,org,requestedAxis,requestedLocale,revisionNo,null,"CODE");
+  }
+
+  @Transactional(readOnly=true)
+  public GridView grid(UUID reportId,UUID org,String requestedAxis,
+                       String requestedLocale,Integer revisionNo,
+                       Integer requestedFormatVersion,String requestedPeriodLabelStyle){
     var report=owned(reportId,org);
     String l=locale(requestedLocale);
+    java.util.Locale renderLocale=ReportFormatService.checkLocale(l);
+    String labelStyle=ReportFormatService.checkPeriodStyle(
+      requestedPeriodLabelStyle==null?"CODE":requestedPeriodLabelStyle);
+    var formatViews=formatService.getFormats(reportId,org,requestedFormatVersion);
+    var selectedFormats=formatService.index(formatViews);
+    int effectiveFormatVersion=formatViews.getFirst().formatVersion();
     String orientation=requestedAxis==null?report.getTimeAxis():axis(requestedAxis);
     var selectedMetrics=bindings(report);
     var selectedPeriods=periods(report);
@@ -343,7 +361,9 @@ public class ReportGridService {
     List<AxisItem> periodHeaders=new ArrayList<>();
     index=0;
     for(var p:selectedPeriods.values())
-      periodHeaders.add(new AxisItem(p.getPeriodCode(),p.getPeriodCode(),"PERIOD_CODE",(++index)*10));
+      periodHeaders.add(new AxisItem(p.getPeriodCode(),
+        formatService.periodLabel(p,report.getPeriodType(),labelStyle,renderLocale),
+        "PERIOD_CODE",(++index)*10));
 
     LibReportRevision selected=null;
     if(revisionNo!=null){
@@ -370,12 +390,16 @@ public class ReportGridService {
     if("COLUMNS".equals(orientation)){
       for(var m:metricHeaders)for(var p:periodHeaders){
         Value v=values.getOrDefault(m.code()+"|"+p.code(),new Value("MISSING",null));
-        matrix.add(new MatrixCell(m.code(),p.code(),m.code(),p.code(),v.state(),v.value()));
+        matrix.add(new MatrixCell(m.code(),p.code(),m.code(),p.code(),v.state(),v.value(),
+          formatService.formatValue(v.state(),v.value(),selectedFormats.get(m.code()),
+            renderLocale,report.getCurrencyCode())));
       }
     }else{
       for(var p:periodHeaders)for(var m:metricHeaders){
         Value v=values.getOrDefault(m.code()+"|"+p.code(),new Value("MISSING",null));
-        matrix.add(new MatrixCell(p.code(),m.code(),m.code(),p.code(),v.state(),v.value()));
+        matrix.add(new MatrixCell(p.code(),m.code(),m.code(),p.code(),v.state(),v.value(),
+          formatService.formatValue(v.state(),v.value(),selectedFormats.get(m.code()),
+            renderLocale,report.getCurrencyCode())));
       }
     }
     return new GridView(reportId,report.getReportCode(),report.getTitle(),
@@ -386,6 +410,6 @@ public class ReportGridService {
       report.getLayoutVersion(),
       "COLUMNS".equals(orientation)?metricHeaders:periodHeaders,
       "COLUMNS".equals(orientation)?periodHeaders:metricHeaders,
-      List.copyOf(matrix));
+      List.copyOf(matrix),effectiveFormatVersion);
   }
 }

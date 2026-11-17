@@ -220,6 +220,15 @@ public class ReportFormatService {
     if(isNegative)text="PARENTHESES".equals(spec.negativeStyle())?"("+text+")":"-"+text;
     if(spec.formatKind().endsWith("PERCENT")||spec.formatKind().equals("PERCENT_POINTS"))
       text+=" %";
+    if(spec.scaleDivisor()>1){
+      String scaleName=switch(locale.getLanguage()){
+        case "ru" -> spec.scaleDivisor()==1000?"тыс.":"млн.";
+        case "kk" -> spec.scaleDivisor()==1000?"мың":"млн.";
+        case "zh" -> spec.scaleDivisor()==1000?"千":"百万";
+        default -> spec.scaleDivisor()==1000?"thousand":"million";
+      };
+      text+=" "+scaleName;
+    }
     if("MONEY".equals(spec.formatKind())&&"CODE".equals(spec.currencyDisplay()))
       text+=" "+isoCurrency;
     return text;
