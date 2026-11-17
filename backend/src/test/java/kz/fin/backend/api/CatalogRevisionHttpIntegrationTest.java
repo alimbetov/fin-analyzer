@@ -259,11 +259,12 @@ class CatalogRevisionHttpIntegrationTest {
                 + "/revisions/" + revisionId + "/schema")
                 .with(user(org, "FIN_READ")))
                 .andExpect(status().isNotFound());
+        // Reconfirming a stale draft is a CAS conflict, not a new revision.
         mvc.perform(post(base + "/drafts/" + draftId + "/confirm")
                 .with(user(org, "FIN_SUBMIT")).contentType(MediaType.APPLICATION_JSON)
                 .content(confirm))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.revisionNumber").value(1));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("FIN_CATALOG_REVISION_CONFLICT"));
 
         mvc.perform(get(base + "/slots/" + slotId + "/current")
                 .with(user(org, "FIN_READ")))
