@@ -69,6 +69,14 @@ public record HtapFinancialSliceKey(
         calendarVersion = code(calendarVersion, "calendarVersion");
         if (currencyCode != null && !currencyCode.matches("[A-Z]{3}"))
             throw new IllegalArgumentException("FIN_HTAP_CURRENCY_INVALID");
+        if (currencyCode != null) {
+            try {
+                java.util.Currency.getInstance(currencyCode);
+            } catch (IllegalArgumentException invalidIso4217) {
+                throw new IllegalArgumentException("FIN_HTAP_CURRENCY_NOT_ISO4217",
+                        invalidIso4217);
+            }
+        }
         if ("MONEY".equals(unitCode) != (currencyCode != null))
             throw new IllegalArgumentException("FIN_HTAP_UNIT_CURRENCY_CONFLICT");
         var resolved = ReportingPeriodV5.resolve(periodType, periodCode, coverage);
