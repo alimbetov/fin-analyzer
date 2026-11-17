@@ -66,6 +66,21 @@ class ConcentrationTypedContractPostgresIntegrationTest {
     private UUID version(String code,String variant,UUID contract,
                          UUID prior,int number,String parameters,String engine,
                          String algorithmVersion) {
+        // This Testcontainers database is shared by the test methods. Preserve
+        // the real UNIQUE(method_code,variant_code,version_no) and immutable
+        // parent chain instead of trying to create several unrelated v1 rows.
+        var latest=jdbc.queryForList("""
+            SELECT config_id,version_no FROM fin_calc.method_config_version
+             WHERE method_code=? AND variant_code=?
+             ORDER BY version_no DESC LIMIT 1
+            """,code,variant);
+        if(!latest.isEmpty()) {
+            var predecessor=(UUID)latest.getFirst().get("config_id");
+            if(prior!=null) assertEquals(prior,predecessor,
+                    "Test fixture must extend the latest immutable config");
+            prior=predecessor;
+            number=((Number)latest.getFirst().get("version_no")).intValue()+1;
+        }
         UUID id=UUID.randomUUID();
         jdbc.update("""
             INSERT INTO fin_calc.method_config_version
