@@ -157,7 +157,7 @@ class HtapMappingGovernancePostgresTest {
             ON CONFLICT (metric_code,metric_version) DO NOTHING
             """);
         UUID approved=governance.propose(org,"F02","FIN-PILOT-V1","MAP-F02-01",
-            "{\\"sourceField\\":\\"netRevenue\\",\\"metricCode\\":\\"REV_NET\\",\\"metricVersion\\":\\"1.0.0\\"}",
+            "{\"sourceField\":\"netRevenue\",\"metricCode\":\"REV_NET\",\"metricVersion\":\"1.0.0\"}",
             token(org,"author","FIN_SUBMIT"));
         Jwt reviewer=token(org,"reviewer","FIN_REVIEW");
         governance.review(org,approved,true,EVIDENCE,reviewer);
@@ -181,7 +181,7 @@ class HtapMappingGovernancePostgresTest {
             org,approved,reviewer),"Semantic evidence must be immutable, not overwritten");
 
         UUID wrong=governance.propose(org,"F02","FIN-PILOT-V1","MAP-F02-02",
-            "{\\"sourceField\\":\\"netRevenue\\",\\"metricCode\\":\\"COGS\\",\\"metricVersion\\":\\"1.0.0\\"}",
+            "{\"sourceField\":\"netRevenue\",\"metricCode\":\"COGS\",\"metricVersion\":\"1.0.0\"}",
             token(org,"author","FIN_SUBMIT"));
         governance.review(org,wrong,true,EVIDENCE,reviewer);
         assertEquals("FIN_HTAP_MAPPING_SEMANTICS_UNQUALIFIED",
