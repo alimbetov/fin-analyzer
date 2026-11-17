@@ -139,6 +139,24 @@ public class CatalogXlsxRevisionService {
         if (slots.size() != 1)
             throw new IllegalStateException("FIN_CATALOG_SLOT_MISSING");
         Slot slot = slots.getFirst();
+        // A retry of an already committed draft is idempotent even if the head
+        // advanced afterwards. The immutable draft and project were scoped above.
+        var priorConfirmation = jdbc.query("""
+            SELECT r.id,r.slot_id,r.draft_id,r.revision_number,
+                   r.parent_revision_id,r.normalized_sha
+              FROM fin_intake.catalog_xlsx_revision r
+             WHERE r.organization_id=? AND r.slot_id=? AND r.draft_id=?
+            """, (rs, i) -> new Confirmed(
+                rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                rs.getObject(3, UUID.class), rs.getInt(4),
+                rs.getObject(5, UUID.class), rs.getString(6)),
+                organizationId, slot.id(), draftId);
+        if (!priorConfirmation.isEmpty()) {
+            var committed = priorConfirmation.getFirst();
+            if (!committed.normalizedFingerprint().equals(expectedFingerprint))
+                throw new IllegalStateException("FIN_CATALOG_REVISION_INTEGRITY_FAILED");
+            return committed;
+        }
         if (slot.current() != expectedRevision)
             throw new IllegalArgumentException("FIN_CATALOG_REVISION_CONFLICT");
 
