@@ -27,6 +27,7 @@ public class FormDraftService {
   private final FormRevisionRepository revisions;
   private final FormRevisionRowRepository rows;
   private final FormCommandReceiptRepository receipts;
+  private final LibCurrencyRepository currencies;
   private final ObjectMapper mapper;
 
   public record RowInput(UUID rowId, int rowPosition, Map<String,String> values) {}
@@ -40,14 +41,17 @@ public class FormDraftService {
   public record RowView(UUID rowId, int rowPosition, Map<String,String> values) {}
   public record DraftView(UUID instanceId, UUID organizationId, int revisionNo,
                           String formCode, String formVersion, String contentMode,
-                          Map<String,String> values, List<RowView> rows, String sha256) {}
+                          Map<String,String> values, List<RowView> rows, String sha256,
+                          String periodType, String periodCode, java.time.LocalDate periodStart,
+                          java.time.LocalDate periodEndExclusive, String currency) {}
 
   public FormDraftService(FormDefinitionRepository forms,FormVersionRepository versions,
          FormFieldRepository fields,FormInstanceRepository instances,
          FormRevisionRepository revisions,FormRevisionRowRepository rows,
-         FormCommandReceiptRepository receipts,ObjectMapper mapper) {
+         FormCommandReceiptRepository receipts,LibCurrencyRepository currencies,ObjectMapper mapper) {
     this.forms=forms;this.versions=versions;this.fields=fields;this.instances=instances;
-    this.revisions=revisions;this.rows=rows;this.receipts=receipts;this.mapper=mapper;
+    this.revisions=revisions;this.rows=rows;this.receipts=receipts;
+    this.currencies=currencies;this.mapper=mapper;
   }
   private static ResponseStatusException bad(String code) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,code);
@@ -75,7 +79,7 @@ public class FormDraftService {
     try{return mapper.readValue(json,new TypeReference<TreeMap<String,String>>(){});
     } catch(JsonProcessingException ex){throw new IllegalStateException(ex);}
   }
-  private static String normalize(String type,String value) {
+  private static String normalize(String type,String value,int moneyMinorUnits) {
     if(value==null) throw bad("NULL_CELL_NOT_ALLOWED");
     String raw=value.trim();
     if(raw.isEmpty()) return ""; // distinct from omitted key; never implicit zero
@@ -86,6 +90,8 @@ public class FormDraftService {
             throw bad("INVALID_DECIMAL");
           var v=new BigDecimal(raw);
           if(v.precision()>38||v.scale()>12) throw bad("INVALID_DECIMAL");
+          if(type.equals("MONEY") && v.stripTrailingZeros().scale()>moneyMinorUnits)
+            throw bad("CURRENCY_MINOR_UNITS_EXCEEDED");
           yield v.signum()==0?"0":v.stripTrailingZeros().toPlainString();
         }
         case "INTEGER" -> {
@@ -104,7 +110,8 @@ public class FormDraftService {
       };
     } catch(java.time.format.DateTimeParseException ex) {throw bad("INVALID_DATE");}
   }
-  private Map<String,String> canonical(UUID versionId,Map<String,String> input,boolean checkRequired) {
+  private Map<String,String> canonical(UUID versionId,Map<String,String> input,
+                                       boolean checkRequired,int moneyMinorUnits) {
     if(input==null) input=Map.of();
     var defs=fields.findByFormVersionIdOrderByDisplayOrderAsc(versionId);
     Map<String,FormField> byCode=new HashMap<>();
@@ -114,7 +121,7 @@ public class FormDraftService {
       FormField f=byCode.get(e.getKey());
       if(f==null) throw bad("UNKNOWN_FIELD:"+e.getKey());
       if(!"MANUAL".equals(f.getInputMode())) throw bad("READ_ONLY_FIELD:"+e.getKey());
-      result.put(e.getKey(),normalize(f.getFieldType(),e.getValue()));
+      result.put(e.getKey(),normalize(f.getFieldType(),e.getValue(),moneyMinorUnits));
     }
     if(checkRequired) for(FormField f:defs) {
       if(Boolean.TRUE.equals(f.getRequired())&&
@@ -134,7 +141,14 @@ public class FormDraftService {
     required(req.reportingBasis(),"REPORTING_BASIS");required(req.dataSpace(),"DATA_SPACE");
     required(req.coverage(),"COVERAGE");required(req.createdBy(),"ACTOR");
     required(req.changeReason(),"REASON");
-    if(req.currency().length()!=3||!req.currency().matches("[A-Z]{3}")) throw bad("CURRENCY_INVALID");
+    if(req.currency().length()!=3||!req.currency().matches("[A-Z]{3}"))
+      throw bad("CURRENCY_INVALID");
+    var currency=currencies.findById(req.currency())
+      .filter(x->"ACTIVE".equals(x.getStatus()))
+      .orElseThrow(()->bad("UNSUPPORTED_CURRENCY"));
+    PeriodResolver.Range period;
+    try{period=PeriodResolver.resolve(req.periodType(),req.periodCode());}
+    catch(IllegalArgumentException e){throw bad("INVALID_PERIOD");}
     if(req.expectedRevision()<0) throw bad("EXPECTED_REVISION_INVALID");
     if(idempotencyKey==null||idempotencyKey.isBlank()||idempotencyKey.length()>200)
       throw bad("IDEMPOTENCY_KEY_REQUIRED");
@@ -171,8 +185,11 @@ public class FormDraftService {
       inst=new FormInstance();inst.setId(UUID.randomUUID());
       inst.setOrganizationId(req.organizationId());inst.setEconomicEntityId(req.economicEntityId());
       inst.setBusinessScopeId(req.businessScopeId());inst.setProjectId(req.projectId());
-      inst.setFormId(form.getId());inst.setPeriodType(req.periodType());
-      inst.setPeriodCode(req.periodCode());inst.setCoverage(req.coverage());
+      inst.setFormId(form.getId());inst.setPeriodType(period.periodType());
+      inst.setPeriodCode(period.periodCode());
+      inst.setPeriodStart(period.startInclusive());
+      inst.setPeriodEndExclusive(period.endExclusive());
+      inst.setCoverage(req.coverage());
       inst.setCurrency(req.currency());inst.setReportingBasis(req.reportingBasis());
       inst.setDataSpace(req.dataSpace());inst.setLatestRevisionNo(0);
       instances.saveAndFlush(inst);
@@ -183,8 +200,8 @@ public class FormDraftService {
         ||!Objects.equals(inst.getEconomicEntityId(),req.economicEntityId())
         ||!Objects.equals(inst.getBusinessScopeId(),req.businessScopeId())
         ||!Objects.equals(inst.getProjectId(),req.projectId())
-        ||!Objects.equals(inst.getPeriodType(),req.periodType())
-        ||!Objects.equals(inst.getPeriodCode(),req.periodCode())
+        ||!Objects.equals(inst.getPeriodType(),period.periodType())
+        ||!Objects.equals(inst.getPeriodCode(),period.periodCode())
         ||!Objects.equals(inst.getCurrency(),req.currency())
         ||!Objects.equals(inst.getCoverage(),req.coverage())
         ||!Objects.equals(inst.getReportingBasis(),req.reportingBasis())
@@ -195,7 +212,8 @@ public class FormDraftService {
       throw new ResponseStatusException(HttpStatus.CONFLICT,"STALE_EXPECTED_REVISION");
 
     boolean single="SINGLE_RECORD".equals(version.getContentMode());
-    Map<String,String> normalized=canonical(version.getId(),req.values(),single);
+    Map<String,String> normalized=canonical(version.getId(),req.values(),single,
+      currency.getMinorUnits());
     List<RowInput> sourceRows=req.rows()==null?List.of():req.rows();
     if((single&&!sourceRows.isEmpty())||(!single&&(sourceRows.isEmpty()||sourceRows.size()>200)))
       throw bad("INVALID_ROW_COUNT");
@@ -207,7 +225,8 @@ public class FormDraftService {
           throw bad("INVALID_ROW_POSITION");
         UUID id=row.rowId()==null?UUID.randomUUID():row.rowId();
         if(!ids.add(id)) throw bad("DUPLICATE_ROW_ID");
-        prepared.add(new RowInput(id,row.rowPosition(),canonical(version.getId(),row.values(),true)));
+        prepared.add(new RowInput(id,row.rowPosition(),canonical(version.getId(),row.values(),true,
+          currency.getMinorUnits())));
       }
       prepared.sort(Comparator.comparingInt(RowInput::rowPosition).thenComparing(RowInput::rowId));
     }
@@ -216,7 +235,7 @@ public class FormDraftService {
     // Scope and revision-pinned form version remain part of the domain hash.
     String content=json(List.of(req.organizationId().toString(),req.economicEntityId().toString(),
       req.businessScopeId().toString(),req.projectId().toString(),req.formCode(),
-      version.getVersionLabel(),req.periodType(),req.periodCode(),req.coverage(),
+      version.getVersionLabel(),period.periodType(),period.periodCode(),req.coverage(),
       req.currency(),req.reportingBasis(),req.dataSpace(),normalized,
       prepared.stream().sorted(Comparator.comparing(RowInput::rowId))
         .map(r->List.of(r.rowId().toString(),r.values())).toList()));
@@ -270,6 +289,8 @@ public class FormDraftService {
        .stream().map(r->new RowView(r.getRowId(),r.getRowPosition(),parseValues(r.getValuesJson()))).toList();
     return new DraftView(inst.getId(),inst.getOrganizationId(),rev.getRevisionNo(),
         form.getFormCode(),version.getVersionLabel(),version.getContentMode(),
-        parseValues(rev.getValuesJson()),lineItems,rev.getCanonicalContentSha256());
+        parseValues(rev.getValuesJson()),lineItems,rev.getCanonicalContentSha256(),
+        inst.getPeriodType(),inst.getPeriodCode(),inst.getPeriodStart(),
+        inst.getPeriodEndExclusive(),inst.getCurrency());
   }
 }
