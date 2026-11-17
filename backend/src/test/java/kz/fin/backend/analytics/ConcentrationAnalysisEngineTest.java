@@ -55,6 +55,24 @@ class ConcentrationAnalysisEngineTest {
                 abc.rows().stream().map(AbcRow::classification).toList());
     }
 
+    @Test void changedAbcBoundaryPolicyChangesClassesButNotReconciledPareto() {
+        // Synthetic evidence for FIN HTAP versioned CON-02 configuration.
+        // A/B thresholds belong to ABC (CON-02), not Pareto (CON-01).
+        var source = pareto(List.of(sku("A","77"),sku("B","13"),
+                sku("C","7"),sku("D","3")),amount("100"));
+        var original = abc(source,DEFAULT_ABC_POLICY);
+        var changed = abc(source,
+                new AbcPolicy("TEST_75_90",amount("75"),amount("90")));
+        assertEquals(List.of("A","A","B","C"),original.rows().stream()
+                .map(AbcRow::classification).toList());
+        assertEquals(List.of("A","B","C","C"),changed.rows().stream()
+                .map(AbcRow::classification).toList());
+        assertEquals(List.of(77,90,97,100),source.rows().stream()
+                .map(r->r.cumulativePercent().intValueExact()).toList());
+        assertEquals(PARETO_VERSION,source.methodVersion());
+        assertNotEquals(original.policyVersion(),changed.policyVersion());
+    }
+
     @Test void zeroOrUnreconciledOrDuplicatePopulationCannotCompute(){
         assertThrows(IllegalArgumentException.class,
                 ()->pareto(List.of(sku("A","20"),sku("B","80")),amount("90")));
