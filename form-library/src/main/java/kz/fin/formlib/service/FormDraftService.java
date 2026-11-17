@@ -251,11 +251,19 @@ public class FormDraftService {
 
   @Transactional(readOnly=true)
   public DraftView read(UUID id,UUID organizationId) {
+    return readRevision(id,organizationId,null);
+  }
+
+  @Transactional(readOnly=true)
+  public DraftView readRevision(UUID id,UUID organizationId,Integer revisionNo) {
     FormInstance inst=instances.findByIdAndOrganizationId(id,organizationId)
         .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"INSTANCE_NOT_FOUND"));
     if(inst.getCurrentRevisionId()==null)
       throw new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND");
-    FormRevision rev=revisions.findById(inst.getCurrentRevisionId()).orElseThrow();
+    FormRevision rev=revisionNo==null
+       ? revisions.findById(inst.getCurrentRevisionId()).orElseThrow()
+       : revisions.findByInstanceIdAndRevisionNo(id,revisionNo)
+           .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND"));
     FormDefinition form=forms.findById(inst.getFormId()).orElseThrow();
     FormVersion version=versions.findById(rev.getFormVersionId()).orElseThrow();
     List<RowView> lineItems=rows.findByRevisionIdOrderByRowPositionAscRowIdAsc(rev.getId())

@@ -94,4 +94,33 @@ class FormLibraryIntegrationTest {
         .andExpect(jsonPath("$.rows[1].rowPosition").value(20))
         .andExpect(jsonPath("$.rows[1].rowId").value(rowId1.toString()));
   }
+  @Test void reorderingRowsetChangesPresentationButNotFinancialContentHash() throws Exception {
+    UUID org=UUID.randomUUID(), a=UUID.randomUUID(), b=UUID.randomUUID();
+    String va="{\\"paymentRef\\":\\"P-A\\",\\"postedAt\\":\\"2026-02-01\\",\\"amount\\":\\"100\\",\\"purpose\\":\\"RECEIPT\\",\\"invoiceRef\\":\\"I-A\\"}";
+    String vb="{\\"paymentRef\\":\\"P-B\\",\\"postedAt\\":\\"2026-02-02\\",\\"amount\\":\\"200\\",\\"purpose\\":\\"RECEIPT\\",\\"invoiceRef\\":\\"I-B\\"}";
+    String initial="[{\\"rowId\\":\\""+a+"\\",\\"rowPosition\\":10,\\"values\\":"+va+
+      "},{\\"rowId\\":\\""+b+"\\",\\"rowPosition\\":20,\\"values\\":"+vb+"}]";
+    String created=web.perform(post("/api/v1/drafts").header("Idempotency-Key","first-"+org)
+      .contentType(MediaType.APPLICATION_JSON)
+      .content(request(null,org,"DF-CSH-01",0,Map.of(),initial)))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    JsonNode receipt=json.readTree(created);
+    UUID instanceId=UUID.fromString(receipt.get("instanceId").asText());
+    String reordered="[{\\"rowId\\":\\""+a+"\\",\\"rowPosition\\":20,\\"values\\":"+va+
+      "},{\\"rowId\\":\\""+b+"\\",\\"rowPosition\\":10,\\"values\\":"+vb+"}]";
+    String updated=web.perform(post("/api/v1/drafts").header("Idempotency-Key","second-"+org)
+      .contentType(MediaType.APPLICATION_JSON)
+      .content(request(instanceId,org,"DF-CSH-01",1,Map.of(),reordered)))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    assertEquals(receipt.get("contentSha256").asText(),
+      json.readTree(updated).get("contentSha256").asText());
+    web.perform(get("/api/v1/drafts/"+instanceId).param("organizationId",org.toString()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.revisionNo").value(2))
+      .andExpect(jsonPath("$.rows[0].rowId").value(b.toString()));
+    web.perform(get("/api/v1/drafts/"+instanceId+"/revisions/1")
+      .param("organizationId",org.toString()))
+      .andExpect(status().isOk()).andExpect(jsonPath("$.revisionNo").value(1))
+      .andExpect(jsonPath("$.rows[0].rowId").value(a.toString()));
+  }
+
 }

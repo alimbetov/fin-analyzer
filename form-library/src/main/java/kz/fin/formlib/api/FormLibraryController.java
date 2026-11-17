@@ -69,4 +69,10 @@ public class FormLibraryController {
            @RequestParam UUID organizationId){
     return drafts.read(id,organizationId);
   }
+  @GetMapping("/drafts/{id}/revisions/{number}")
+  public FormDraftService.DraftView readRevision(@PathVariable UUID id,
+           @PathVariable int number,@RequestParam UUID organizationId){
+    if(number<1) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND");
+    return drafts.readRevision(id,organizationId,number);
+  }
 }
