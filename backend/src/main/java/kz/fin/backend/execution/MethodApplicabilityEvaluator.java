@@ -140,7 +140,6 @@ public class MethodApplicabilityEvaluator {
         var missing=new TreeSet<String>();
         var conflicts=new TreeSet<String>();
         boolean unresolvedPopulation=false;
-        var matchedFacts=new ArrayList<Fact>();
         if(!d.supportedDataSpaces().contains(source.dataSpace()))
             return decision(d,source,Status.NOT_APPLICABLE,
                     List.of("R2_DATA_SPACE_NOT_SUPPORTED"),matched,missing,matchedFacts);
@@ -171,7 +170,6 @@ public class MethodApplicabilityEvaluator {
             }
             if(!compatible.isEmpty()) matched.add(input.metricCode());
             for(var row:compatible) matchedFacts.add(row.reference());
-            matchedFacts.addAll(compatible);
             if(compatible.isEmpty()) conflicts.add("R2_INPUT_UNQUALIFIED_OR_INCOMPATIBLE");
             if(compatible.stream().map(Fact::currency).distinct().count()>1)
                 conflicts.add("R2_CURRENCY_CONFLICT");
