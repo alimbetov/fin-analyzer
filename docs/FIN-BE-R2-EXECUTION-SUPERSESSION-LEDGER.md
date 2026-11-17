@@ -33,6 +33,23 @@ There are **three different meanings of M1/M2/M3** in earlier documents (R2 acce
 | Same §5–6 | implementation path and M0–M6 delivery order | **SUPERSEDED DELIVERY ORDER ONLY** | W0–W8; no second scheduler/outbox and no ACTUAL permit |
 | Existing `SingleExecutorScheduler.java`, `analysis_run/task` and original outbox | runtime legacy operational code | **KEEP DURING MIGRATION** | feature-flagged, additive replacement inside same execution service; do not annotate `@Deprecated` until all callers migrated and historical data compatible |
 
+## v1.1 cross-cutting change control (P0 mandatory)
+
+The [2026-11-17 technical review](FIN-BE-R2-W-TECHNICAL-REVIEW-2026-11-17.md) establishes stricter rules than the early W0–W8 proposal. **These are new normative requirements, not deprecated historical safety gates:**
+
+| Previously underspecified | New controlling design requirement | Implementation gate |
+|---|---|---|
+| `fin.workspace.enabled` + legacy polling | One effective `fin.execution.mode` with fail-fast conflicting flags, no dual execution/CORE publication | W0-MODE |
+| “Per-tenant quotas” | Atomic global+tenant+engine stage capacity leases in the same short transaction as fenced task claim | W2-ADMIT |
+| “Workers use resources” | PREPARE/SQL/JAVA/CLEANUP all have budgets and cluster-wide connection reserves | W2-STAGE/BULK |
+| “Lease expires” | Cancel/confirm physical worker completion before releasing capacity, otherwise quarantine | W4-FENCE |
+| “Reusable workspace” | Scoped immutable source+population+policy identity, generation, CAS seal and read-time ABAC | W1-SEAL/ISOL |
+| “PostgreSQL isolation” | Scoped composite FK, non-owner/non-BYPASSRLS runtime roles, RLS/pool reset tests where used | W7-SEC |
+| “HASH partition defaults” | Unpartitioned baseline and fixed HASH comparison before physical freeze | W1-PART/W6-TUNE |
+| “Performance tests” | Zero-violation correctness gates; pre-registered machine-specific OLTP and worker SLOs | W6-SLO |
+
+**Application code is not yet deprecated.** Changes in future commits must preserve legacy tests and report artifacts, add explicit migration/rollback proof and keep the execution mode OFF until W0/W1 gates. The new v1.1 technical review is an internal analysis, **not** independent S2 approval.
+
 ## Rules for future code / specification changes
 
 1. **Do not mark all preceding R2 requirements deprecated:** this would accidentally remove critical tenant, source, permit, risk, and CORE protection. Mark only narrow outdated *implementation mechanisms and delivery sequencing* as SUPERSEDED.
