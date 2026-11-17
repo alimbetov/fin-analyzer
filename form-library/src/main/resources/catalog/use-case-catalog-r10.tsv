@@ -1,0 +1,8 @@
+useCaseCode	titleRu	titleEn	audience	deliverable	version	qualificationState	modelCodes
+FINANCIAL_HEALTH	Диагностика финансового состояния	Financial health diagnostics	OWNER_CFO_ANALYST	FINANCIAL_HEALTH_REPORT	1	CANDIDATE_NOT_S2	ACC-01;ACC-05;CFO-05
+INVESTOR_READINESS	Диагностика для инвестора	Investor due diligence readiness	INVESTOR_FOUNDER_ADVISER	INVESTMENT_READINESS_DOSSIER	1	CANDIDATE_NOT_S2	INV-02;INV-05;INV-07;INV-08
+BUSINESS_PLAN	Подготовка бизнес-плана	Business plan preparation	FOUNDER_ECONOMIST	BUSINESS_PLAN_PACKAGE	1	CANDIDATE_NOT_S2	MGT-01;MGT-05;INV-02;INV-07
+BANK_FINANCING	Подготовка к кредитованию	Bank financing readiness	BORROWER_LENDER	CREDIT_APPLICATION_DOSSIER	1	CANDIDATE_NOT_S2	CFO-01;CFO-02;CFO-05;INV-08
+INVESTMENT_APPRAISAL	Оценка инвестиционного проекта	Investment project appraisal	INVESTOR_ECONOMIST	INVESTMENT_EVALUATION	1	CANDIDATE_NOT_S2	INV-02;INV-04;INV-05;INV-07;INV-09
+MANAGEMENT_CONTROL	Управленческий анализ и бюджет	Management analysis and budget	MANAGER_CFO_ECONOMIST	MANAGEMENT_PERFORMANCE_REPORT	1	CANDIDATE_NOT_S2	CFO-03;CFO-04;MGT-05;MGT-06
+GRANT_PROGRAM	Заявка на грант или финансирование программы	Grant and program funding dossier	NONPROFIT_PUBLIC_PROJECT	PROGRAM_FUNDING_PROPOSAL	1	CANDIDATE_NOT_S2	MGT-07;MGT-08;CST-06
