@@ -57,7 +57,16 @@ public class ReferenceCatalogController {
                            String title,String description,String translationStatus) {}
   public record FormView(String formCode,String version,String captureMode,String contentMode,
                          String qualificationState,String locale,String title,String description,
-                         String translationStatus,String purpose,String purposeTranslationStatus) {}
+                         String translationStatus,String purpose,String purposeTranslationStatus) {
+    // Maintain the original nine-argument construction contract for existing
+    // preview generators and legacy integrations.
+    public FormView(String formCode,String version,String captureMode,String contentMode,
+        String qualificationState,String locale,String title,String description,
+        String translationStatus){
+      this(formCode,version,captureMode,contentMode,qualificationState,locale,
+        title,description,translationStatus,null,"PENDING_TRANSLATION");
+    }
+  }
   public record FieldView(String fieldCode,String fieldType,String inputMode,boolean required,
                           int displayOrder,String sectionCode,String title,String translationStatus,
                           String unitPolicy) {}
