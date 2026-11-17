@@ -269,8 +269,8 @@ public class ReportGridService {
       normalized.put(identity,new Value(state,canonical));pairs.put(identity,pair);
     }
     List<CellInput> normalizedInputs=new ArrayList<>();
-    normalized.forEach((key,value)->{
-      var p=pairs.get(key);
+    normalized.forEach((cellKey,value)->{
+      var p=pairs.get(cellKey);
       normalizedInputs.add(new CellInput(p.metric(),p.period(),value.state(),value.value()));
     });
     var validation=inputValidator.validateSnapshot(reportId,req.organizationId(),normalizedInputs);
