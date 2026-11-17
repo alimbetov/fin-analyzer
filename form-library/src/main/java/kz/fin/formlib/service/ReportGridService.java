@@ -121,6 +121,11 @@ public class ReportGridService {
     return reports.findByIdAndOrganizationId(id,org)
       .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"REPORT_NOT_FOUND"));
   }
+  private LibReportDefinition locked(UUID id,UUID org){
+    if(id==null||org==null)throw invalid("REPORT_CONTEXT_REQUIRED");
+    return reports.lockByIdAndOrganizationId(id,org).orElseThrow(
+      ()->new ResponseStatusException(HttpStatus.NOT_FOUND,"REPORT_NOT_FOUND"));
+  }
   private LibCurrency currency(String code){
     return currencies.findById(required(code,"CURRENCY"))
       .filter(c->"ACTIVE".equals(c.getStatus()))
@@ -241,7 +246,7 @@ public class ReportGridService {
   @Transactional
   public SaveReceipt save(UUID reportId,SaveReport req,String idempotencyKey){
     if(req==null)throw invalid("REVISION_REQUEST_REQUIRED");
-    var report=owned(reportId,req.organizationId());
+    var report=locked(reportId,req.organizationId());
     String key=required(idempotencyKey,"IDEMPOTENCY_KEY");
     if(key.length()>200)throw invalid("IDEMPOTENCY_KEY_TOO_LONG");
     String actor=required(req.createdBy(),"AUTHOR");
@@ -313,6 +318,7 @@ public class ReportGridService {
     rev.setValidationVersion(validation.validationVersion());
     rev.setValidationSha256(validation.rulesSha256());
     revisions.saveAndFlush(rev);
+    var storedCells=new ArrayList<LibReportRevisionCell>(normalized.size());
     for(var kv:normalized.entrySet()){
       var pair=pairs.get(kv.getKey());var val=kv.getValue();
       var row=new LibReportRevisionCell();
@@ -320,8 +326,9 @@ public class ReportGridService {
       row.setMetricId(selectedMetrics.get(pair.metric()).metric().getId());
       row.setPeriodCode(pair.period());row.setValueState(val.state());
       row.setDecimalValue(val.value());
-      revisionCells.save(row);
+      storedCells.add(row);
     }
+    revisionCells.saveAll(storedCells);
     revisionCells.flush();
     report.setCurrentRevisionId(rev.getId());
     report.setLatestRevisionNo(rev.getRevisionNo());

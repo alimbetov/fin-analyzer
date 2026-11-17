@@ -156,6 +156,11 @@ public class FormDraftService {
     var form=forms.findByFormCode(req.formCode()).orElseThrow(()->bad("FORM_NOT_FOUND"));
     var version=versions.findById(form.getCurrentVersionId()).orElseThrow();
     if("EVIDENCE".equals(version.getContentMode())) throw bad("EVIDENCE_UPLOAD_NOT_IMPLEMENTED");
+    // A catalog identity alone is not an approved writable schema.
+    // F02 is the single explicit pilot with a typed input contract.
+    if(!"TYPED_DRAFT".equals(form.getLegacyCaptureMode())
+        &&!"F02".equals(form.getFormCode()))
+      throw bad("CAPTURE_SCHEMA_NOT_APPROVED");
 
     // Hash the caller's exact request (before generation of row UUIDs), with map keys ordered.
     String canonicalRequest=json(List.of(String.valueOf(req.instanceId()),
@@ -264,12 +269,14 @@ public class FormDraftService {
     revision.setRowOrderSha256(orderHash);revision.setSourceKind("CLIPBOARD_OR_MANUAL_DRAFT");
     revision.setCreatedAt(Instant.now());revision.setCreatedBy(req.createdBy());
     revision.setChangeReason(req.changeReason());revisions.saveAndFlush(revision);
+    var storedRows=new ArrayList<FormRevisionRow>(prepared.size());
     for(RowInput row:prepared) {
       FormRevisionRow entry=new FormRevisionRow();entry.setId(UUID.randomUUID());
       entry.setRevisionId(revision.getId());entry.setRowId(row.rowId());
       entry.setRowPosition(row.rowPosition());entry.setValuesJson(json(row.values()));
-      rows.save(entry);
+      storedRows.add(entry);
     }
+    if(!storedRows.isEmpty())rows.saveAll(storedRows);
     inst.setCurrentRevisionId(revision.getId());
     inst.setLatestRevisionNo(revision.getRevisionNo());
     instances.saveAndFlush(inst); // Hibernate @Version protects concurrent same-slot commits.

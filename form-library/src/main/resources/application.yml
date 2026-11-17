@@ -11,6 +11,11 @@ spring:
     password: ""
   jpa:
     open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 32
+        order_inserts: true
     hibernate:
       ddl-auto: validate
   liquibase:
