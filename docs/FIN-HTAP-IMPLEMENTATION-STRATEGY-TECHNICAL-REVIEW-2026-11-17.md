@@ -34,6 +34,12 @@
 
 **Review count:** **8 P0 / 8 P1**, where **P0 refers to an unresolved release/next-stage precondition**, not necessarily a presently exploitable runtime bug. **Current W1.1 functionality is GREEN** in reviewed GitHub CI; there is no code evidence that a destructive partition reaper or new SQL batch execution is live.
 
+## B.1. Follow-up code-backed correction (2026-11-17)
+
+**HTAP-STR-02 nuance:** `CatalogXlsxRoundTripService.normalizedFingerprint` starts with `schemaFingerprint(formCode)`, so **structural schema changes are already indirectly included in the legacy normalized SHA** for correctly issued drafts. The unresolved design blocker is **mapping/financial policy version and catalog activation epoch**, which existing schema and normalization fingerprints do not fully cover. New `CatalogXlsxRevisionService.confirm` explicitly rejects a persisted draft whose `schema_fingerprint` differs from the current server registry and includes prior schema equality in its NO_OP check. This is a partial fail-closed improvement, **not complete closure** across mixed-version deploys or changed metric mapping.
+
+**New tests/coverage proof:** `HtapCalculationPeriodPolicyTest`, stale-schema PostgreSQL test in `CatalogXlsxRoundTripIntegrationTest`, and 60-family/5-wired evidence assertion in `MethodologyCatalogContractTest`. These later commits require a fresh same-SHA CI outcome, not the original W1.1 CI. See [P0 Recovery / Methodology Reality](FIN-HTAP-METHODOLOGY-REALITY-AND-P0-RECOVERY-PLAN.md). Independent S2 pending.
+
 ## C. Required strategy changes by gate (no parallel uncontrolled features)
 
 ### Gate W1.1 — retain GREEN, closure not proof of entire HTAP
