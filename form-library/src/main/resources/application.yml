@@ -18,3 +18,10 @@ spring:
   h2:
     console:
       enabled: false
+
+# Public, version-aware reference cache only; never tenant-specific reports.
+fin:
+  catalog:
+    cache:
+      ttl: ${FIN_CATALOG_CACHE_TTL:PT5M}
+      max-entries: ${FIN_CATALOG_CACHE_MAX_ENTRIES:512}

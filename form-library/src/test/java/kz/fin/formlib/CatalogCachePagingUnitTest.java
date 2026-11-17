@@ -33,6 +33,14 @@ class CatalogCachePagingUnitTest {
     assertEquals(4,loads.get());
   }
 
+  @Test void publicationEpochPreventsCachedOldGenerationFromBeingReused(){
+    var cache=new CatalogReadCache(Duration.ofMinutes(1),30,Ticker.systemTicker());
+    assertEquals("old",cache.get("forms","ru",()->"old"));
+    cache.invalidateAfterCommit(); // without an active transaction, invalidate now
+    assertEquals("new",cache.get("forms","ru",()->"new"));
+    assertEquals("new",cache.get("forms","ru",()->"unexpected"));
+  }
+
   @Test void nestedLookupsAcrossNamespacesNeverCauseRecursiveUpdate(){
     var cache=new CatalogReadCache(Duration.ofMinutes(1),30,Ticker.systemTicker());
     var result=cache.get("ui-launch","ru|F02",()->

@@ -5,6 +5,8 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Ticker;
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -12,6 +14,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 /**
@@ -33,10 +36,19 @@ public class CatalogReadCache {
     "legacy-form-summaries","legacy-form-detail","ui-categories",
     "ui-category-forms","ui-launch","use-case-forms");
   private final Map<String,Cache<String,Object>> namespaceCaches=new ConcurrentHashMap<>();
+  // An in-flight loader that began before publication is always keyed by the
+  // old epoch, even if it completes after eviction.
+  private final AtomicLong generation=new AtomicLong();
   private final Duration ttl;
   private final long maxEntries;
   private final Ticker ticker;
 
+  @Autowired
+  public CatalogReadCache(
+      @Value("${fin.catalog.cache.ttl:PT5M}") Duration ttl,
+      @Value("${fin.catalog.cache.max-entries:512}") long maxEntries){
+    this(ttl,maxEntries,Ticker.systemTicker());
+  }
   public CatalogReadCache(){this(Duration.ofMinutes(5),512,Ticker.systemTicker());}
   /** Explicit policy for deterministic expiry and LRU/size tests. */
   public CatalogReadCache(Duration ttl,long maxEntries,Ticker ticker){
@@ -54,9 +66,13 @@ public class CatalogReadCache {
   @SuppressWarnings("unchecked")
   public <T> T get(String namespace,String key,Supplier<T> loader){
     if(key==null||loader==null)throw new IllegalArgumentException("INVALID_CACHE_KEY");
-    return (T)cache(namespace).get(key,ignored->loader.get());
+    long epoch=generation.get();
+    return (T)cache(namespace).get(epoch+"|"+key,ignored->loader.get());
   }
-  public void invalidateAll(){namespaceCaches.values().forEach(Cache::invalidateAll);}
+  public void invalidateAll(){
+    generation.incrementAndGet();
+    namespaceCaches.values().forEach(Cache::invalidateAll);
+  }
   public void invalidateAfterCommit(){
     if(TransactionSynchronizationManager.isSynchronizationActive()){
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){

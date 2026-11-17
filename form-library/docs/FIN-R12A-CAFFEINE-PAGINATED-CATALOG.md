@@ -19,8 +19,8 @@ Branch `feat/fin-form-library-standalone`. No React client added. Backend return
 
 ### Caffeine settings
 
-- JVM-local cache, whitelist of 12 namespaces; independent cache per namespace (nested composite reference lookups must not cause `Recursive update`).
-- `maximumSize(512)` per namespace; `expireAfterWrite(5 minutes)`; `recordStats()`.
+- JVM-local cache, whitelist of 12 namespaces; independent cache per namespace (nested composite reference lookups must not cause `Recursive update`). Cache keys are prefixed by a local publication epoch so an old in-flight load cannot overwrite a newly visible version.
+- `maximumSize(512)` per namespace; `expireAfterWrite(5 minutes)`; `recordStats()`. Both are configurable through `FIN_CATALOG_CACHE_MAX_ENTRIES` and `FIN_CATALOG_CACHE_TTL` (`PT5M` by default).
 - Cache only server-defined finite keys (locale, form code, category code, method package); no arbitrary search, free-text query or pagination pages. Four locales: `ru`, `kk`, `en`, `zh-Hans`, different cache entries.
 - Fail closed for unsupported cache namespaces; no tenant report, actor, private favorite, paid entitlement, share token, financial status or user revision cache.
 - Successful `CatalogManagementService.publish` triggers transactional **afterCommit** global namespace invalidation; editing a draft does not invalidate published data. On other JVMs TTL bounds staleness but cross-node cache broadcast is not implemented. For production, require Redis/Kafka/Outbox invalidation or catalogue-versioned cache keys plus event sequence, not just 5-minute eventual convergence.
