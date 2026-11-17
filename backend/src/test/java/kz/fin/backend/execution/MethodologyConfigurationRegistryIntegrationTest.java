@@ -270,6 +270,20 @@ class MethodologyConfigurationRegistryIntegrationTest {
                 SELECT pointer_version FROM fin_calc.method_active_config
                 WHERE method_code='CON-02' AND variant_code='ABC_SALES'
                 """, Long.class));
+        // A CAS update may change config_id but must never rename an active
+        // family/variant key. A rename silently deactivates the old variant.
+        var scopeRewrite = assertThrows(DataAccessException.class, () -> jdbc.update("""
+                UPDATE fin_calc.method_active_config
+                   SET method_code='FIN-01',variant_code='REV_NET_MOM',
+                       pointer_version=pointer_version+1
+                 WHERE method_code='CON-02' AND variant_code='ABC_SALES'
+                """));
+        assertTrue(scopeRewrite.getMostSpecificCause().getMessage()
+                .contains("FIN_METHOD_ACTIVE_CONFIG_SCOPE_IMMUTABLE"));
+        assertEquals(2L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_calc.method_config_activation
+                WHERE method_code='CON-02' AND variant_code='ABC_SALES'
+                """, Long.class));
         assertEquals(60L, jdbc.queryForObject(
                 "SELECT count(*) FROM fin_calc.methodology_catalog_view",Long.class));
         assertEquals(1L, jdbc.queryForObject("""
