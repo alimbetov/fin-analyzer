@@ -78,6 +78,7 @@ public class InputTemplatePreviewService {
   private final LibMetricDefinitionRepository metrics;
   private final FieldMetricLabelCandidateLookup labelCandidates;
   private final FormEditorialDraftLookup formEditorial;
+  private final FieldMetricContractGuard contractGuard;
 
   public InputTemplatePreviewService(FormDefinitionRepository definitions,
       FormVersionRepository versions,FormSectionRepository sections,
@@ -85,7 +86,8 @@ public class InputTemplatePreviewService {
       FormFieldTranslationRepository fieldTranslations,
       LibMetricDefinitionRepository metrics,
       FieldMetricLabelCandidateLookup labelCandidates,
-      FormEditorialDraftLookup formEditorial) {
+      FormEditorialDraftLookup formEditorial,
+      FieldMetricContractGuard contractGuard) {
     this.definitions=definitions;
     this.versions=versions;
     this.sections=sections;
@@ -95,6 +97,7 @@ public class InputTemplatePreviewService {
     this.metrics=metrics;
     this.labelCandidates=labelCandidates;
     this.formEditorial=formEditorial;
+    this.contractGuard=contractGuard;
   }
 
   private static ResponseStatusException invalid(String code){
@@ -260,8 +263,11 @@ public class InputTemplatePreviewService {
           .equals(Set.of("netRevenue","cogs","operatingExpenses"))
       &&orderedFields.stream().allMatch(f->"MONEY".equals(f.getFieldType())
           &&"MANUAL".equals(f.getInputMode()));
-    boolean inputAllowed=("TYPED_DRAFT".equals(definition.getLegacyCaptureMode())
-      &&!"EVIDENCE".equals(contentMode))||f02Pilot;
+    boolean bindingCurrent=contractGuard.matches(formCode,version.getId());
+    boolean inputAllowed=bindingCurrent&&
+      (("TYPED_DRAFT".equals(definition.getLegacyCaptureMode())
+      &&!"EVIDENCE".equals(contentMode))||f02Pilot);
+    if(!bindingCurrent)warnings.add("FIELD_METRIC_CONTRACT_STALE_PREVIEW_READ_ONLY");
     if(f02Pilot)warnings.add("F02_PILOT_UNQUALIFIED");
     if(!inputAllowed)warnings.add("INPUT_NOT_ALLOWED_FOR_CAPTURE_MODE");
     for(var field:orderedFields){

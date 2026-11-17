@@ -29,6 +29,7 @@ public class FormDraftService {
   private final FormCommandReceiptRepository receipts;
   private final LibCurrencyRepository currencies;
   private final ObjectMapper mapper;
+  private final FieldMetricContractGuard contractGuard;
 
   public record RowInput(UUID rowId, int rowPosition, Map<String,String> values) {}
   public record DraftRequest(UUID instanceId, UUID organizationId, UUID economicEntityId,
@@ -49,10 +50,11 @@ public class FormDraftService {
   public FormDraftService(FormDefinitionRepository forms,FormVersionRepository versions,
          FormFieldRepository fields,FormInstanceRepository instances,
          FormRevisionRepository revisions,FormRevisionRowRepository rows,
-         FormCommandReceiptRepository receipts,LibCurrencyRepository currencies,ObjectMapper mapper) {
+         FormCommandReceiptRepository receipts,LibCurrencyRepository currencies,
+         ObjectMapper mapper,FieldMetricContractGuard contractGuard) {
     this.forms=forms;this.versions=versions;this.fields=fields;this.instances=instances;
     this.revisions=revisions;this.rows=rows;this.receipts=receipts;
-    this.currencies=currencies;this.mapper=mapper;
+    this.currencies=currencies;this.mapper=mapper;this.contractGuard=contractGuard;
   }
   private static ResponseStatusException bad(String code) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,code);
@@ -231,6 +233,8 @@ public class FormDraftService {
         throw new IllegalStateException("REVISION_FORM_VERSION_INTEGRITY");
     }
 
+    if(!contractGuard.matches(req.formCode(),version.getId()))
+      throw bad("FIELD_METRIC_CONTRACT_STALE");
     boolean single="SINGLE_RECORD".equals(version.getContentMode());
     Map<String,String> normalized=canonical(version.getId(),req.values(),single,
       currency.getMinorUnits());

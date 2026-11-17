@@ -67,6 +67,7 @@ public class ReportGridService {
   private final ReportFormatService formatService;
   private final ReportInputValidationService inputValidator;
   private final ReportDerivedTotalService derivedService;
+  private final FieldMetricContractGuard contractGuard;
 
   public ReportGridService(LibReportDefinitionRepository reports,
        LibReportMetricRepository reportMetrics,LibReportPeriodRepository reportPeriods,
@@ -76,13 +77,13 @@ public class ReportGridService {
        FormVersionRepository versions,FormFieldRepository fields,
        LibCurrencyRepository currencies,ObjectMapper json,
        ReportFormatService formatService,ReportInputValidationService inputValidator,
-       ReportDerivedTotalService derivedService) {
+       ReportDerivedTotalService derivedService,FieldMetricContractGuard contractGuard) {
     this.reports=reports;this.reportMetrics=reportMetrics;this.reportPeriods=reportPeriods;
     this.revisions=revisions;this.revisionCells=revisionCells;this.receipts=receipts;
     this.metrics=metrics;this.metricTranslations=metricTranslations;this.forms=forms;
     this.versions=versions;this.fields=fields;this.currencies=currencies;this.json=json;
     this.formatService=formatService;this.inputValidator=inputValidator;
-    this.derivedService=derivedService;
+    this.derivedService=derivedService;this.contractGuard=contractGuard;
   }
   private static ResponseStatusException invalid(String error) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,error);
@@ -140,6 +141,8 @@ public class ReportGridService {
       .orElseThrow(()->invalid("SOURCE_FORM_UNKNOWN"));
     var v=versions.findById(f.getCurrentVersionId())
       .orElseThrow(()->invalid("SOURCE_FORM_VERSION_UNKNOWN"));
+    if(!contractGuard.matches(f.getFormCode(),v.getId()))
+      throw invalid("FIELD_METRIC_CONTRACT_STALE");
     var field=fields.findByFormVersionIdOrderByDisplayOrderAsc(v.getId())
       .stream().filter(x->x.getFieldCode().equals(metric.getSourceFieldCode()))
       .findFirst().orElseThrow(()->invalid("SOURCE_FIELD_NOT_IN_VERSION"));
