@@ -5,6 +5,7 @@ import kz.fin.formlib.repository.*;
 import kz.fin.formlib.service.PeriodResolver;
 import kz.fin.formlib.service.CatalogReadCache;
 import kz.fin.formlib.service.CatalogPaging;
+import kz.fin.formlib.service.FormEditorialDraftLookup;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,6 +21,7 @@ import java.util.*;
 public class ReferenceCatalogController {
   private static final Set<String> LOCALES=Set.of("ru","kk","en","zh-Hans");
   private final CatalogReadCache cache;
+  private final FormEditorialDraftLookup editorial;
   private final LibCurrencyRepository currencies;
   private final LibCurrencyTranslationRepository currencyTranslations;
   private final LibPeriodTypeRepository periods;
@@ -40,8 +42,9 @@ public class ReferenceCatalogController {
       LibFormTranslationRepository formTranslations,FormSectionRepository sections,
       FormFieldRepository fields,FormFieldTranslationRepository fieldTranslations,
       LibMetricDefinitionRepository metrics,LibMetricTranslationRepository metricTranslations,
-      CatalogReadCache cache) {
+      CatalogReadCache cache,FormEditorialDraftLookup editorial) {
     this.cache=cache;
+    this.editorial=editorial;
     this.currencies=currencies;this.currencyTranslations=currencyTranslations;
     this.periods=periods;this.periodTranslations=periodTranslations;
     this.forms=forms;this.versions=versions;this.formTranslations=formTranslations;
@@ -162,16 +165,25 @@ public class ReferenceCatalogController {
     formTranslations.findByLocale(locale).forEach(t->tr.put(t.getFormVersionId(),t));
     return tr;
   }
-  private FormView formView(FormDefinition f,String locale,Map<UUID,LibFormTranslation> tr){
+  private static boolean filled(String text){return text!=null&&!text.isBlank();}
+  private FormView formView(FormDefinition f,String locale,
+      Map<UUID,LibFormTranslation> tr,
+      Map<String,FormEditorialDraftLookup.Candidate> candidates){
     var v=versions.findById(f.getCurrentVersionId()).orElseThrow();
     var t=tr.get(v.getId());
+    var c=candidates.get(f.getFormCode());
+    if(c==null)throw new IllegalStateException("EDITORIAL_FORM_MISSING:"+f.getFormCode());
+    boolean named=t!=null&&filled(t.getTitle());
+    boolean described=t!=null&&filled(t.getDescription());
+    boolean purposeful=t!=null&&filled(t.getPurpose());
+    // Never modify the immutable published form version for display.
+    // Every generated fallback carries AUTO_DRAFT_REVIEW_REQUIRED.
     return new FormView(f.getFormCode(),v.getVersionLabel(),f.getLegacyCaptureMode(),
       v.getContentMode(),v.getQualificationState(),locale,
-      t==null?null:t.getTitle(),t==null?null:t.getDescription(),
-      t==null?"PENDING_TRANSLATION":t.getReviewStatus(),
-      t==null?null:t.getPurpose(),
-      t==null||t.getPurpose()==null||t.getPurpose().isBlank()?"PENDING_TRANSLATION":
-        t.getPurposeReviewStatus());
+      named?t.getTitle():c.title(),described?t.getDescription():c.description(),
+      named&&described?t.getReviewStatus():c.reviewStatus(),
+      purposeful?t.getPurpose():c.purpose(),
+      purposeful?t.getPurposeReviewStatus():c.reviewStatus());
   }
 
   @GetMapping("/forms")
@@ -179,8 +191,9 @@ public class ReferenceCatalogController {
     String l=locale(locale);
     return cache.get("forms",l,()->{
       var tr=formTranslationMap(l);
+      var candidates=editorial.byLocale(l);
       return forms.findAllByOrderByFormCodeAsc().stream()
-        .map(f->formView(f,l,tr)).toList();
+        .map(f->formView(f,l,tr,candidates)).toList();
     });
   }
 
@@ -191,7 +204,7 @@ public class ReferenceCatalogController {
     return cache.get("form-detail",l+"|"+code,()->{
     var f=forms.findByFormCode(code)
       .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"FORM_NOT_FOUND"));
-    var view=formView(f,l,formTranslationMap(l));
+    var view=formView(f,l,formTranslationMap(l),editorial.byLocale(l));
     var orderedSections=sections.findByFormVersionIdOrderBySectionOrderAsc(f.getCurrentVersionId());
     var sectionById=new HashMap<UUID,FormSection>();
     orderedSections.forEach(s->sectionById.put(s.getId(),s));
