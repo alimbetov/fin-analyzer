@@ -1,0 +1,249 @@
+# FIN HTAP — Consolidated Technical Specification v1.0
+
+**Project:** FIN Analyzer · `alimbetov/fin-analyzer` · only branch `feat/fin-r0-r1a`  
+**Date:** 2026-11-17 · **Decision status:** CONSOLIDATED DESIGN BASELINE / W0 INDEPENDENT S2 HOLD / NOT IMPLEMENTED  
+**Technology:** Java 21, Spring Boot, PostgreSQL 16, Flyway; Backend only.  
+**Audit:** [FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17](FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17.md). **Reviewed baseline:** `eef1360aee1b39fa4ba590fb1e472592732c238e` (before this documentation change).  
+**Supersedes as implementation authority:** execution, workspace, aggregation, derived metrics and physical partition implementation strategies scattered across [ADR-R2-05](ADR-R2-05-METHOD-MODULE-DUAL-ENGINE-IMMUTABLE-RESULTS.md), [ADR-R2-06](ADR-R2-06-TENANT-AWARE-CALCULATION-WORKSPACE.md), [ADR-R2-07](ADR-R2-07-VERSIONED-FINANCIAL-AGGREGATE-LAYER.md), [ADR-R2-08](ADR-R2-08-LIFECYCLE-PARTITION-RECALCULATION.md), [ADR-R2-09](ADR-R2-09-HTAP-DERIVED-INDICATORS-PERIOD-CURRENCY-ISOLATION.md), and the old [FIN-BE-R2-W](FIN-BE-R2-WORKSPACE-ORCHESTRATION-TZ.md). They remain cited rationale and historical acceptance evidence. **Never weaken their stricter trust, permission, data-space, audit, financial S2, immutable history or RELEASE_HOLD controls.**  
+**Terminology:** FIN HTAP is a proposed hybrid OLTP/OLAP *application architecture* on PostgreSQL, **not** a claim that PostgreSQL automatically isolates analytics or that 60 methodologies are production-qualified.
+
+## 0. Architecture commitments and scope
+
+Goal: one governed, safe, reproducible **financial calculation plane** for approximately 60 independently qualified methodologies and reusable auto-indicators, serving multiple tenants without allowing analytical workloads to exhaust OLTP capacity. Ensure deterministic outcomes on immutable sources, avoid repeated full scans where aggregation demonstrably saves work, and discard fully retired temporary calculation payload rapidly via `DETACH/DROP`.
+
+Mandatory architecture:
+```text
+    OLTP intake -> reviewed SourceRevision -> immutable Published FactSet
+                                           |              |
+                                    trusted publication   existing outbox
+                                           \              /
+                                        server-owned Planner
+                         Preview (read-only) -> Commit (not execute)
+                            -> permit + capacity admission (Java)
+                                           |
+                         optional governed PREPARE / fin_agg SEALED
+                                           |
+                    FinancialSlice / Series Directory (tenant and source scoped)
+                                           |
+                        fin_workspace: staged generation -> SEALED
+                                     |                |
+                            SQL MethodModule      JAVA MethodModule
+                                     \                /
+                         fenced immutable MethodResultEnvelope
+                            -> authorized CORE/report read side
+                                           |
+                                CLEANUP: generation retirement
+                         DRAIN -> DETACH CONCURRENTLY -> DROP
+```
+
+There must be exactly **one existing orchestrator and one existing trusted source outbox**. A new generic ETL scheduler, new unrestricted SQL execution endpoint, distributed cluster or one service per method is out of scope. Financial method approval and `ACTUAL` authority remain separate and held. Existing import/report snapshots, catalog/forms and historical runs remain readable.
+
+**Acceptance state is multi-dimensional**: `DESIGN_REVIEWED` != `IMPLEMENTED` != `TESTED` != `PERF_ACCEPTED` != `METHOD_S2_APPROVED` != `ACTUAL_EXECUTION_PERMITTED` != `PRODUCTION_READY`. `RELEASE_HOLD` stays; source publication never automatically launches unqualified methods.
+
+## 1. Financial identity, immutable source and tenant authority (P0)
+
+### 1.1. Exact five-axis business key
+
+```text
+Tenant + FormCode + PeriodType + Period + Currency
+```
+
+This **FinancialSliceKey** is the business address, in the specified order; it is not a sufficient primary key for a unique financial value nor automatically one PostgreSQL child table. A form can contain multiple indicators, entities, dimensions and source versions. Therefore each permitted slice includes **TrustedSliceContext**:
+- `organization_id` (tenant v1, from signed scope authorization), `economic_entity_id`, `business_scope_id`;
+- exact published `fact_set_revision_id`, `snapshot_hash`, publication/outbox evidence, `data_space`, `reporting_basis`;
+- `form_code`, `form_version`, `source_revision_id` from `fin_fact.approved_source_revision`; not a fictitious form column in `fact_assertion`;
+- `metric_code`, `metric_version`, `measure_kind`, `unit_code`, canonical `dimension_hash`/dimensions and selected population policy;
+- `time_kind` (`INTERVAL` vs `AS_OF`), `period_type` (`MONTH`, `QUARTER`, `YEAR`, qualified `AS_OF_DATE` or `FISCAL_PERIOD`), `period_start`, `period_end_exclusive`, `calendar_id/version`, `aggregation_policy_version`.
+
+**Point vs series:** `Period` is included in FinancialSliceKey for a single observation. For DELTA, MoM, QoQ, YoY, moving average and volatility, `FinancialSeriesKey` includes all the above *comparability dimensions except Period*; ordered Period identifies each observation within that one series. SQL window `PARTITION BY` and Java comparator MUST include every invariant series dimension, and MUST NOT group by Period. Missing a period does not cause the prior available row to be treated as the prior period. Duplicate periods, overlaps, mixed calendar versions and partial coverage block results.
+
+**Cross-form/multi-metric** methodologies may use multiple separately qualified input series under their own versioned `MultiInputMethodContract`: declare exact source/form/metric binding and aggregation/alignment logic, verify every input tenant and publication, do not pretend that cross-form computations are ordinary single-series rolling indicators. A published FactSet may validly select multiple approved source revisions/forms.
+
+### 1.2. Trust and security
+
+The code currently defines the FACT authority in `fin_fact.fact_assertion`, `fact_selection`, `fact_set_publication` and publication outbox. Exactly matching source, revision, entity/scope, basis and `data_space` are mandatory throughout planning, aggregate building, workspace sealing and results. `MISSING`, `EXPLICIT_ZERO`, `ESTIMATED`, `NOT_APPLICABLE` remain separate; prohibited ACTUAL estimated values are blocked. Historical source rows and published results are append-only, never mutated during recalculation.
+
+HTTP `FinanceAccessPolicy` must validate organization-scoped `FIN_ANALYZE`/`FIN_READ` as appropriate. No client JSON, URL parameter or unverified token claim can authorize a tenant. Background workers use a server-controlled narrow principal and *recheck* source/method/permit, not a stale user JWT. Composite tenant FKs and explicit SQL predicates are mandatory; worker DB role is non-owner/non-BYPASSRLS. RLS is optional defense-in-depth only with audited `FORCE ROW LEVEL SECURITY`, safe functions and `SET LOCAL` tenant context transaction-reset test. Cross-tenant reuse is prohibited even for numerically identical data.
+
+### 1.3. Stable hashes and idempotency
+
+Define a versioned canonical encoding (typed fields, explicit null marker, unambiguous length prefix, sorted canonical dimensions and selected assertion identities) for `SliceKey`, `SeriesKey`, `SourceKey`, `WorkspaceKey`, `PopulationHash`, `PlanKey` and `ResultKey`. Hashes are integrity fingerprints **not digital signatures**. Method code/implementation checksum, calendar, policy, precision and population are pinned. A unique result collision requires exact payload comparison, not a silent overwrite. Plan retries must not change logical result identity; attempt/fence never enters ResultKey.
+
+## 2. PeriodType and Currency as arithmetic policy (P0)
+
+A **server-owned, versioned `PeriodCalendar`** maps each period type and calendar to an unambiguous ordinal, exact half-open boundaries and approved corresponding prior-year ordinal, including completeness rules. Do not silently infer MONTH from arbitrary interval duration, or compare fiscal Q1 with calendar Q1. For `AS_OF_DATE`, a stock closing value is a point-in-time value, not a monthly flow. Fiscal 4-4-5 / 53-week equivalence remains NOT_APPLICABLE until reviewed.
+
+| Indicator comparison | Allowed PeriodType | Offset and prerequisites |
+|---|---|---|
+| MoM | MONTH | previous **calendar/fiscal** month, exact preceding ordinal |
+| QoQ | QUARTER | prior complete quarter, same calendar/version |
+| YoY | MONTH/QUARTER/YEAR | exact previous-year counterpart, not simply previous row |
+| SMA N | qualified same grain | exactly N consecutive complete points, no missing samples |
+| TTM12 | MONTH + FLOW | 12 fully covered nonoverlapping monthly flows; no STOCK sum |
+| Closing stock | AS_OF/approved quarter end | exact approved closing date, no addition of balances |
+| Day-weighted level | compatible complete INTERVAL | weight by exact covered days, not count of observations |
+
+All monetary inputs for a calculation must be in the **same Currency** across time. `KZT` and `USD` cannot be added, averaged or compared by default; `MONEY` requires valid nonnull ISO currency, nonmoney requires a typed `currency=NULL` plus compatible unit. A percent result still retains input/source currency and basis in provenance, even when output unit is PCT. Explicit FX conversion is a **different versioned, independently qualified** transform with rate source/revision, period/date policy (FLOW vs STOCK), pair, target currency and rounding; no automatic “latest rate” conversion.
+
+Standard financial percentage policy for FIN-01 remains `100*(current-prior)/prior` for prior>0, `ZERO_BASELINE` for prior=0 and `NEGATIVE_BASELINE_PERCENT_UNDEFINED` for prior<0. Alternate signed-base growth must be a distinct module/version. Every method declares exact zero/missing/negative semantics.
+
+## 3. Core computation modules and Derived Indicator Layer
+
+**One qualified method variant = one versioned `MethodModule`** using SQL or Java engine, with exact input/period/currency/precision contract, server-owned SQL artifact hash and immutable result. Method variants are not auto-enabled because they exist in a catalog. All methods share a typed `MethodInput` and `MethodResultEnvelope`; math is `NUMERIC(38,12)`/Java `BigDecimal` unless an independently approved higher-precision policy requires it.
+
+### 3.1. Reuse existing functionality, do not rewrite as greenfield
+
+Current `AutoIndicatorEngine` already implements `aggregate` (FLOW_SUM, MONTHLY_FLOW_MEAN, DAY_WEIGHTED_LEVEL_MEAN, STOCK_CLOSING), `compare`, `movingAverage`, `shareByDimension`, `ratioOf`. The FIN-01 SQL module is a SYNTHETIC read-only pilot using `LAG`; neither is yet a governed HTAP worker. Harden and wrap existing algorithms; measure parity before migrating.
+
+| Indicator (independent descriptor/version) | Core calculation | W-stage |
+|---|---|---|
+| DELTA_PREVIOUS | current - canonical prior | W3 |
+| PCT_CHANGE_PREVIOUS / MoM/QoQ | strict compatible prior; versioned denominator policy | W3 |
+| YOY_CHANGE | exact previous-year counterpart | W3 |
+| SMA3 / SMA6 / SMA12 | N consecutive points / N | W3 |
+| TTM12_FLOW | SUM 12 complete monthly FLOW | W3 |
+| ROLLING_DELTA_TO_MEAN | current - SMA(N) | W3 |
+| STDDEV_POP_N | sqrt(sum((x-mean)^2)/N) | W3 |
+| STDDEV_SAMP_N | sqrt(sum((x-mean)^2)/(N-1)); N>=2 | W3 |
+| CV_N, ZSCORE_PRIOR_N | variability and deviation vs N **prior** points, excluding current from baseline | W5 after financial review |
+| CAGR, MEDIAN, QUARTILES, EWMA, seasonality | independently specified rules | W5+ |
+
+For STDDEV/sqrt, PostgreSQL `stddev` and Java `BigDecimal` may differ in intermediate precision; define a **deterministic quantization and comparison policy**. Never silently coerce to `double` or use PostgreSQL default `round` as Java HALF_EVEN parity proof. Distinguish population vs sample deviation and RMSE from externally observed/forecast errors. Z-score with zero variance is NOT_COMPUTABLE; arbitrary anomaly thresholds are not approved financial facts, risks or causal explanations.
+
+**SQL correctness invariant:** `PARTITION BY` all invariant SeriesKey fields (tenant, source, form/version, grain, currency, metric/version, unit, dimensions, entity/scope, basis, dataSpace, calendar), **ORDER BY canonical period ordinal**; separately verify calendar adjacency/complete coverage/duplicate period controls. `LAG/ROWS N PRECEDING` and `COUNT=N` alone cannot establish continuity. Staged SQL candidate is provisional until validator passes. Cross-form methods need explicit independently qualified joins.
+
+### 3.2. Status and evidence
+
+Result must include `status` CALCULATED/ESTIMATED/INCOMPLETE/NOT_COMPUTABLE, reason code if blocked, exact input observation/period IDs, schema/method/SQL checksum, source currency and unit, sample N, window bounds, calendar and policy versions, organization/source hashes, workspace generation and tenant. Never fill absent period with zero, silently resample or publish a status as causal/risk conclusion.
+
+## 4. Storage, aggregation and physical partitions
+
+### 4.1. Distinct durability domains
+
+1. **OLTP source (`fin_fact`)**: published FactSet and source history, approvals, original outbox, method result/report history; **never touched by workspace DROP**.
+2. **Reusable Aggregate Layer (`fin_agg`)**: optional tenant/source-version-scoped, immutable-after-SEALED reusable aggregate cache with manifest, cells, lineage, compatible aggregation policy and independent retention pins. Unknown algebra -> DIRECT_PUBLISHED. New revision/policy -> new manifest; no old-value UPDATE.
+3. **Ephemeral Calculation Workspace (`fin_workspace`)**: durable metadata/manifest/references and generated stage payload in lifecycle-managed partitions. Only disposable, reproducible stage payload is physically droppable after full safety proof. The workspace is not a new approval authority and does not replace FIN fact source or immutable result receipts.
+
+**Aggregation algebra:** FLOW_SUM only complete, nonoverlapping compatible intervals; STOCK_CLOSING exact AS_OF (no SUM); LEVEL_DAY_WEIGHTED AVG with complete day weights; RATIO uses independently qualified numerator/denominator components, not AVG(percent). Financial provenance must retain form, metric, policy, calendar and dimension selection. Never roll partial quarter into complete quarter. The “aggregate first” strategy is conditional: for small/one-use input, DIRECT_PUBLISHED may be faster overall.
+
+### 4.2. Logical index vs physical partition
+
+The five-axis FinancialSliceKey identifies a **logical financial segment**, not a PostgreSQL table. Indexed `financial_slice_manifest` maps exact trusted SliceKey+generation to sealed workspace ID, content hash, and physical cohort.
+
+**Physical GC candidate for high-volume temporary stage:** `RANGE(reclaim_epoch)` partition cohorts (daily/weekly based on measured retention and size, not finance reporting Period). The partition may contain several tenants, forms, periods and currencies, requiring exact SQL predicates and composite FKs to maintain isolation. Runtime queries bind `reclaim_epoch`, `workspace_id`, tenant/source and series constraints so PostgreSQL prunes physical cohorts and cannot mix contents.
+
+Do not create physical `Tenant × Form × PeriodType × Period × Currency` partitions: cardinality and DDL/lock overhead would explode. Alternative unpartitioned or fixed HASH(organization/workspace) are read-performance **benchmark candidates**; a shared HASH child with active rows cannot be dropped for one workspace. Dedicated per-heavy-run cohort requires explicit minimum size, tenant partition quota and operational authorization.
+
+**PostgreSQL constraints:** partitioned-parent PK/UNIQUE must include every partition key; metadata table can own globally unique `workspace_id`, but payload keys include reclaim_epoch and tenant scope. Review cross-tenant composite FK and FK/trigger dependencies before any detach; a FK that pins individual child can obstruct detach/drop. Partition precreation and DDL are operator-maintained, never per HTTP calculation. No DEFAULT child if using CONCURRENTLY detach; test missing-cohort admission behavior (reject/defer rather than insert into DEFAULT).
+
+### 4.3. Generations, sealing and invalidation
+
+A source/policy is immutable, but derived *current-generation pointer* can switch:
+`CREATED -> LOADING -> VALIDATING -> SEALED -> ACTIVE -> RETIRED -> RECLAIMABLE`; failures -> FAILED/QUARANTINED with auditable replays. Builders obtain admission and fenced generations, append idempotent staged batches, reconcile selected assertion counts/content hash/period/metric/currency coverage, then short CAS seal. **No SQL/Java method may read a non-SEALED input.** After sealing, prevent modification through DB privileges and guards. For recalculation, generation N+1 is built/SEALED while N stays readable; switch only the new pointer with one control transaction. Already-pinned readers continue using N. Changing source revision, form version, calendar, formula or source population creates new canonical identities, never overwrites immutable prior results.
+
+Cache invalidation is versioned: new FactSet never alters old, and old references may survive with TTL/legal hold/replay rules. Expiry **by reference and full cohort membership**, not by assuming “older than 24h” means safe.
+
+### 4.4. DROP-based cleanup and crash recovery (P0)
+
+A cohort's lifecycle:
+`OPEN -> CLOSED_TO_NEW_WRITES -> DRAINING -> DETACH_REQUESTED -> DETACHED -> DROP_REQUESTED -> DROPPED`; interruptions -> RECOVERY_REQUIRED.
+
+**Safety barrier:** lock catalog/cohort in a short transaction; prove every member generation reclaimable, no active/pending plan, reader pin, live/unconfirmed SQL statement, unexpired/quarantined lease, reference, report/replay pin or legal hold; transition DRAINING prevents new references/members. A retiring slice alone never permits dropping an active shared cohort. Keep separate small persistent partition catalog, membership and cleanup audit after physical DROP.
+
+**DDL:** dedicated privileged maintenance role and allowlisted parent/child from DB catalog, no arbitrary string or public endpoint, no `CASCADE`. Preferred sequence on an eligible child: autocommit `ALTER TABLE ... DETACH PARTITION ... CONCURRENTLY` outside explicit transaction -> verify catalog -> separate `DROP TABLE detached_child`. PostgreSQL 16 disallows CONCURRENTLY with a DEFAULT partition; only one pending detach per parent; a crash may need `DETACH PARTITION ... FINALIZE`. Concurrency still waits for running transactions and acquires locks; global DDL budget and timeouts are mandatory. Metadata barrier and actual DDL cannot be a single ACID transaction, so a journal/reconciler must restore consistency after crash.
+
+**Worker liveness** is stronger than an expired lease: fence/cancel/query termination must be confirmed or capacity and cohort remain quarantined. Garbage collection is deferred, not on user HTTP request path. No `DROP` on `fin_fact`, durable `fin_agg` pinned data, plan/audit, immutable result/report. Small metadata may use bounded DELETE if legal.
+
+**Current implementation:** `WorkspacePartitionMaintenanceUtility` only inspects and always returns non-approval for retirement; it does not create, detach or drop tables. A previously supplied generic `TablePartitionService` that drops attached daily children based on date-only cutoff **must not be copied as-is**: no cohort/drain proof, no safe concurrent detach and accepts arbitrary schema/table names. Its dry-run/observability/retry concepts may be adapted with tests.
+
+## 5. Tenant-aware orchestration, quotas and predictable failure
+
+One effective `fin.execution.mode = OFF|LEGACY_TEST|WORKSPACE_SHADOW|WORKSPACE`, default OFF. Fail startup on conflicting legacy `fin.execution.enabled` / new feature mode; no dual task claim/result write. SHADOW is SYNTHETIC-only, read/compare, no production receipt/CORE side effects. Preview is read-only; Commit persists immutable plan without execution; Activation requires explicit server permit, source authority, DAG and resources.
+
+Stages `PREPARE`, `SQL`, `JAVA`, `CLEANUP` all consume **global+tenant+class** capacity, plus PostgreSQL connection and disk/WAL/CPU pressure guardrails. Prevent heavy aggregate-building and DDL cleanup from bypassing worker quotas. Schedule with persisted bounded weighted-fair tenant dispatch, queue quotas and resource classes; current `SingleExecutorScheduler` is not yet that system.
+
+**Atomic claim contract:** in ONE short PostgreSQL transaction choose eligible tenant/task, lock scheduler cursor/capacity buckets in deterministic order, verify source/method permit and prerequisites, atomically reserve global+tenant+class budget and durable capacity lease/fence, CAS task READY->RUNNING; commit *before* opening expensive work. If any reservation fails, no task is RUNNING and no partial capacity is allocated. Local JVM counters are metrics, not authority. Cross-instance 2+ worker test must prove zero quota oversubscription.
+
+**Lease expiry:** mark REVOKING, revoke fence, cancel query, wait for confirmed termination or quarantine physical capacity; never allow two physical worker executions to exceed hard admission simply because a lease timestamp elapsed. Commit result+task terminal outcome under live fence atomically, UNIQUE logical ResultKey with payload/hash comparison, immutable output and no last-writer-wins. Crash at any boundary is replayable, idempotent, observable.
+
+**Backpressure:** reserve connections for OLTP/HTTP, migrations and recovery across all replicas; bound SQL statement/lock/transaction timeout, temp files and `work_mem`; cap workspace rows/bytes and queued work. Shed heavy analytics on DB pressure (connections, CPU, WAL, disk, OLTP p95), never block critical source publication behind unbounded analytic transactions. Measure rather than claim per-tenant physical CPU isolation—PostgreSQL ordinary pools enforce concurrency/connection/query caps, not strict per-tenant CPU quotas.
+
+**Legacy schema issue:** `fin_exec.analysis_run.event_id UNIQUE`, `outbox_delivery.event_id PK`, `analysis_task UNIQUE(run_id,method_code)` cannot directly store multi-version reanalysis without collisions; introduce a separate versioned plan and per-variant binding with forward-only Flyway. Preserve all old rows and API/CI behavior.
+
+## 6. Implementable contracts and migration rules
+
+Use reviewed value objects and explicit statuses. Proposed contracts (not yet classes):
+- `FinancialSliceKey(tenant,formCode,periodType,period,currency)` + `TrustedSliceContext(...full source identity...)`; `FinancialSeriesKey` omits only period.
+- `PeriodCalendar(calendarId,version,periodType,ordinal,start,end,complete,previousYearEquivalent)`; qualified mapping from time_kind/form accounting period.
+- `AggregationPolicy(metric+version,measureKind,allowedGrain,unit,dimensions,completion,methodVersion)`; server-only allowlist and source policy hash.
+- `AggregateManifest(id,org,sourceKey,policyVersion,inputHash,outputHash,status=BUILDING|SEALED|...)`.
+- `WorkspaceGeneration(id,workspace,tenant,sourceKey,reclaimEpoch,generation,fence,state,sealedHash)`; `SliceBinding(...,physicalCohort)`.
+- `MethodVariantDescriptor(method,version,engine,sqlChecksum,periodTypes,currenciesOrUnitPolicy,inputs,assumptions,precision,releaseQualified)`; `MethodInput`, `MethodResultEnvelope` remain typed.
+- `PlanPreview` (NO DB writes), `PlanCommit` (immutable plan NO compute), `ActivatePlan` (permit+capacity), `ResultReceipt` (append-only logical key, audit).
+- `PartitionCatalog(cohort,parent,child,bounds,members,closedAt,reclaimGeneration,state)` + `RetirementAudit` and retryable `PartitionReaper` only after W4 proof.
+
+DB migrations must be **additive, forward-only Flyway** with fresh DB and upgrade-from-existing fixtures. Do not change historical Flyway content or rewrite source/CORE histories. Data backfill/migration cannot silently manufacture `PeriodType`, fiscal calendars, form associations, approvals or impute missing data. Runtime mode OFF until security/qualification/CI/DB proof.
+
+## 7. Work plan W0–W8 (one delivery order)
+
+| Gate | Deliverable | Required proof |
+|---|---|---|
+| **W0 Design freeze** | Canonical spec and audit, PeriodCalendar/SourceKey decisions, security roles, physical options, test data/size, operating budget, baseline SHA | independent S2 architecture review, negative-model checks; no unresolved P0 schema ambiguity |
+| **W1 Trusted data plane** | PeriodCalendar versioning, slice/series resolution, sealed population, optional fin_agg policy and workspace schema, read-only inspector | Real PostgreSQL 16 fresh+upgrade, no cross-tenant/form/currency/period/revision mixing, concurrent seal race |
+| **W2 Governed admission** | single mode, fair tenant scheduler, global/tenant/class capacity/leases and cancellation, bounded PREPARE/SQL/JAVA/CLEANUP | two-worker/two-node contention, no overadmission, no starving eligible tenant, OLTP reserve |
+| **W3 Pilot indicators and FIN-01** | SQL typed indicator execution for DELTA/MoM/YoY/SMA/TTM/STDDEV and FIN-01 same source Java parity, SYNTHETIC shadow only | Golden exact numeric/status/period/currency/rounding and 16+ negative cases, no ACTUAL |
+| **W4 Immutable receipts and GC** | versioned plan and results/fencing, N+1 CAS switch, cohort membership barrier, safe DETACH/FINALIZE/DROP reaper | crash replay, stale fences, orphan query, same cohort multiple tenants, no referenced DROP |
+| **W5 DAG and methods** | other reviewed financial variants, qualified cross-form bindings, one ordered/parallel DAG, no duplicate scheduling | sequential vs parallel equality, source/module S2 per method, old adapters regression |
+| **W6 Performance** | compare DIRECT / unpartitioned AGG / HASH AGG / RANGE workspace, 1/2/4/8 workers, tenant skew, high volume GC | measured p50/p95/p99, end-to-end including build+cleanup, WAL/temp/locks/disk, OLTP p95, numeric thresholds frozen before run |
+| **W7 Security and operations** | runtime roles/RLS hardening, audit and telemetry, DDL/GC operator controls, quotas, legal holds, incident/runbooks | RLS pool reset, impersonation, denial, disk/DB pressure and recovery drills |
+| **W8 Acceptance** | all same SHA regressions, independent design/security/method S2, evidence links and release matrix | no P0, no skipped blockers, explicit separate ACTUAL/release decisions |
+
+**Engineering delivery discipline:** first PostgreSQL RED tests and negative fixtures, independent review, then minimal GREEN change; small incremental commits to the only branch. Existing backend/UI unrelated development is STOP; never weaken old tests, alter main or enable production flags as a shortcut. Documentation alone is NOT code completion.
+
+## 8. Executable acceptance matrix and expected status
+
+All scenarios require a test case ID, fixture SQL, expected persisted state, Java golden where applicable, exact implementation SHA and CI run. Do not describe named future scenarios as PASS.
+
+| ID | Test | Must prove |
+|---|---|---|
+| HTAP-SRC-01 | Source not published / wrong hash / wrong scope | no trusted workspace or method result |
+| HTAP-SRC-02 | Same five-axis key but different source revision/form version/metric/dimension | separate immutable source, no result/cache collision |
+| HTAP-ISO-01 | Tenant A and B, identical form/period/currency | zero cross-tenant joins/rows, including pooled connection |
+| HTAP-ISO-02 | Same tenant, same period, KZT and USD | no mixed currency delta/mean/stddev/rollup |
+| HTAP-ISO-03 | Same tenant, form X and Y same month/currency | distinct series; reviewed cross-form method only |
+| HTAP-ISO-04 | Same month vs quarter vs year/AS_OF | no cross-grain window/stock summation |
+| HTAP-TIME-01 | Monthly Jan, Mar (missing Feb), `LAG(1)` sees Jan | INCOMPLETE/MISSING_PERIODS, not artificial MoM |
+| HTAP-TIME-02 | Duplicate/overlap/partial month, fiscal policy mismatch | fail closed, no `CALCULATED` |
+| HTAP-TIME-03 | Year-end month/quarter, leap year, 4-4-5/53-week case | only exact approved calendar equivalent selected |
+| HTAP-CALC-01 | MONTH Jan=100 Feb=120 Mar=180 | Mar DELTA=60, PCT=50, SMA3=133.333333333333 |
+| HTAP-CALC-02 | Prior 0/negative, missing, explicit zero, ESTIMATED ACTUAL | exact legacy blocked reasons and status; no imputed amount |
+| HTAP-CALC-03 | STDDEV population vs sample, zero variance, tie HALF_EVEN | exact qualified decimal/reference, not float approximation |
+| HTAP-CALC-04 | FLOW vs STOCK vs LEVEL vs RATIO | legal algebra only, complete coverage and unit semantics |
+| HTAP-PART-01 | Two tenants in one physical lifecycle cohort, only one retired | DROP rejected, active tenant data readable |
+| HTAP-PART-02 | N reader pinned, N+1 SEALED+active | old reads N, new reads N+1, no overwrite of results |
+| HTAP-PART-03 | interrupted concurrent detach / pending detach / DEFAULT parent | recover via catalog/FINALIZE or safely block, no orphan drop |
+| HTAP-PART-04 | forged partition name, worker role DDL request | rejected by allowlist + privileges |
+| HTAP-ADM-01 | Global SQL=2, each tenant SQL=1, two JVM workers | never >2 global or >1 per tenant physical/running tasks |
+| HTAP-ADM-02 | PREPARE/CLEANUP overload, SQL task and OLTP requests | admission limits all classes; OLTP reserve maintained |
+| HTAP-ADM-03 | lost lease with SQL still executing | no release until cancellation confirmed; old fence cannot publish |
+| HTAP-RESULT-01 | concurrent same result key, identical/different payload | one immutable result; conflict mismatch BLOCKED_COLLISION |
+| HTAP-MIG-01 | fresh and upgraded Flyway from previous HEAD | old runs/reports remain readable, no schema version conflicts |
+| HTAP-LOAD-01 | direct vs aggregate vs partition query and GC tests | measured throughput, p95/p99, WAL/lock/partition count and OLTP |
+| HTAP-REL-01 | unapproved method or ACTUAL job in shadow/mode OFF | absolutely no execution or production publication |
+
+**Hard correctness fail gates (zero tolerance):** cross-tenant/form/source/currency/grain contamination; unqualified ACTUAL execution; wrong-period comparison; any incorrect `CALCULATED` on incomplete data; over-admission; stale-fence publish; duplicate or mutable result; DROP of a pinned/active cohort; loss of source/report/audit; unauthorized SQL/DDL. All block W8 even when performance is excellent.
+
+**Performance gates:** choose actual dataset shapes, hardware and concrete p95/p99/OLTP/queue/fairness/connection/WAL/retention numerical thresholds **before** measuring. Compare end-to-end build+recompute+cleanup rather than isolated warm SQL. Record cold/warm cache and repetitions. No fabricated “10x” or arbitrary throughput estimates.
+
+## 9. Non-goals, blockers and release decision
+
+Not delivered by this spec: migrated 60 methods, full HTAP infrastructure, approved PeriodCalendar/fiscal models, live aggregate table, physical cohort tables and reaper, tenant capacity scheduler, new SQL indicator implementation, independently reviewed FX or new sources. W1 code cannot be called GREEN without published FactSet/PostgreSQL negative tests and S2. `RELEASE_HOLD` and `ACTUAL` execution HOLD persist.
+
+**Next correct engineering commit:** W0 contract-test RED fixtures for `FinancialSliceKey`, `FinancialSeriesKey`, period/calendar and currency policy and tenant/source inheritance; then smallest additive W1 schema/test. Keep `WorkspacePartitionMaintenanceUtility` read-only until a durable cohort barrier exists. Provide exact SHA, files, tests and CI for each claim.
+
+## 10. External PostgreSQL constraints (official documentation)
+
+PostgreSQL 16 partitioning: https://www.postgresql.org/docs/16/ddl-partitioning.html  
+PostgreSQL 16 ALTER TABLE / DETACH CONCURRENTLY: https://www.postgresql.org/docs/16/sql-altertable.html  
+PostgreSQL 16 window functions: https://www.postgresql.org/docs/16/functions-window.html  
+PostgreSQL 16 row security: https://www.postgresql.org/docs/16/ddl-rowsecurity.html
