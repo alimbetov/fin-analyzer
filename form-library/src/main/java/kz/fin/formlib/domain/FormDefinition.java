@@ -11,7 +11,9 @@ public class FormDefinition {
 @Column(name="catalog",nullable=false) private String catalog;
 @Column(name="legacy_capture_mode",nullable=false) private String legacyCaptureMode;
 @Column(name="current_version_id") private UUID currentVersionId;
+@Version @Column(name="row_version",nullable=false) private Long rowVersion;
 public FormDefinition(){}
+public Long getRowVersion(){return rowVersion;}
 public UUID getId(){return id;}
 public void setId(UUID value){this.id=value;}
 public String getFormCode(){return formCode;}

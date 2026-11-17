@@ -11,3 +11,5 @@ databaseChangeLog:
       file: db/changelog/005-lib-report-validation.sql
   - include:
       file: db/changelog/006-lib-report-derived-totals.sql
+  - include:
+      file: db/changelog/007-lib-catalog-management.sql
