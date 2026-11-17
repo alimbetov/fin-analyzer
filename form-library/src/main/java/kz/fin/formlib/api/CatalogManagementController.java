@@ -1,6 +1,7 @@
 package kz.fin.formlib.api;
 
 import kz.fin.formlib.service.CatalogManagementService;
+import kz.fin.formlib.service.CatalogPaging;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +30,14 @@ public class CatalogManagementController {
   @GetMapping("/drafts/{id}/events")
   public List<CatalogManagementService.HistoryView> events(@PathVariable UUID id){
     return service.history(id);
+  }
+
+  @GetMapping("/drafts/{id}/events/page")
+  public CatalogPaging.Page<CatalogManagementService.HistoryView> eventsPage(
+      @PathVariable UUID id,
+      @RequestParam(defaultValue="0") int page,
+      @RequestParam(defaultValue="24") int size){
+    return service.historyPage(id,page,size);
   }
 
   @PutMapping("/drafts/{id}/translations/{locale}")

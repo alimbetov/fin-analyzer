@@ -459,6 +459,18 @@ public class CatalogManagementService {
     return receipt(locked.form(),s);
   }
   @Transactional(readOnly=true)
+  public CatalogPaging.Page<HistoryView> historyPage(UUID id,int page,int size){
+    CatalogPaging.validateBounds(page,size);
+    if(!sessions.existsById(id))
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND,"EDIT_SESSION_NOT_FOUND");
+    var data=events.findByEditSessionIdOrderByEditRevisionAsc(id,
+      org.springframework.data.domain.PageRequest.of(page,size));
+    return CatalogPaging.fromDatabase(data.map(x->new HistoryView(
+      x.getEditRevision(),x.getEventType(),x.getActor(),
+      x.getOccurredAt(),x.getContentSha256())));
+  }
+
+  @Transactional(readOnly=true)
   public List<HistoryView> history(UUID id){
     if(!sessions.existsById(id))
       throw new ResponseStatusException(HttpStatus.NOT_FOUND,"EDIT_SESSION_NOT_FOUND");

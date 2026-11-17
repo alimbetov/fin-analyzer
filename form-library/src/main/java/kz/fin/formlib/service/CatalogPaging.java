@@ -41,9 +41,19 @@ public final class CatalogPaging {
       if(value!=null&&value.toLowerCase(Locale.ROOT).contains(q))return true;
     return false;
   }
+  public static void validateBounds(int page,int size){
+    if(page<0||page>1_000_000||size<1||size>50)
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,"INVALID_PAGE_REQUEST");
+  }
+  public static <T> Page<T> fromDatabase(org.springframework.data.domain.Page<T> data){
+    return new Page<>(List.copyOf(data.getContent()),data.getNumber(),data.getSize(),
+      data.getTotalElements(),data.getTotalPages(),data.hasPrevious(),data.hasNext(),
+      "LIST","RELEVANCE");
+  }
   public static <T> Page<T> page(List<T> items,int page,int size,
       String view,String sort){
-    if(items==null||page<0||page>1_000_000||size<1||size>50)
+    validateBounds(page,size);
+    if(items==null)
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,"INVALID_PAGE_REQUEST");
     String mode=viewMode(view),order=sortMode(sort);
     int total=items.size(),pages=total==0?0:(total+size-1)/size;

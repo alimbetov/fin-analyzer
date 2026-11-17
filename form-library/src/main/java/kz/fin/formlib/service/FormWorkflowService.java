@@ -69,6 +69,17 @@ public class FormWorkflowService {
         e.getToStatus(),e.getRevisionId(),e.getActorLabel(),
         e.getReason(),e.getOccurredAt())).toList();
   }
+  @Transactional(readOnly=true)
+  public CatalogPaging.Page<EventView> historyPage(UUID id,UUID organizationId,
+      int page,int size){
+    CatalogPaging.validateBounds(page,size);
+    owned(id,organizationId); // authorization boundary must precede any query
+    var result=events.findByInstanceIdOrderByStatusVersionAsc(id,
+      org.springframework.data.domain.PageRequest.of(page,size));
+    return CatalogPaging.fromDatabase(result.map(e->new EventView(
+      e.getStatusVersion(),e.getFromStatus(),e.getToStatus(),
+      e.getRevisionId(),e.getActorLabel(),e.getReason(),e.getOccurredAt())));
+  }
   @Transactional
   public StatusView transition(UUID id,TransitionRequest req){
     if(req==null||req.organizationId()==null)throw bad("TRANSITION_CONTEXT_REQUIRED");

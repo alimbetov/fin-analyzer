@@ -1,5 +1,6 @@
 package kz.fin.formlib.api;
 import kz.fin.formlib.service.FormWorkflowService;
+import kz.fin.formlib.service.CatalogPaging;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +16,13 @@ public class FormWorkflowController {
  @GetMapping("/status/events")
  public List<FormWorkflowService.EventView> history(@PathVariable UUID instanceId,
      @RequestParam UUID organizationId){return service.history(instanceId,organizationId);}
+ @GetMapping("/status/events/page")
+ public CatalogPaging.Page<FormWorkflowService.EventView> historyPage(
+     @PathVariable UUID instanceId,@RequestParam UUID organizationId,
+     @RequestParam(defaultValue="0") int page,
+     @RequestParam(defaultValue="24") int size){
+   return service.historyPage(instanceId,organizationId,page,size);
+ }
  @PostMapping("/status-transitions")
  public FormWorkflowService.StatusView transition(@PathVariable UUID instanceId,
      @RequestBody FormWorkflowService.TransitionRequest req){
