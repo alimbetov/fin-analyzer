@@ -202,6 +202,10 @@ For STDDEV/sqrt, PostgreSQL `stddev` and Java `BigDecimal` may differ in interme
 
 Result must include `status` CALCULATED/ESTIMATED/INCOMPLETE/NOT_COMPUTABLE, reason code if blocked, exact input observation/period IDs, schema/method/SQL checksum, source currency and unit, sample N, window bounds, calendar and policy versions, organization/source hashes, workspace generation and tenant. Never fill absent period with zero, silently resample or publish a status as causal/risk conclusion.
 
+## W0/W1.2.A incremental code and W2/W3/W6 readiness (2026-11-17)
+
+[Implementation + technical gap audit](FIN-HTAP-W0-W12A-IMPLEMENTATION-REVIEW-W2-W3-W6.md) records actual new `HtapFinancialSliceKey`, `HtapIsoFinancialCalendar`, the immutable mapping **candidate** version/mapping SHA, read-only PostgreSQL publication view, scoped candidate resolver and tests. These are strictly W1.2.A **foundations**: mapping review/activation `catalog_epoch`, fiscal calendar, multi-source financial series, source+algorithm S2 and permit are NOT implemented. No new `fin_agg` storage, partitioned workspace, W2 scheduling, W3 controlled method execution or W6 performance results are claimed. The audit lists executable W2/W3 gates and a reproducible W6 workload/EXPLAIN benchmark. **Do not equate mapping SHA validity with approved mapping authority; ACTUAL and RELEASE_HOLD persist.**
+
 ## W0 physical performance decision — ADR-R2-13 (2026-11-17)
 
 **Controlling physical layout decision:** [ADR-R2-13 — HTAP Physical Layout, Performance-First](ADR-R2-13-HTAP-PHYSICAL-LAYOUT-PERFORMANCE-FIRST.md) is the **normative initial per-storage-domain policy** for FIN HTAP. FinancialSliceKey is a complete source/metric/period/tenant **logical** identity, not a database partition key; the requested `organization + entity + scope + form + period + currency + mappingVersion + publishedRevision` is **insufficient alone** without form/source, dataSpace/basis, timeKind/grain/coverage/calendar, metric, dimension, unit/value state and immutable source evidence. Never create a physical partition per logical financial tuple.
