@@ -3,6 +3,7 @@ package kz.fin.backend.intake;
 import kz.fin.backend.analytics.AnalysisContext;
 import kz.fin.backend.domain.EconomicKernel;
 import kz.fin.backend.persistence.FactSetPublicationService;
+import kz.fin.backend.execution.HtapBlockedPlanOnlyService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -46,6 +47,7 @@ class HtapPublishedSliceCandidateResolverPostgresTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired FactSetPublicationService publications;
     @Autowired HtapPublishedSliceCandidateResolver resolver;
+    @Autowired HtapBlockedPlanOnlyService blockedPlans;
 
     private static final String DIM_SHA="a".repeat(64);
     private static final String FAKE_SHA="b".repeat(64);
@@ -57,7 +59,7 @@ class HtapPublishedSliceCandidateResolverPostgresTest {
                 .issuedAt(Instant.parse("2026-01-01T00:00:00Z"))
                 .expiresAt(Instant.parse("2030-01-01T00:00:00Z"))
                 .claim("fin_access",List.of(Map.of("organizationId",organization.toString(),
-                        "permissions",List.of("FIN_READ"))))
+                        "permissions",List.of("FIN_READ","FIN_ANALYZE"))))
                 .build();
     }
 
@@ -140,6 +142,37 @@ class HtapPublishedSliceCandidateResolverPostgresTest {
         assertThrows(DataAccessException.class,() -> jdbc.update("""
             DELETE FROM fin_calc.htap_mapping_candidate_version WHERE mapping_id=?
             """,mapping));
+
+        var preview=blockedPlans.preview(pinned,readToken(org));
+        assertEquals(7,preview.nodes().size());
+        assertFalse(preview.executionPermitted());
+        assertEquals(preview,blockedPlans.preview(pinned,readToken(org)));
+        assertTrue(preview.nodes().stream().allMatch(n ->
+                "BLOCKED".equals(n.status()) && !n.executionPermitted()
+                && n.reasonCodes().contains("FIN_HTAP_INDEPENDENT_METHOD_S2_PENDING")));
+        int sys=java.util.stream.IntStream.range(0,preview.nodes().size())
+                .filter(i -> preview.nodes().get(i).methodCode()
+                        .equals("SYS/VERIFY_PUBLISHED_FACT_SET"))
+                .findFirst().orElseThrow();
+        int fin=java.util.stream.IntStream.range(0,preview.nodes().size())
+                .filter(i -> preview.nodes().get(i).methodCode()
+                        .equals("FIN-01/REV_NET_MOM"))
+                .findFirst().orElseThrow();
+        assertTrue(sys<fin,"Dependency must precede dependent method");
+        var committed=blockedPlans.commitBlocked(pinned,readToken(org));
+        assertEquals(committed,blockedPlans.commitBlocked(pinned,readToken(org)));
+        assertFalse(committed.executable());
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.htap_blocked_method_plan
+            WHERE organization_id=?
+            """,Long.class,org));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_exec.htap_blocked_method_plan
+               SET catalog_epoch=999 WHERE plan_id=?
+            """,committed.planId()));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            DELETE FROM fin_exec.htap_blocked_method_plan WHERE plan_id=?
+            """,committed.planId()));
 
         var wrongSource=new HtapFinancialSliceKey(
                 org,entity,scope,revision,published.snapshotHash(),UUID.randomUUID(),
