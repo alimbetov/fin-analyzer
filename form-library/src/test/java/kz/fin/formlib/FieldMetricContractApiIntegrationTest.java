@@ -71,6 +71,24 @@ class FieldMetricContractApiIntegrationTest {
     for(var field:f02.get("fields"))
       assertNotEquals("netProfit",field.get("fieldCode").asText());
   }
+  @Test void semanticMetricRoleDisambiguatesFormDerivedProfitFromPhysicalInput()
+      throws Exception{
+    var derived=getJson("/api/v1/catalog/contracts/metrics/F02.netProfit");
+    assertEquals("SOURCE_FIELD",derived.get("legacyMetricKind").asText());
+    assertEquals("FORM_DERIVED_CANDIDATE",derived.get("semanticRole").asText());
+    assertEquals("netRevenue - cogs - operatingExpenses",
+      derived.get("formulaCandidate").asText());
+    assertFalse(derived.get("hasPhysicalBinding").asBoolean());
+    assertFalse(derived.get("financialQualified").asBoolean());
+    var source=getJson("/api/v1/catalog/contracts/metrics/F02.netRevenue");
+    assertEquals("SOURCE_FIELD",source.get("semanticRole").asText());
+    assertTrue(source.get("hasPhysicalBinding").asBoolean());
+    assertFalse(source.get("financialQualified").asBoolean());
+    var analytic=getJson("/api/v1/catalog/contracts/metrics/NET_PROFIT");
+    assertEquals("ANALYTICAL_OUTPUT",analytic.get("semanticRole").asText());
+    api.perform(get("/api/v1/catalog/contracts/metrics/UNRECOGNIZED"))
+      .andExpect(status().isNotFound());
+  }
   @Test void localeIsStrictAndUnknownFormDoesNotExposeAnyContracts()throws Exception{
     var zh=getJson("/api/v1/catalog/contracts/forms/D01?locale=zh-Hans");
     assertEquals("zh-Hans",zh.get("locale").asText());
