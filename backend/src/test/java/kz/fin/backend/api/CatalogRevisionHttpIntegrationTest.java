@@ -134,6 +134,30 @@ class CatalogRevisionHttpIntegrationTest {
                             .andExpect(jsonPath("$.parsed.context.formCode")
                                     .value(form.code()))
                             .andExpect(jsonPath("$.parsed.schemaFingerprint").isNotEmpty());
+
+                    // HTTP upload is exercised for each of the 166 modes.
+                    byte[] filled = populated(workbook, form.code());
+                    var filledFile = new MockMultipartFile("file", "filled.xlsx",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            filled);
+                    var uploaded = multipart(base + "/uploads").file(filledFile)
+                            .with(user(org, "FIN_SUBMIT"))
+                            .param("templateId", templateId.toString());
+                    if (form.captureMode() == CatalogCaptureRegistry.Mode.EVIDENCE_ONLY) {
+                        byte[] document;
+                        try (var pdf = new org.apache.pdfbox.pdmodel.PDDocument();
+                             var out = new ByteArrayOutputStream()) {
+                            pdf.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+                            pdf.save(out);
+                            document = out.toByteArray();
+                        }
+                        uploaded.file(new MockMultipartFile("original", "evidence.pdf",
+                                "application/pdf", document));
+                    }
+                    mvc.perform(uploaded)
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.formCode").value(form.code()))
+                            .andExpect(jsonPath("$.normalizedFingerprint").isNotEmpty());
                 }));
     }
 
@@ -202,6 +226,24 @@ class CatalogRevisionHttpIntegrationTest {
         JsonNode revision = json.readTree(committed.getContentAsString());
         String slotId = revision.path("slotId").asText();
         String revisionId = revision.path("revisionId").asText();
+
+        mvc.perform(get(base + "/revisions/" + revisionId + "/schema")
+                .with(user(org, "FIN_READ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPATIBLE"))
+                .andExpect(jsonPath("$.sourceFormat").value("FIN-BE-CATALOG-XLSX-V2"));
+        mvc.perform(get(base + "/revisions/" + revisionId + "/schema")
+                .with(user(UUID.randomUUID(), "FIN_READ")))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(root(org, project.id(), "C01")
+                + "/revisions/" + revisionId + "/schema")
+                .with(user(org, "FIN_READ")))
+                .andExpect(status().isNotFound());
+        mvc.perform(post(base + "/drafts/" + draftId + "/confirm")
+                .with(user(org, "FIN_SUBMIT")).contentType(MediaType.APPLICATION_JSON)
+                .content(confirm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revisionNumber").value(1));
 
         mvc.perform(get(base + "/slots/" + slotId + "/current")
                 .with(user(org, "FIN_READ")))
