@@ -355,6 +355,13 @@ class MethodologyConfigurationRegistryIntegrationTest {
                 SELECT implementation_status FROM fin_calc.methodology_catalog_view
                 WHERE method_code='FIN-03'
                 """,String.class));
+        var javaView = methodReadService.allWithParameters().stream()
+                .filter(m -> "FIN-03".equals(m.code())).findFirst().orElseThrow();
+        assertEquals("INTEGRATION_TESTED_UNQUALIFIED",
+                javaView.implementationStatus(),
+                "JPA-backed read service must reflect append-only engineering evidence");
+        assertFalse(javaView.releaseQualified());
+        assertFalse(javaView.autoRunAllowed());
         assertEquals(0L,jdbc.queryForObject("""
                 SELECT count(*) FROM fin_calc.methodology_catalog_view
                 WHERE release_qualified OR auto_run_allowed OR method_execution_permitted

@@ -6,6 +6,10 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -94,8 +98,35 @@ public class MethodConfigVersionEntity {
     public String getAlgorithmId() { return algorithmId; }
     public String getAlgorithmVersion() { return algorithmVersion; }
     public String getAlgorithmSha256() { return algorithmSha256; }
+    /**
+     * Defensive, recursive JSON snapshot. A shallow Map.copyOf leaves nested
+     * JSON objects/arrays mutable and rejects valid JSON null values.
+     * Plan fingerprinting must never see a caller-mutated in-memory tree.
+     */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> getParameters() {
-        return Map.copyOf(parameters);
+        return (Map<String, Object>) freezeJson(parameters);
+    }
+
+    private static Object freezeJson(Object value) {
+        if (value == null) return null;
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, child) -> {
+                if (!(key instanceof String field))
+                    throw new IllegalStateException("FIN_METHOD_CONFIG_NON_STRING_JSON_KEY");
+                copy.put(field, freezeJson(child));
+            });
+            return Collections.unmodifiableMap(copy);
+        }
+        if (value instanceof List<?> list) {
+            List<Object> copy = new ArrayList<>(list.size());
+            list.forEach(child -> copy.add(freezeJson(child)));
+            return Collections.unmodifiableList(copy);
+        }
+        if (value instanceof String || value instanceof Number || value instanceof Boolean)
+            return value;
+        throw new IllegalStateException("FIN_METHOD_CONFIG_UNSUPPORTED_JSON_VALUE");
     }
     public String getParamsSha256() { return paramsSha256; }
     public String getEffectiveSha256() { return effectiveSha256; }
