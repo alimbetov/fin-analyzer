@@ -46,7 +46,7 @@ class MethodologyConfigurationRegistryIntegrationTest {
             INSERT INTO fin_calc.method_parameter_contract
               (contract_id,method_code,variant_code,contract_version,
                validation_profile,parameter_schema,schema_sha256,authored_by)
-            VALUES (?,?,?,?,CAST(? AS jsonb),?,'config-author')
+            VALUES (?,?,?,?,?,CAST(? AS jsonb),?,'config-author')
             """, id, code, variant, "TEST-"+UUID.randomUUID(), profile,
             "{\"type\":\"object\",\"required\":[\"aLimitPercent\",\"bLimitPercent\"]}", ZERO_SHA);
         return id;
