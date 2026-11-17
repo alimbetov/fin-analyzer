@@ -34,7 +34,7 @@ public class CatalogReadCache {
   private static final java.util.Set<String> NAMESPACES=java.util.Set.of(
     "currencies","period-types","metrics","metric-detail","forms","form-detail",
     "legacy-form-summaries","legacy-form-detail","ui-categories",
-    "ui-category-forms","ui-launch","use-case-forms");
+    "ui-category-forms","ui-launch","use-case-forms","ui-db-catalog");
   private final Map<String,Cache<String,Object>> namespaceCaches=new ConcurrentHashMap<>();
   // An in-flight loader that began before publication is always keyed by the
   // old epoch, even if it completes after eviction.

@@ -7,6 +7,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.BufferedReader;
@@ -50,6 +52,8 @@ public class CatalogUiNavigationService {
   private record CategoryMeta(String code,String parent,String type,int sort,
       Map<String,Texts> localized,String status) {}
   private record FormLink(String formCode,String role,int sortOrder) {}
+  private record CatalogDbSnapshot(Map<String,CategoryMeta> categories,
+      Map<String,List<FormLink>> links) {}
   private static final List<String> LOCALES=List.of("ru","kk","en","zh-Hans");
   private static final Set<String> CATEGORY_TYPES=Set.of("ROOT","DOMAIN","SECTOR","PURPOSE");
   private static final Set<String> LINK_ROLES=Set.of(
@@ -57,14 +61,16 @@ public class CatalogUiNavigationService {
   private final ReferenceCatalogController catalog;
   private final FormDefinitionRepository forms;
   private final CatalogReadCache cache;
+  private final JdbcTemplate jdbc;
   private final Map<String,CategoryMeta> categories;
   private final Map<String,List<FormLink>> links;
 
   public CatalogUiNavigationService(ReferenceCatalogController catalog,
-      FormDefinitionRepository forms,CatalogReadCache cache) {
+      FormDefinitionRepository forms,CatalogReadCache cache,JdbcTemplate jdbc) {
     this.catalog=catalog;
     this.forms=forms;
     this.cache=cache;
+    this.jdbc=jdbc;
     Map<String,CategoryMeta> defs=new LinkedHashMap<>();
     var validFormCodes=new HashSet<String>();
     for(var line:read("catalog/form-navigation-r10.tsv",4)){
@@ -164,25 +170,89 @@ public class CatalogUiNavigationService {
       return result;
     }catch(java.io.IOException e){throw new IllegalStateException("CATALOG_RESOURCE_UNAVAILABLE",e);}
   }
+  /**
+   * A single DB-backed, immutable, cacheable snapshot. Static source maps above
+   * verify seed integrity at application construction but are NOT used as the
+   * authoritative runtime category text or relationships.
+   * The seeder executes before any request can reach this method.
+   */
+  private CatalogDbSnapshot dbSnapshot(){
+    return cache.get("ui-db-catalog","v1",()->{
+      var translated=new HashMap<String,Map<String,Texts>>();
+      jdbc.query("""
+        SELECT category_code,locale,title,purpose,description
+        FROM fin_lib.lib_catalog_category_translation
+        """,(RowCallbackHandler)rs->{
+        var row=translated.computeIfAbsent(rs.getString("category_code"),
+          ignored->new HashMap<>());
+        if(row.putIfAbsent(rs.getString("locale"),
+            new Texts(rs.getString("title"),rs.getString("purpose"),
+              rs.getString("description")))!=null)
+          throw new IllegalStateException("DUPLICATE_DB_CATEGORY_LOCALE");
+      });
+      Map<String,CategoryMeta> liveCategories=new HashMap<>();
+      jdbc.query("""
+        SELECT code,parent_code,category_type,sort_order,lifecycle_status
+        FROM fin_lib.lib_catalog_category
+        """,(RowCallbackHandler)rs->{
+        var code=rs.getString("code");
+        var byLocale=translated.get(code);
+        if(byLocale==null||byLocale.size()!=4||
+          !byLocale.keySet().equals(new HashSet<>(LOCALES)))
+          throw new IllegalStateException("DB_CATEGORY_LOCALE_COVERAGE");
+        String parent=rs.getString("parent_code");
+        var result=new CategoryMeta(code,parent==null?"":parent,
+          rs.getString("category_type"),rs.getInt("sort_order"),
+          Map.copyOf(byLocale),rs.getString("lifecycle_status"));
+        if(liveCategories.putIfAbsent(code,result)!=null)
+          throw new IllegalStateException("DB_CATEGORY_DUPLICATE");
+      });
+      if(liveCategories.size()!=47||!liveCategories.keySet().equals(categories.keySet())
+        ||translated.size()!=47)throw new IllegalStateException("DB_CATEGORY_SOURCE_DRIFT");
+      var liveLinks=new HashMap<String,List<FormLink>>();
+      var uniqueness=new HashSet<String>();
+      jdbc.query("""
+        SELECT l.category_code,f.form_code,l.association_role,l.sort_order
+        FROM fin_lib.lib_catalog_category_form l
+        JOIN fin_lib.lib_form_definition f ON f.id=l.form_id
+        """,(RowCallbackHandler)rs->{
+        String cat=rs.getString("category_code"),code=rs.getString("form_code");
+        if(!liveCategories.containsKey(cat)||!uniqueness.add(cat+"|"+code))
+          throw new IllegalStateException("DB_CATEGORY_LINK_INVALID");
+        liveLinks.computeIfAbsent(cat,ignored->new ArrayList<>())
+          .add(new FormLink(code,rs.getString("association_role"),
+            rs.getInt("sort_order")));
+      });
+      if(uniqueness.size()!=389)throw new IllegalStateException("DB_CATEGORY_LINK_DRIFT");
+      Map<String,List<FormLink>> immutable=new HashMap<>();
+      liveLinks.forEach((key,value)->immutable.put(key,value.stream()
+        .sorted(Comparator.comparingInt(FormLink::sortOrder).thenComparing(FormLink::formCode))
+        .toList()));
+      return new CatalogDbSnapshot(Map.copyOf(liveCategories),Map.copyOf(immutable));
+    });
+  }
   private static String validateLocale(String locale){
     if(!LOCALES.contains(locale))
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"UNSUPPORTED_LOCALE");
     return locale;
   }
   private CategoryMeta requireCategory(String categoryCode){
-    var def=categories.get(categoryCode==null?"":categoryCode.toUpperCase(Locale.ROOT));
+    var def=dbSnapshot().categories().get(
+      categoryCode==null?"":categoryCode.toUpperCase(Locale.ROOT));
     if(def==null)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"CATEGORY_NOT_FOUND");
     return def;
   }
   private List<CategoryMeta> children(String parent){
-    return categories.values().stream().filter(c->c.parent().equals(parent))
+    return dbSnapshot().categories().values().stream()
+      .filter(c->c.parent().equals(parent))
       .sorted(Comparator.comparingInt(CategoryMeta::sort).thenComparing(CategoryMeta::code))
       .toList();
   }
   private List<FormLink> collectLinks(CategoryMeta cat){
     var result=new LinkedHashMap<String,FormLink>();
-    for(var link:links.getOrDefault(cat.code(),List.of()))result.put(link.formCode(),link);
-    for(var child:children(cat.code()))for(var link:links.getOrDefault(child.code(),List.of()))
+    var dbLinks=dbSnapshot().links();
+    for(var link:dbLinks.getOrDefault(cat.code(),List.of()))result.put(link.formCode(),link);
+    for(var child:children(cat.code()))for(var link:dbLinks.getOrDefault(child.code(),List.of()))
       result.putIfAbsent(link.formCode(),link);
     return List.copyOf(result.values());
   }
@@ -196,7 +266,7 @@ public class CatalogUiNavigationService {
   public CategoriesView listCategories(String locale){
     validateLocale(locale);
     return cache.get("ui-categories",locale,()->{
-    var all=categories.values().stream()
+    var all=dbSnapshot().categories().values().stream()
       .sorted(Comparator.comparing((CategoryMeta x)->x.parent().isBlank()?0:1)
         .thenComparing(CategoryMeta::parent)
         .thenComparingInt(CategoryMeta::sort).thenComparing(CategoryMeta::code))
