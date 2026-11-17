@@ -5,6 +5,8 @@ import kz.fin.backend.domain.EconomicKernel;
 import kz.fin.backend.persistence.FactSetPublicationService;
 import kz.fin.backend.execution.HtapV12Fin01BlockedPlanService;
 import kz.fin.backend.execution.HtapFin01AdmissionPreflight;
+import kz.fin.backend.execution.HtapFin01EvidenceBindingService;
+import kz.fin.backend.execution.HtapRuntimeClassDigest;
 import kz.fin.backend.execution.MethodTaskAdapter;
 import kz.fin.backend.methodology.Fin01RevenueMomSqlModule;
 import java.math.RoundingMode;
@@ -52,6 +54,7 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
     @Autowired HtapV11MonthlyRevenueSourceService sources;
     @Autowired HtapV12Fin01BlockedPlanService fin01Plans;
     @Autowired HtapFin01AdmissionPreflight v13Preflight;
+    @Autowired HtapFin01EvidenceBindingService evidenceBindings;
     @Autowired Fin01RevenueMomSqlModule fin01Sql;
 
     private record Fixture(UUID org, UUID entity, UUID scope, UUID source,
@@ -406,6 +409,132 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
         assertTrue(stale.reasons().contains(
                 "FIN_HTAP_V13_MAPPING_EPOCH_OR_ACTIVE_VERSION_STALE"));
         assertFalse(stale.executionPermitted());
+    }
+
+    @Test void v132ImmutableEvidenceBindingRejectsTamperingStaleConfigAndRevokedS2() throws Exception {
+        Fixture f=publishedTwoMonths("KZT",false,false);
+        Jwt planner=token(f.org(),"binder","FIN_READ","FIN_ANALYZE");
+        var planRequest=new HtapV12Fin01BlockedPlanService.Request(f.org(),f.entity(),
+                f.scope(),f.factSet(),f.snapshotSha(),f.source(),f.mapping(),1,
+                YearMonth.of(2026,1),YearMonth.of(2026,2));
+        var plan=fin01Plans.commitBlocked(planRequest,planner);
+        String classSha=HtapRuntimeClassDigest.inspect(Fin01RevenueMomSqlModule.class)
+                .classSha256();
+        UUID contract=UUID.randomUUID(), config=UUID.randomUUID(), review=UUID.randomUUID();
+        String policy="""
+            {"baselinePolicy":"POSITIVE_ONLY","roundingMode":"HALF_EVEN",
+             "percentageScale":12,"periodPolicy":"ISO_MONTH_FLOW_PERIOD_ONLY_V1"}
+            """;
+        String contractVersion="FIN01-TEST-"+contract;
+        jdbc.update("""
+            INSERT INTO fin_calc.method_parameter_contract(
+                contract_id,method_code,variant_code,contract_version,
+                validation_profile,parameter_schema,schema_sha256,authored_by)
+            VALUES (?,'FIN-01','REV_NET_MOM',?,'FIN01_MONTHLY_MOM_TYPED_V1',
+                    fin_calc.fin01_monthly_mom_typed_schema_v1(),?,'config-author')
+            """,contract,contractVersion,"0".repeat(64));
+        jdbc.update("""
+            INSERT INTO fin_calc.method_config_version(
+                config_id,method_code,variant_code,version_no,contract_id,engine,
+                algorithm_id,algorithm_version,algorithm_sha256,parameters,
+                params_sha256,effective_sha256,created_by)
+            VALUES (?,'FIN-01','REV_NET_MOM',1,?,'SQL',
+                'FIN-01/REV_NET_MOM','R2_SQL_PILOT_1',?,?::jsonb,?,?,'config-author')
+            """,config,contract,classSha,policy,"0".repeat(64),"0".repeat(64));
+        jdbc.update("""
+            INSERT INTO fin_calc.method_config_review(
+                review_id,config_id,submitted_by,reviewed_by,decision,
+                evidence_sha256,review_reason)
+            VALUES (?,?,'config-author','config-reviewer','APPROVED',?,'test-only editorial approval')
+            """,UUID.randomUUID(),config,"1".repeat(64));
+        jdbc.update("""
+            INSERT INTO fin_calc.method_active_config(
+                method_code,variant_code,config_id,pointer_version,activated_by)
+            VALUES ('FIN-01','REV_NET_MOM',?,1,'test-publisher')
+            """,config);
+
+        // These approvals are synthetic TEST FIXTURES, NOT production S2.
+        jdbc.update("""
+            INSERT INTO fin_calc.method_s2_review(
+                id,method_code,method_version,form_code,form_version,reporting_basis,
+                semantic_contract_sha,golden_cases_sha,review_evidence_sha,
+                submitted_by,reviewed_by,review_decision,review_reason,
+                effective_from,effective_until)
+            VALUES (?,'FIN-01/REV_NET_MOM','R2_SQL_PILOT_1',
+                'F02','FIN-PILOT-V1','MANAGEMENT',?,?,?,
+                'test-submitter','test-independent-s2','APPROVED',
+                'test-only synthetic S2 ledger',now()-interval '1 day',now()+interval '1 day')
+            """,review,"2".repeat(64),"3".repeat(64),"4".repeat(64));
+
+        String artifact="a".repeat(64),lock="b".repeat(64);
+        String manifest="""
+            {"methodCode":"FIN-01/REV_NET_MOM","algorithmVersion":"R2_SQL_PILOT_1",
+              "artifactSha256":"%s","dependencyLockSha256":"%s",
+              "implementationClassSha256":"%s",
+              "dependencies":[{"component":"postgresql","sha256":"%s"}]}
+            """.formatted(artifact,lock,classSha,"c".repeat(64));
+        var evidence=new HtapFin01EvidenceBindingService.Evidence(
+                plan.id(),config,review,artifact,lock,manifest,
+                "test-untrusted-key","A".repeat(88));
+        var bound=evidenceBindings.bindUnverified(f.org(),evidence,planner);
+        assertEquals(bound,evidenceBindings.bindUnverified(f.org(),evidence,planner));
+        assertEquals("EVIDENCE_BOUND_HOLD",bound.state());
+        assertFalse(bound.executionPermitted());
+        assertEquals(64,bound.bindingSha256().length());
+        assertThrows(IllegalStateException.class,()->evidenceBindings.bindUnverified(
+                f.org(),new HtapFin01EvidenceBindingService.Evidence(
+                    plan.id(),config,review,"f".repeat(64),lock,manifest,
+                    "test-untrusted-key","A".repeat(88)),planner));
+        assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_exec.htap_fin01_evidence_binding
+            SET execution_permitted=true WHERE id=?
+            """,bound.id()));
+        assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+            DELETE FROM fin_exec.htap_fin01_evidence_binding WHERE id=?
+            """,bound.id()));
+        assertThrows(AccessDeniedException.class,()->evidenceBindings.inspect(
+                f.org(),bound.id(),token(UUID.randomUUID(),"other","FIN_READ","FIN_ANALYZE")));
+        var inspected=evidenceBindings.inspect(f.org(),bound.id(),planner);
+        assertTrue(inspected.reasons().contains("FIN01_BINDING_ARTIFACT_SIGNATURE_AND_INSTALLED_BYTES_UNVERIFIED"));
+        assertFalse(inspected.executionPermitted());
+
+        jdbc.update("""
+            INSERT INTO fin_calc.method_s2_revocation(
+                id,review_id,revoked_by,reason,evidence_sha)
+            VALUES (?,?,'test-independent-s2','test revocation',?)
+            """,UUID.randomUUID(),review,"5".repeat(64));
+        assertTrue(evidenceBindings.inspect(f.org(),bound.id(),planner)
+                .reasons().contains("FIN01_BINDING_S2_REVOKED_OR_EXPIRED"));
+
+        UUID newConfig=UUID.randomUUID();
+        jdbc.update("""
+            INSERT INTO fin_calc.method_config_version(
+                config_id,method_code,variant_code,version_no,parent_config_id,
+                contract_id,engine,algorithm_id,algorithm_version,
+                algorithm_sha256,parameters,params_sha256,effective_sha256,created_by)
+            VALUES (?,'FIN-01','REV_NET_MOM',2,?,?,'SQL','FIN-01/REV_NET_MOM',
+                'R2_SQL_PILOT_1',?,?::jsonb,?,?,'new-config-author')
+            """,newConfig,config,contract,classSha,policy,"0".repeat(64),"0".repeat(64));
+        jdbc.update("""
+            INSERT INTO fin_calc.method_config_review(
+                review_id,config_id,submitted_by,reviewed_by,decision,
+                evidence_sha256,review_reason)
+            VALUES (?,?,'new-config-author','another-reviewer','APPROVED',?,
+                'test-only replacement')
+            """,UUID.randomUUID(),newConfig,"6".repeat(64));
+        jdbc.update("""
+            UPDATE fin_calc.method_active_config
+            SET config_id=?,pointer_version=2,activated_by='next-publisher'
+            WHERE method_code='FIN-01' AND variant_code='REV_NET_MOM'
+            """,newConfig);
+        assertTrue(evidenceBindings.inspect(f.org(),bound.id(),planner)
+                .reasons().contains("FIN01_BINDING_ACTIVE_CONFIG_CHANGED"));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run WHERE organization_id=?
+            """,Long.class,f.org()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_calc.report_run WHERE organization_id=?
+            """,Long.class,f.org()));
     }
 
 }
