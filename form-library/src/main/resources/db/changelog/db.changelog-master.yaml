@@ -19,3 +19,5 @@ databaseChangeLog:
       file: db/changelog/009-lib-form-purpose.sql
   - include:
       file: db/changelog/010-lib-catalog-category.sql
+  - include:
+      file: db/changelog/011-lib-editorial-drafts.sql
