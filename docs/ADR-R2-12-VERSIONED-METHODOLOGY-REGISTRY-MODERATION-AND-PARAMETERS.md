@@ -95,6 +95,16 @@ PENDING (new immutable config version)
 
 **Known future addition:** method implementation status and formal parameter schemas for all 60 must be derived from actual review evidence; a static R1 catalogue snapshot is not evidence that later variants have passed financial S2. A separate append-only implementation-evidence ledger (rather than overwriting seed rows) may be added at W5 to track the method-by-method rollout.
 
+## 5.A. MR-R1 — persistent Java MethodologyEntity with all 259 proposed parameters
+
+**Requirement:** the parameter matrix is a backend persistence model, not an Excel-only document. Additive `V20261117_05__method_parameter_candidates.sql` seeds exactly **259 proposed parameter codes** under all **60 existing method_family** rows with `UNIQUE(method_code,parameter_code)`, FK and irreversible append-only records. All rows are `PROPOSED_UNREVIEWED`; the presence of a name is NOT an approved parameter type/default/validation formula or runnable method.
+
+The Java entity model is `kz.fin.backend.methodology.persistence.MethodologyEntity` (`fin_calc.method_family`) with `@OneToMany(mappedBy = "methodology") List<MethodParameterCandidateEntity> parameters` and version history `List<MethodConfigVersionEntity> configurationVersions`. Existing `fin_calc.method_config_version.parameters JSONB` holds the **exact values for a particular immutable configuration version**, and stores SHA-256 and method/code version. The 259 proposed definitions are **not** inserted into the executable parameter contracts or the active configuration.
+
+`V20261117_06__methodology_catalog_parameter_view.sql` extends the single 60-row `fin_calc.methodology_catalog_view` with `parameter_candidates` JSONB array; other fields continue to expose active/latest configs and moderation. The internal `MethodologyCatalogReadService.allWithParameters()` returns all 60 entities with nested parameter names using one JPA fetch-join; it is **read-only**, not a new public unauthenticated API.
+
+**Minimum acceptance:** real PostgreSQL 16 Flyway upgrade, JPA `ddl-auto=validate`, 60 methods, 259 parameters, 60 represented methods, no duplicate candidates, FK integrity, irreversible parameter rows, correct FIN-01 and CON-02 parent-child association, single view row per method with nested candidate arrays, zero new `ACTUAL` or `releaseQualified`. Exact SHA of CI required. A future moderation stage will add typed versioned **approved** parameter contracts and safely display candidate-vs-approved status per variant; no arbitrary string parameter should reach Java/SQL executors.
+
 ## 6. Mandatory follow-up tests and blockers
 
 | ID | Required proof | Gate |
