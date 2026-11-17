@@ -199,6 +199,19 @@ public class CatalogXlsxRevisionService {
             """, next, slot.id(), organizationId, slot.current()) != 1)
             throw new IllegalStateException("FIN_CATALOG_SLOT_CAS_FAILED");
 
+        // FIN HTAP W1.F166: immutable UNQUALIFIED draft event.
+        // The insert shares this @Transactional boundary with the revision
+        // and slot-head CAS. Any journal failure rolls back all three writes.
+        // Repeated canonical contents returned above never produce an event.
+        // This is NOT a FactSet publication or an execution permit; the
+        // financial source outbox remains FACT_SET_PUBLISHED-only.
+        if (jdbc.update("""
+            INSERT INTO fin_exec.form_change_journal
+                (event_id,organization_id,slot_id,revision_id,event_type)
+            VALUES (?,?,?,?,'TENANT_FORM_REVISION_CONFIRMED')
+            """, UUID.randomUUID(), organizationId, slot.id(), revisionId) != 1)
+            throw new IllegalStateException("FIN_HTAP_FORM_CHANGE_JOURNAL_FAILED");
+
         return new Confirmed(revisionId, slot.id(), draftId, next,
                 previous, draft.fingerprint());
     }
