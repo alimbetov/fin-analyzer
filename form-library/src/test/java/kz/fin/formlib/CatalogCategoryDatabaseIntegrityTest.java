@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -18,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * The read API alone cannot satisfy these assertions.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 class CatalogCategoryDatabaseIntegrityTest {
  @Autowired JdbcTemplate db;
  @Autowired CatalogCategoryBootstrap seed;
