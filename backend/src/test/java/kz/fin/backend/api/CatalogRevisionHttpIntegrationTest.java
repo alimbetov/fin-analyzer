@@ -142,9 +142,9 @@ class CatalogRevisionHttpIntegrationTest {
                     var filledFile = new MockMultipartFile("file", "filled.xlsx",
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             filled);
-                    var uploaded = multipart(base + "/uploads").file(filledFile)
-                            .with(user(org, "FIN_SUBMIT"))
-                            .param("templateId", templateId.toString());
+                    var uploaded = multipart(base + "/uploads").file(filledFile);
+                    uploaded.with(user(org, "FIN_SUBMIT"));
+                    uploaded.param("templateId", templateId.toString());
                     if (form.captureMode() == CatalogCaptureRegistry.Mode.EVIDENCE_ONLY) {
                         byte[] document;
                         try (var pdf = new org.apache.pdfbox.pdmodel.PDDocument();
