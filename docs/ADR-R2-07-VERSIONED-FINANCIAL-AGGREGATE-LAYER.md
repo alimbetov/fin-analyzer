@@ -25,6 +25,12 @@ immutable trusted fin_fact + source population/version contract
 
 SQL generation and materialization is a **PREPARE-class admitted task** with global+tenant quota, row budget, query timeout, memory/temp/WAL limits, and policy gates; no precomputation synchronously on the user upload/publish HTTP transaction. Legacy scheduler and outbox remain single. `fin.execution.mode=OFF` and release HOLD remain default.
 
+## 1.A. Logical financial slice and physical partition are separate
+
+The requested **tenant + form code + period + period type + currency** identifies a common financial **logical slice** used for routing, indexing and later generation replacement. The complete trusted key also pins entity/scope, published revision/hash, dataSpace, reportingBasis, form version/source revision, `metric_code/metric_version`, dimension and population contract, fiscal calendar, aggregation policy and value state. `form_code` is derived from `approved_source_revision`, not stored on every assertion; cross-form calculations must preserve metric identity. `time_kind` (`INTERVAL`/`AS_OF`) is distinct from `period_grain` (`MONTH`/`QUARTER`/`YEAR`).
+
+For fast GC of *ephemeral* materialization, the physical data partition follows a bounded, server-owned **lifecycle cohort** and is DROP-eligible only when **every mapped slice/generation** is reclaimable. See [ADR-R2-08 §2.A](ADR-R2-08-LIFECYCLE-PARTITION-RECALCULATION.md) and [FIN-BE-R2-W §0.E](FIN-BE-R2-WORKSPACE-ORCHESTRATION-TZ.md). A persistent reusable aggregate manifest may need a different retention period than the ephemeral workspace; never drop referenced `fin_agg` cells simply because the prior computation generation has retired. The five-dimensional business selector is **not** a directive to create a child table per combination.
+
 ## 2. Two different notions of “type”
 
 Do not conflate:
