@@ -32,11 +32,14 @@ public class FormUseCaseCatalogService {
   private static final Set<String> VALID_ROLES=Set.of("CORE","SUPPORTING","EVIDENCE");
   private static final Set<String> VALID_LOCALES=Set.of("ru","kk","en","zh-Hans");
   private final ReferenceCatalogController catalog;
+  private final CatalogReadCache cache;
   private final Map<String,Definition> definitions;
   private final Map<String,List<Entry>> links;
 
-  public FormUseCaseCatalogService(ReferenceCatalogController catalog) {
+  public FormUseCaseCatalogService(ReferenceCatalogController catalog,
+      CatalogReadCache cache) {
     this.catalog=catalog;
+    this.cache=cache;
     var validForms=new HashSet<String>();
     for(var row:rows("catalog/form-navigation-r10.tsv",4)) {
       if(!validForms.add(row[0]))throw new IllegalStateException("DUPLICATE_FORM_NAVIGATION");
@@ -140,6 +143,7 @@ public class FormUseCaseCatalogService {
     String norm=normalize(code);
     if(!VALID_LOCALES.contains(locale))
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"UNSUPPORTED_LOCALE");
+    return cache.get("use-case-forms",locale+"|"+norm,()->{
     Map<String,ReferenceCatalogController.FormView> byCode=new HashMap<>();
     for(var form:catalog.forms(locale)){
       if(byCode.putIfAbsent(form.formCode(),form)!=null)
@@ -162,5 +166,6 @@ public class FormUseCaseCatalogService {
     warnings.add("NOT_A_CREDIT_DECISION_OR_INVESTMENT_RECOMMENDATION");
     return new UseCaseDetails(summary(norm),locale,List.copyOf(suggestions),
       List.copyOf(warnings));
+    });
   }
 }

@@ -3,6 +3,8 @@ package kz.fin.formlib.api;
 import kz.fin.formlib.domain.*;
 import kz.fin.formlib.repository.*;
 import kz.fin.formlib.service.FormDraftService;
+import kz.fin.formlib.service.CatalogPaging;
+import kz.fin.formlib.service.CatalogReadCache;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,10 +18,13 @@ public class FormLibraryController {
   private final FormSectionRepository sections;
   private final FormFieldRepository fields;
   private final FormDraftService drafts;
+  private final CatalogReadCache cache;
 
   public FormLibraryController(FormDefinitionRepository forms,FormVersionRepository versions,
-        FormSectionRepository sections,FormFieldRepository fields,FormDraftService drafts){
+        FormSectionRepository sections,FormFieldRepository fields,FormDraftService drafts,
+        CatalogReadCache cache){
     this.forms=forms;this.versions=versions;this.sections=sections;this.fields=fields;this.drafts=drafts;
+    this.cache=cache;
   }
   public record FormSummary(String formCode,String catalog,String captureMode,
                             String version,String contentMode,String qualificationState){}
@@ -32,14 +37,15 @@ public class FormLibraryController {
   }
   @GetMapping("/forms")
   public List<FormSummary> list(){
-    return forms.findAllByOrderByFormCodeAsc().stream().map(f->{
+    return cache.get("legacy-form-summaries","ALL",()->forms.findAllByOrderByFormCodeAsc().stream().map(f->{
       var v=version(f);
       return new FormSummary(f.getFormCode(),f.getCatalog(),f.getLegacyCaptureMode(),
           v.getVersionLabel(),v.getContentMode(),v.getQualificationState());
-    }).toList();
+    }).toList());
   }
   @GetMapping("/forms/{code}")
   public FormDetail get(@PathVariable String code){
+    return cache.get("legacy-form-detail",code,()->{
     FormDefinition f=forms.findByFormCode(code)
       .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"FORM_NOT_FOUND"));
     var v=version(f);
@@ -58,6 +64,19 @@ public class FormLibraryController {
             byId.get(field.getSectionId()))).toList();
     return new FormDetail(new FormSummary(f.getFormCode(),f.getCatalog(),f.getLegacyCaptureMode(),
         v.getVersionLabel(),v.getContentMode(),v.getQualificationState()),sec,vals);
+    });
+  }
+
+  @GetMapping("/forms/page")
+  public CatalogPaging.Page<FormSummary> formsPage(
+      @RequestParam(defaultValue="0") int page,
+      @RequestParam(defaultValue="24") int size,
+      @RequestParam(required=false) String q,
+      @RequestParam(defaultValue="CARDS") String viewMode){
+    String search=CatalogPaging.normalizedSearch(q);
+    var filtered=list().stream().filter(f->CatalogPaging.matches(search,
+      f.formCode(),f.catalog(),f.contentMode())).toList();
+    return CatalogPaging.page(filtered,page,size,viewMode,"CODE");
   }
   @PostMapping("/drafts")
   public FormDraftService.DraftReceipt save(@RequestHeader("Idempotency-Key") String key,
