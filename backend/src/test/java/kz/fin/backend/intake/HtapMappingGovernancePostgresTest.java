@@ -146,4 +146,51 @@ class HtapMappingGovernancePostgresTest {
                 ()->governance.activate(org,"F02","1.0",rejected,0,
                         token(org,"publisher","FIN_PUBLISH")));
     }
+
+    @Test void semanticMappingRequiresRealPilotFieldQualifiedMetricAndIndependentReviewer() {
+        UUID org=UUID.randomUUID();
+        JdbcTemplate db=jdbc;
+        db.update("""
+            INSERT INTO fin_calc.metric_contract(
+               metric_code,metric_version,measure_kind,unit_code,qualification,method_ref)
+            VALUES ('REV_NET','1.0.0','FLOW','MONEY','QUALIFIED','HTAP_W12A_PILOT')
+            ON CONFLICT (metric_code,metric_version) DO NOTHING
+            """);
+        UUID approved=governance.propose(org,"F02","FIN-PILOT-V1","MAP-F02-01",
+            "{\\"sourceField\\":\\"netRevenue\\",\\"metricCode\\":\\"REV_NET\\",\\"metricVersion\\":\\"1.0.0\\"}",
+            token(org,"author","FIN_SUBMIT"));
+        Jwt reviewer=token(org,"reviewer","FIN_REVIEW");
+        governance.review(org,approved,true,EVIDENCE,reviewer);
+        assertThrows(AccessDeniedException.class,
+            ()->governance.validatePilotSemantics(org,approved,
+                token(UUID.randomUUID(),"reviewer","FIN_REVIEW")));
+        assertEquals(approved,governance.validatePilotSemantics(org,approved,reviewer));
+        assertEquals(1L,db.queryForObject("""
+            SELECT count(*) FROM fin_calc.htap_mapping_semantic_evidence
+             WHERE organization_id=? AND mapping_id=? AND metric_code='REV_NET'
+               AND metric_version='1.0.0' AND unit_code='MONEY'
+               AND semantic_standard='INTERNAL_FIN_PILOT'
+               AND semantic_state='VALIDATED_PILOT_NOT_S2'
+               AND NOT execution_permitted
+            """,Long.class,org,approved));
+        assertThrows(DataAccessException.class,()->db.update("""
+            UPDATE fin_calc.htap_mapping_semantic_evidence
+               SET unit_code='COUNT' WHERE organization_id=? AND mapping_id=?
+            """,org,approved));
+        assertThrows(DataAccessException.class,()->governance.validatePilotSemantics(
+            org,approved,reviewer),"Semantic evidence must be immutable, not overwritten");
+
+        UUID wrong=governance.propose(org,"F02","FIN-PILOT-V1","MAP-F02-02",
+            "{\\"sourceField\\":\\"netRevenue\\",\\"metricCode\\":\\"COGS\\",\\"metricVersion\\":\\"1.0.0\\"}",
+            token(org,"author","FIN_SUBMIT"));
+        governance.review(org,wrong,true,EVIDENCE,reviewer);
+        assertEquals("FIN_HTAP_MAPPING_SEMANTICS_UNQUALIFIED",
+            assertThrows(IllegalArgumentException.class,
+              ()->governance.validatePilotSemantics(org,wrong,reviewer)).getMessage());
+        assertEquals(0L,db.queryForObject("""
+            SELECT count(*) FROM fin_exec.htap_blocked_method_plan
+            WHERE organization_id=?
+            """,Long.class,org));
+    }
+
 }
