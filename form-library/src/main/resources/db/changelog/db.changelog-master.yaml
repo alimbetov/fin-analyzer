@@ -1,3 +1,5 @@
 databaseChangeLog:
   - include:
       file: db/changelog/001-lib-schema.sql
+  - include:
+      file: db/changelog/002-lib-reference-catalogs.sql

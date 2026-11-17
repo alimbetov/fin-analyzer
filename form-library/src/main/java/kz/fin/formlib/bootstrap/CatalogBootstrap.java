@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.*;
 
 @Component
+@org.springframework.core.annotation.Order(1)
 public class CatalogBootstrap implements ApplicationRunner {
   private final FormDefinitionRepository forms;
   private final FormVersionRepository versions;

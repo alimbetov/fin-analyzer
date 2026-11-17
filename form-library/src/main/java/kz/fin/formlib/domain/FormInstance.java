@@ -22,6 +22,8 @@ public class FormInstance {
 @Column(name="latest_revision_no",nullable=false) private Integer latestRevisionNo;
 @Version
 @Column(name="row_version") private Long rowVersion;
+@Column(name="period_start") private java.time.LocalDate periodStart;
+@Column(name="period_end_exclusive") private java.time.LocalDate periodEndExclusive;
 public FormInstance(){}
 public UUID getId(){return id;}
 public void setId(UUID value){this.id=value;}
@@ -53,4 +55,8 @@ public Integer getLatestRevisionNo(){return latestRevisionNo;}
 public void setLatestRevisionNo(Integer value){this.latestRevisionNo=value;}
 public Long getRowVersion(){return rowVersion;}
 public void setRowVersion(Long value){this.rowVersion=value;}
+public java.time.LocalDate getPeriodStart(){return periodStart;}
+public void setPeriodStart(java.time.LocalDate v){periodStart=v;}
+public java.time.LocalDate getPeriodEndExclusive(){return periodEndExclusive;}
+public void setPeriodEndExclusive(java.time.LocalDate v){periodEndExclusive=v;}
 }

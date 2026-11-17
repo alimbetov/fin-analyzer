@@ -13,6 +13,7 @@ public class FormFieldTranslation {
 @Column(name="locale",nullable=false) private String locale;
 @Column(name="title",nullable=false) private String title;
 @Column(name="description") private String description;
+@Column(name="review_status",nullable=false) private String reviewStatus="LEGACY_UNREVIEWED";
 public FormFieldTranslation(){}
 public UUID getId(){return id;}
 public void setId(UUID value){this.id=value;}
@@ -28,4 +29,6 @@ public String getTitle(){return title;}
 public void setTitle(String value){this.title=value;}
 public String getDescription(){return description;}
 public void setDescription(String value){this.description=value;}
+public String getReviewStatus(){return reviewStatus;}
+public void setReviewStatus(String value){reviewStatus=value;}
 }
