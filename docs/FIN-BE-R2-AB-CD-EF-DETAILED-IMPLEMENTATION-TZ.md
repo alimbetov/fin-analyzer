@@ -14,6 +14,10 @@
 
 **Пред-R2.B аудит:** [FIN-BE-R2-PRE-B-TECHNICAL-AUDIT-2026-11-17.md](FIN-BE-R2-PRE-B-TECHNICAL-AUDIT-2026-11-17.md). Зафиксированы code-backed дефекты R2.A1/A2, исправления, негативные PostgreSQL-тесты, ограничения legacy executor и обязательные gates перед неизменяемым PlanPreview/PlanCommit. Технический GREEN не заменяет независимую приёмку или ACTUAL-полномочие.
 
+## W1.2.A mapping editorial moderation and R2.B BLOCKED PLAN_ONLY implementation
+
+[Implementation evidence + open P0 gates](FIN-HTAP-W12A-MAPPING-GOVERNANCE-R2B-BLOCKED-PLAN-IMPLEMENTATION.md) records the new append-only mapping review/authorship, signed-subject backend service, monotonic tenant `catalog_epoch`, and read-only R2.A2-derived, dependency-ordered blocked PlanPreview with immutable, idempotent `BLOCKED_PLAN_ONLY` snapshot. **Not a runnable PlanCommit**: no qualified source-field mapping, fiscal policy, pinned algorithm artifact/S2, production executor or ACTUAL. All previous release/permission holds remain mandatory. Same-HEAD CI and independent S2 are separate required gates.
+
 ## Актуальное нормативное уточнение после FIN-MR-R2.1 (2026-11-17)
 
 **Проверенный code baseline:** `45d3f37a895ae73d3934ae9979495d28c1b1626b` (в отличие от исторического commit выше); FIN Backend Domain/FIN CI **SUCCESS**, 1 972 backend теста. **Источник согласования приоритетов:** [FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) и [FIN-HTAP-CONSOLIDATED-TZ.md v1.2](FIN-HTAP-CONSOLIDATED-TZ.md). Эти документы уточняют ранее описанный порядок, не снижают финансовые и security-гейты.
