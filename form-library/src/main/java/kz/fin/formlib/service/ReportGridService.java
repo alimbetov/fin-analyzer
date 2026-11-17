@@ -31,7 +31,7 @@ public class ReportGridService {
   public record LayoutReceipt(UUID reportId,int layoutVersion,String timeAxis,int latestRevisionNo) {}
   public record AxisItem(String code,String label,String translationStatus,int displayOrder) {}
   public record MatrixCell(String rowKey,String columnKey,String metricCode,String periodCode,
-                           String state,String value) {}
+                           String state,String value,String formattedValue) {}
   public record GridView(UUID reportId,String reportCode,String title,UUID organizationId,
                          int revisionNo,String contentSha256,String qualificationState,
                          String currencyCode,String periodType,String timeAxis,
