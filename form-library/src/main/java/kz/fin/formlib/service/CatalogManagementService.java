@@ -54,6 +54,7 @@ public class CatalogManagementService {
                             String contentSha256) {}
 
   private static final Set<String> LOCALES=Set.of("ru","kk","en","zh-Hans");
+  private final CatalogReadCache catalogCache;
   private final FormDefinitionRepository forms;
   private final FormVersionRepository versions;
   private final FormSectionRepository sections;
@@ -71,7 +72,9 @@ public class CatalogManagementService {
       LibFormTranslationRepository formTranslations,
       FormValidationRuleRepository validationRules,
       FormMetricMappingCandidateRepository metricMappings,
-      LibFormEditSessionRepository sessions,LibFormEditEventRepository events){
+      LibFormEditSessionRepository sessions,LibFormEditEventRepository events,
+      CatalogReadCache catalogCache){
+    this.catalogCache=catalogCache;
     this.forms=forms;this.versions=versions;this.sections=sections;this.fields=fields;
     this.fieldTranslations=fieldTranslations;this.formTranslations=formTranslations;
     this.validationRules=validationRules;this.metricMappings=metricMappings;
@@ -442,6 +445,8 @@ public class CatalogManagementService {
     f.setCurrentVersionId(draft.getId());forms.saveAndFlush(f);
     s.setStatus("PUBLISHED");s.setPublishedAt(Instant.now());
     changed(s,who,"CATALOG_PUBLISHED",draft.getPresentationSha256());
+    // Invalidate only AFTER DB commit: never expose an uncommitted version.
+    catalogCache.invalidateAfterCommit();
     return receipt(f,s);
   }
   @Transactional
