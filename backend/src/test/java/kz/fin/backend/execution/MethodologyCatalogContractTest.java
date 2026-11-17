@@ -69,4 +69,41 @@ class MethodologyCatalogContractTest {
             assertFalse(fin01.path("releaseQualified").asBoolean(true));
         }
     }
+
+    @Test void methodCatalogCoverageMatchesRealWiredBusinessVariants() throws Exception {
+        try (InputStream input = getClass().getResourceAsStream(RESOURCE)) {
+            assertNotNull(input);
+            JsonNode methods = new ObjectMapper().readTree(input).path("methods");
+            var wired = new HashSet<String>();
+            var counts = new java.util.HashMap<String,Integer>();
+            for (JsonNode method : methods) {
+                String status = method.path("implementationStatus").asText();
+                counts.merge(status, 1, Integer::sum);
+                if ("ONE_VARIANT_WIRED_UNQUALIFIED".equals(status)) {
+                    wired.add(method.path("code").asText());
+                    assertTrue(method.hasNonNull("candidateImplementation"));
+                }
+                assertFalse(method.path("autoRunAllowed").asBoolean());
+                assertFalse(method.path("releaseQualified").asBoolean());
+            }
+            assertEquals(Set.of("FIN-01", "FIN-02", "FIN-04", "CON-01", "CON-02"),
+                    wired);
+            assertEquals(5, counts.get("ONE_VARIANT_WIRED_UNQUALIFIED"));
+            assertEquals(11, counts.get("CODE_CANDIDATE_NOT_QUALIFIED"));
+            assertEquals(2, counts.get("PURE_ENGINE_GOLDENS_AUTHORED_NO_TRUSTED_ADAPTER"));
+            assertEquals(42, counts.get("NOT_YET_AUDITED"));
+            assertEquals(60, counts.values().stream().mapToInt(Integer::intValue).sum());
+
+            // These five financial families correspond to seven read-only
+            // server adapters; two descriptors are SYS helpers.
+            var descriptorFamilies = new HashSet<String>();
+            for (var descriptor : MethodVariantRegistry.definitions()) {
+                String family = descriptor.methodCode()
+                        .substring(0, descriptor.methodCode().indexOf('/'));
+                if (!"SYS".equals(family)) descriptorFamilies.add(family);
+                assertFalse(descriptor.methodS2Qualified());
+            }
+            assertEquals(wired, descriptorFamilies);
+        }
+    }
 }
