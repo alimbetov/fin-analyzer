@@ -50,10 +50,11 @@ public final class HtapCalculationPeriodPolicy {
         Objects.requireNonNull(timeKind, "timeKind");
         var resolved = ReportingPeriodV5.resolve(type, periodCode, coverage);
 
-        // A source AS_OF observation has a date, never a reporting interval.
-        // Conversely an INTERVAL cannot be used as an AS_OF closing balance.
-        if ((type == ReportingPeriodV5.Type.AS_OF)
-                != (timeKind == EconomicKernel.TimeKind.AS_OF)) {
+        // An AS_OF source point is a dated stock observation, not an
+        // INTERVAL. Monthly/quarterly AS_OF *closing* observations can be
+        // legitimate in future policies, but are not this FLOW pilot.
+        if (type == ReportingPeriodV5.Type.AS_OF
+                && timeKind != EconomicKernel.TimeKind.AS_OF) {
             return new Decision(resolved, timeKind, Status.BLOCKED_TIME_KIND_MISMATCH,
                     "FIN_HTAP_SOURCE_TIME_KIND_MISMATCH");
         }
