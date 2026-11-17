@@ -126,3 +126,12 @@ Use current `fin_calc.method_family`, `method_parameter_contract`, `method_confi
 - **R2.4-E**: recurring automated contract-to-implementation drift report in CI, negative tests and published evidence on one exact SHA.
 
 **Explicit non-goals:** 60 new SQL procedures, default 10 presets for every family, generic unrestricted formula DSL, unreviewed numeric norms, release of ACTUAL/production execution, frontend changes.
+
+## 8. Implementation evidence (2026-11-17)
+
+**R2.4-A first backend increment — IMPLEMENTED / CI NOT VERIFIED:** forward-only migration `backend/src/main/resources/db/migration/V20261117_11__method_parameter_coverage_read_model.sql` defines `fin_calc.method_parameter_coverage_view`, one method-family row with candidate and unreviewed counts, contract counts, typed-profile instance counts and two deliberately **false** authorization fields. Its migration-time assertion aborts if 60 family records, 259 unreviewed candidate records, or full family distribution drift. This is read-only observability, not a typed parameter validator or ACTUAL permit.
+
+**Regression test added (execution not claimed):** `backend/src/test/java/kz/fin/methodology/MethodParameterCoverageViewTest.java` uses PostgreSQL 16 Testcontainers and Flyway fresh installation to check 60/259 counts, no implied S2/permit and family-specific information. R2.1 introduced **validation profiles without inserting contract instances**; the test explicitly does not assume two activated/selected typed contracts.
+
+**Still OPEN:** exact 259-to-R2.4 semantic-slot reconciliation, approved typed contracts for remaining variants, additional mathematical boundary tests, moderator actor/revocation workflow, populated schema upgrade proof, same-SHA CI GREEN, independent S2 and all runtime planning. Do not mark R2.4-B/C/D complete.
+
