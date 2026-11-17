@@ -142,7 +142,7 @@ class ReportGridIntegrationTest {
     http.perform(post("/api/v1/report-grids").contentType(MediaType.APPLICATION_JSON)
        .content(json(unsupported))).andExpect(status().isUnprocessableEntity());
     var week53=new ReportGridService.CreateReport(org,"NEG-"+UUID.randomUUID(),"Bad",
-      "KZT","W",List.of("2026-W53"),List.of("F02.netRevenue"),"ROWS");
+      "KZT","W",List.of("2026-W54"),List.of("F02.netRevenue"),"ROWS");
     http.perform(post("/api/v1/report-grids").contentType(MediaType.APPLICATION_JSON)
        .content(json(week53))).andExpect(status().isUnprocessableEntity());
     UUID id=create(org,"KZT","DEC",List.of("2026-02-1","2026-02-2","2026-02-3"),
