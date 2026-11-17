@@ -7,6 +7,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class SingleExecutorGraphTest {
     private static MethodTaskAdapter adapter(String code, List<String> prerequisites) {
@@ -37,6 +38,24 @@ class SingleExecutorGraphTest {
                 mock(JdbcTemplate.class),mock(PlatformTransactionManager.class),
                 List.of(a,b),false));
     }
+    @Test void legacyFeatureFlagCannotStartWithoutR2Permit() {
+        var error=assertThrows(IllegalStateException.class, () ->
+                new SingleExecutorScheduler(mock(JdbcTemplate.class),
+                        mock(PlatformTransactionManager.class),
+                        List.of(adapter("SYS/VERIFY",List.of())),true));
+        assertEquals("FIN_R2_LEGACY_EXECUTION_PERMIT_UNAVAILABLE",error.getMessage());
+    }
+
+    @Test void directTickCannotBypassDefaultGuardOrTouchDatabase() {
+        var jdbc=mock(JdbcTemplate.class);
+        var tx=mock(PlatformTransactionManager.class);
+        var scheduler=new SingleExecutorScheduler(jdbc,tx,
+                List.of(adapter("SYS/VERIFY",List.of())),false);
+        var error=assertThrows(IllegalStateException.class,scheduler::tick);
+        assertEquals("FIN_R2_LEGACY_EXECUTION_PERMIT_UNAVAILABLE",error.getMessage());
+        verifyNoInteractions(jdbc,tx);
+    }
+
     @Test void rejectsAmbiguousMethodRegistration() {
         var a=adapter("FIN-01",List.of());
         var b=adapter("FIN-01",List.of());

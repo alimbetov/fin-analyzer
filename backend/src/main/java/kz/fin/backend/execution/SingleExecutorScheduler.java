@@ -1,5 +1,6 @@
 package kz.fin.backend.execution;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,13 +22,20 @@ public final class SingleExecutorScheduler {
     private final TransactionTemplate transactions;
     private final Map<String,MethodTaskAdapter> adapters;
     private final boolean enabled;
+    private final LegacyExecutionPermitGuard permitGuard;
 
+    @Autowired
     public SingleExecutorScheduler(JdbcTemplate jdbc, PlatformTransactionManager tx,
                                    List<MethodTaskAdapter> registered,
-                                   @Value("${fin.execution.enabled:false}") boolean enabled) {
+                                   @Value("${fin.execution.enabled:false}") boolean enabled,
+                                   LegacyExecutionPermitGuard permitGuard) {
         this.jdbc=jdbc;
         this.transactions=new TransactionTemplate(tx);
         this.enabled=enabled;
+        this.permitGuard=Objects.requireNonNull(permitGuard);
+        // Fail deployment immediately if the old, unqualified scheduler is switched on.
+        // Even explicit tick() callers must pass the same guard below.
+        if (enabled) this.permitGuard.requirePermit();
         var map=new LinkedHashMap<String,MethodTaskAdapter>();
         for(var adapter:registered) {
             if(map.putIfAbsent(adapter.methodCode(),adapter)!=null)
@@ -37,7 +45,14 @@ public final class SingleExecutorScheduler {
         validateGraph();
     }
 
-    /** Real scheduler, default disabled; tests invoke tick() explicitly. */
+    // Preserve source-compatible graph-validation tests without creating any
+    // permissive production constructor. Executing a legacy task still fails closed.
+    SingleExecutorScheduler(JdbcTemplate jdbc, PlatformTransactionManager tx,
+                            List<MethodTaskAdapter> registered, boolean enabled) {
+        this(jdbc, tx, registered, enabled, new DenyAllLegacyExecutionPermitGuard());
+    }
+
+    /** Real scheduler, default disabled; manual tick() is also guarded. */
     @Scheduled(fixedDelayString="${fin.execution.poll-ms:10000}")
     public void scheduledTick() {
         if (enabled) tick();
@@ -45,6 +60,9 @@ public final class SingleExecutorScheduler {
 
     /** At most one event and one compute task; no DB transaction during execution. */
     public boolean tick() {
+        // Must run BEFORE planOne(), claimOne(), outbox acknowledgement or any
+        // adapter side effect. Feature flags cannot override missing R2 authority.
+        permitGuard.requirePermit();
         boolean planned;
         try {
             planned=Boolean.TRUE.equals(transactions.execute(status->planOne()));
@@ -57,6 +75,9 @@ public final class SingleExecutorScheduler {
         var adapter=adapters.get(task.methodCode());
         if(adapter==null) { fail(task,"UNREGISTERED_METHOD_ADAPTER"); return true; }
         try {
+            // A future permit-aware implementation must revalidate before
+            // side effects and before accepting a result after a long calculation.
+            permitGuard.requirePermit();
             String json=adapter.execute(task.revision());
             if(json==null || json.isBlank()) throw new IllegalStateException("EMPTY_TASK_RESULT");
             transactions.executeWithoutResult(status->complete(task,json));
@@ -204,6 +225,7 @@ public final class SingleExecutorScheduler {
     }
 
     private void complete(Task task,String json) {
+        permitGuard.requirePermit();
         int updated=jdbc.update("""
             UPDATE fin_exec.analysis_task
                SET task_status='COMPUTED',result_json=CAST(? AS jsonb),

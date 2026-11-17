@@ -8,6 +8,7 @@ import kz.fin.backend.persistence.TrustedFinancialFormMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * independently reviewed, immutable SKU sales/returns/cancellations journal.
  * FIN-01 / FIN-02 are not substituted for an authorized sales population.
  */
+@Import(LegacyExecutorGoldenFixturePermit.class)
 @SpringBootTest(properties={"fin.methods.con.enabled=true","fin.execution.enabled=false"})
 @Testcontainers
 class ReviewedSkuSingleExecutorIntegrationTest {

@@ -9,6 +9,7 @@ import kz.fin.backend.persistence.FactSetPublicationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Mismatch, missing total, and unqualified revenue must be fail-closed.
  * No hypothetical denominator is constructed by the production adapter.
  */
+@Import(LegacyExecutorGoldenFixturePermit.class)
 @SpringBootTest
 @Testcontainers
 class QualifiedRevenueStructureIntegrationTest {
