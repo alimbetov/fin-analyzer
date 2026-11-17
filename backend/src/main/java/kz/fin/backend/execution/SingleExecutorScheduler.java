@@ -47,7 +47,7 @@ public final class SingleExecutorScheduler {
 
     // Preserve source-compatible graph-validation tests without creating any
     // permissive production constructor. Executing a legacy task still fails closed.
-    SingleExecutorScheduler(JdbcTemplate jdbc, PlatformTransactionManager tx,
+    public SingleExecutorScheduler(JdbcTemplate jdbc, PlatformTransactionManager tx,
                             List<MethodTaskAdapter> registered, boolean enabled) {
         this(jdbc, tx, registered, enabled, new DenyAllLegacyExecutionPermitGuard());
     }

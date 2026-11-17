@@ -5,6 +5,9 @@ import kz.fin.backend.domain.EconomicKernel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import kz.fin.backend.execution.LegacyExecutorGoldenFixturePermit;
+import kz.fin.backend.execution.LegacyExecutionPermitGuard;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -20,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+@Import(LegacyExecutorGoldenFixturePermit.class)
 @SpringBootTest
 @Testcontainers
 class FactPublicationIntegrationTest {
@@ -39,6 +43,7 @@ class FactPublicationIntegrationTest {
     @Autowired FactSetPublicationService publicationService;
     @Autowired kz.fin.backend.execution.SingleExecutorScheduler scheduler;
     @Autowired org.springframework.transaction.PlatformTransactionManager txManager;
+    @Autowired LegacyExecutionPermitGuard goldenFixturePermit;
     @Autowired kz.fin.backend.execution.PublishedFactIntegrityAdapter integrityAdapter;
 
     record Fixture(UUID org, UUID entity, UUID scope, UUID sourceId,
@@ -451,7 +456,7 @@ class FactPublicationIntegrationTest {
                 }
             };
         var worker=new kz.fin.backend.execution.SingleExecutorScheduler(
-            jdbc,txManager,List.of(integrityAdapter,failing),false);
+            jdbc,txManager,List.of(integrityAdapter,failing),false,goldenFixturePermit);
         for(int i=0;i<150;i++) {
             worker.tick();
             Long failures=jdbc.queryForObject("""
@@ -534,7 +539,7 @@ class FactPublicationIntegrationTest {
                 }
             };
         var worker=new kz.fin.backend.execution.SingleExecutorScheduler(
-            jdbc,txManager,List.of(adapter),false);
+            jdbc,txManager,List.of(adapter),false,goldenFixturePermit);
         for(int i=0;i<150 && invocations.get()==0;i++) worker.tick();
         assertEquals(1,invocations.get());
         assertEquals("RUNNING",jdbc.queryForObject("""
@@ -562,9 +567,9 @@ class FactPublicationIntegrationTest {
         var f=fixture();
         publish(f);
         var workerA=new kz.fin.backend.execution.SingleExecutorScheduler(
-            jdbc,txManager,List.of(integrityAdapter),false);
+            jdbc,txManager,List.of(integrityAdapter),false,goldenFixturePermit);
         var workerB=new kz.fin.backend.execution.SingleExecutorScheduler(
-            jdbc,txManager,List.of(integrityAdapter),false);
+            jdbc,txManager,List.of(integrityAdapter),false,goldenFixturePermit);
         ExecutorService pool=Executors.newFixedThreadPool(2);
         CountDownLatch ready=new CountDownLatch(2), start=new CountDownLatch(1);
         try {
@@ -624,7 +629,7 @@ class FactPublicationIntegrationTest {
                 }
             };
         var worker=new kz.fin.backend.execution.SingleExecutorScheduler(
-            jdbc,txManager,List.of(badPlan),false);
+            jdbc,txManager,List.of(badPlan),false,goldenFixturePermit);
         UUID eventId=jdbc.queryForObject("""
             SELECT event_id FROM fin_exec.fact_publication_outbox
             WHERE organization_id=? AND fact_set_revision_id=?
