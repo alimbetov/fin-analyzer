@@ -21,6 +21,7 @@ CASES = {
         "rejectsDuplicateMethodAndDuplicateAdapterAndUnknownFamily",
         "rejectsMissingBindingsAndUnknownDependencyAndCycles",
         "invalidUnitsDuplicatesVersionsAndS2PromotionRejected",
+        "registryFingerprintChangesWithCatalogContentsAndUnexpectedRolesAreRejected",
     },
     "kz.fin.backend.execution.MethodApplicabilityPostgresIntegrationTest": {
         "publishedSyntheticSourceProducesReasonCodesWithoutAnyExecution",
@@ -28,6 +29,7 @@ CASES = {
         "unqualifiedMetricContractBecomesBlockingConflict",
         "nonconsecutiveRevenueMonthsCannotPassInputValidation",
         "foreignTenantWrongSourceHashAndDisabledLabFailClosed",
+        "conflictingApprovedSourceRevisionsMustNotBecomeComparableRevenueInput",
     },
 }
 
