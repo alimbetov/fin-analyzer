@@ -21,3 +21,5 @@ databaseChangeLog:
       file: db/changelog/010-lib-catalog-category.sql
   - include:
       file: db/changelog/011-lib-editorial-drafts.sql
+  - include:
+      file: db/changelog/012-lib-field-metric-contract.sql
