@@ -5,6 +5,8 @@ import kz.fin.backend.domain.EconomicKernel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import kz.fin.backend.execution.LegacyExecutorGoldenFixturePermit;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -19,6 +21,7 @@ import java.time.YearMonth;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+@Import(LegacyExecutorGoldenFixturePermit.class)
 @SpringBootTest
 @Testcontainers
 class TrustedBusinessDiagnosticIntegrationTest {
