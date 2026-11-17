@@ -1,7 +1,7 @@
-# FIN HTAP — Consolidated Technical Specification v1.0
+# FIN HTAP — Consolidated Technical Specification v1.1
 
 **Project:** FIN Analyzer · `alimbetov/fin-analyzer` · only branch `feat/fin-r0-r1a`  
-**Date:** 2026-11-17 · **Decision status:** CONSOLIDATED DESIGN BASELINE / W0 INDEPENDENT S2 HOLD / NOT IMPLEMENTED  
+**Date:** 2026-11-17 · **Revision:** v1.1 (trusted cross-period history hardening) · **Decision status:** CONSOLIDATED DESIGN BASELINE / W0 INDEPENDENT S2 HOLD / NOT IMPLEMENTED  
 **Technology:** Java 21, Spring Boot, PostgreSQL 16, Flyway; Backend only.  
 **Audit:** [FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17](FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17.md). **Reviewed baseline:** `eef1360aee1b39fa4ba590fb1e472592732c238e` (before this documentation change).  
 **Supersedes as implementation authority:** execution, workspace, aggregation, derived metrics and physical partition implementation strategies scattered across [ADR-R2-05](ADR-R2-05-METHOD-MODULE-DUAL-ENGINE-IMMUTABLE-RESULTS.md), [ADR-R2-06](ADR-R2-06-TENANT-AWARE-CALCULATION-WORKSPACE.md), [ADR-R2-07](ADR-R2-07-VERSIONED-FINANCIAL-AGGREGATE-LAYER.md), [ADR-R2-08](ADR-R2-08-LIFECYCLE-PARTITION-RECALCULATION.md), [ADR-R2-09](ADR-R2-09-HTAP-DERIVED-INDICATORS-PERIOD-CURRENCY-ISOLATION.md), and the old [FIN-BE-R2-W](FIN-BE-R2-WORKSPACE-ORCHESTRATION-TZ.md). They remain cited rationale and historical acceptance evidence. **Never weaken their stricter trust, permission, data-space, audit, financial S2, immutable history or RELEASE_HOLD controls.**  
@@ -58,6 +58,24 @@ This **FinancialSliceKey** is the business address, in the specified order; it i
 **Point vs series:** `Period` is included in FinancialSliceKey for a single observation. For DELTA, MoM, QoQ, YoY, moving average and volatility, `FinancialSeriesKey` includes all the above *comparability dimensions except Period*; ordered Period identifies each observation within that one series. SQL window `PARTITION BY` and Java comparator MUST include every invariant series dimension, and MUST NOT group by Period. Missing a period does not cause the prior available row to be treated as the prior period. Duplicate periods, overlaps, mixed calendar versions and partial coverage block results.
 
 **Cross-form/multi-metric** methodologies may use multiple separately qualified input series under their own versioned `MultiInputMethodContract`: declare exact source/form/metric binding and aggregation/alignment logic, verify every input tenant and publication, do not pretend that cross-form computations are ordinary single-series rolling indicators. A published FactSet may validly select multiple approved source revisions/forms.
+
+### 1.2. TrustedComparisonSet — allow verified multi-source history without mixed revisions (P0)
+
+**Why:** Current `AutoIndicatorEngine.SeriesKey` pins one `factSetRevisionId`, and `fact_assertion.source_revision_id` can legitimately differ between two reporting periods. Equal `source_revision_id` for every point would incorrectly forbid valid monthly history; dropping source pinning would introduce silent mixing of fact versions. **Distinguish each point's immutable source provenance from the whole series' deterministic selection identity**.
+
+- **Single-published-snapshot mode (first pilot):** one trusted `fact_set_revision_id + snapshot_hash` containing all monthly points. Individual `source_revision_id`/form code/ver are retained **per point**, not forced equal between adjacent months. Require exact same approved `FormCode/FormVersion` for an ordinary series, same metric/unit/currency/entity/scope/dimension/dataSpace/basis/calendar and complete periods.
+- **Multi-published-snapshot mode (separately approved extension):** immutable `TrustedComparisonSet(id, tenant, entity, scope, basis, dataSpace, ordered{fact_set_revision_id,snapshot_hash,publication_id,source_approval}, effective_selector_policy_version, per_period_selected_assertion_id, ordered_lineage_hash, sealed_at)`. A server-controlled builder verifies every publication, source authorization and complete canonical timeline, then resolves **exactly one authoritative assertion per metric/dimension/period** by a reviewed precedence policy (e.g. a newer correction explicitly supersedes an older selected assertion). Any ambiguity, conflicting versions or incomplete period is BLOCKED, **not** last-write-wins.
+- **Series grouping:** `FinancialSeriesKey` pins the **comparison_set_hash** (or the single FactSet source hash), not the individual `source_revision_id` of each point; each point carries its own exact revision, form version and audit evidence. Cross-tenant, currency, form/version, PeriodType, calendar, basis, metric, dimension and unit mismatches still fail closed. No assumption that two different FactSet IDs automatically constitute a consistent series. Output ResultKey includes full comparison set hash.
+- **Retrospective corrections:** publication/FactSet remains immutable; a changed month creates a *new* comparison set and new result identity. Never change existing historical MoM/YoY/mean/STDDEV receipts in place.
+- **W3 gate:** first prove single-published-snapshot history with separate approved form SourceRevisions; a second composite-history path stays disabled until W1 HistorySet schema, reviewer policy and dedicated RED/golden tests exist.
+
+**RED tests:** `HTAP-HISTORY-01` same tenant/form/version Jan–Mar selected from distinct approved SourceRevision IDs in one published FactSet -> valid consecutive series; `02` same period appears twice in unqualified multi-FactSet candidate -> BLOCKED_AMBIGUOUS_PERIOD; `03` tenant/form/currency mismatch across published FactSets -> reject at ComparisonSet seal; `04` new restatement changes only Feb and produces a new history/result fingerprint, old history remains readable; `05` missing approved source revision or incorrect snapshot hash blocks the entire series. Existing Java `SeriesKey` is not retroactively widened without its own versioned adapter and tests.
+
+### 1.3. AS_OF closing values and PeriodType are separate dimensions (P0)
+
+A stock point may be `time_kind=AS_OF` at the exact last day of a calendar/fiscal month while `PeriodType=MONTH` describes its **sampling cadence**. It is not an `INTERVAL` flow. A strict calendar mapping records the `AS_OF` date + its owning `MONTH/QUARTER/YEAR` period and verifies the correct closing day. An `AS_OF_DATE` PeriodType is reserved for a qualified arbitrary date without inferred monthly cadence. A `MONTH/AS_OF` stock series may support a descriptive moving average of N monthly **closing values** if specifically qualified; it must never be transformed into monthly STOCK_SUM or a day-weighted average by default. Two points with different `time_kind` are not ordinary comparable observations without an explicitly approved method. These rules preserve existing `STOCK_CLOSING` semantics and avoid conflating a stock valuation date with a flow reporting interval.
+
+**RED tests:** `HTAP-CLOSE-01` end-of-February stock and end-of-March stock are two valid `MONTH/AS_OF` points with correctly resolved calendar ordinals; `02` midmonth stock cannot masquerade as month closing; `03` FLOW interval + STOCK closing inside one SMA/TTM stream is blocked; `04` approved monthly closing-value SMA cannot sum balances.
 
 ### 1.2. Trust and security
 
@@ -173,7 +191,7 @@ Stages `PREPARE`, `SQL`, `JAVA`, `CLEANUP` all consume **global+tenant+class** c
 ## 6. Implementable contracts and migration rules
 
 Use reviewed value objects and explicit statuses. Proposed contracts (not yet classes):
-- `FinancialSliceKey(tenant,formCode,periodType,period,currency)` + `TrustedSliceContext(...full source identity...)`; `FinancialSeriesKey` omits only period.
+- `FinancialSliceKey(tenant,formCode,periodType,period,currency)` + `TrustedSliceContext(...full point-specific source identity...)`; `FinancialSeriesKey` omits period and per-point revision IDs but pins an exact sealed `TrustedComparisonSet` hash (see §1.2).
 - `PeriodCalendar(calendarId,version,periodType,ordinal,start,end,complete,previousYearEquivalent)`; qualified mapping from time_kind/form accounting period.
 - `AggregationPolicy(metric+version,measureKind,allowedGrain,unit,dimensions,completion,methodVersion)`; server-only allowlist and source policy hash.
 - `AggregateManifest(id,org,sourceKey,policyVersion,inputHash,outputHash,status=BUILDING|SEALED|...)`.
@@ -189,7 +207,7 @@ DB migrations must be **additive, forward-only Flyway** with fresh DB and upgrad
 | Gate | Deliverable | Required proof |
 |---|---|---|
 | **W0 Design freeze** | Canonical spec and audit, PeriodCalendar/SourceKey decisions, security roles, physical options, test data/size, operating budget, baseline SHA | independent S2 architecture review, negative-model checks; no unresolved P0 schema ambiguity |
-| **W1 Trusted data plane** | PeriodCalendar versioning, slice/series resolution, sealed population, optional fin_agg policy and workspace schema, read-only inspector | Real PostgreSQL 16 fresh+upgrade, no cross-tenant/form/currency/period/revision mixing, concurrent seal race |
+| **W1 Trusted data plane** | PeriodCalendar versioning including monthly AS_OF closing, slice/series resolution and sealed single-FactSet comparison history; composite `TrustedComparisonSet` only behind separate S2 gate, optional fin_agg and workspace schema | PostgreSQL 16 fresh+upgrade, no cross-tenant/form/currency/period/version mixing, independent per-period source revisions, concurrent seal race |
 | **W2 Governed admission** | single mode, fair tenant scheduler, global/tenant/class capacity/leases and cancellation, bounded PREPARE/SQL/JAVA/CLEANUP | two-worker/two-node contention, no overadmission, no starving eligible tenant, OLTP reserve |
 | **W3 Pilot indicators and FIN-01** | SQL typed indicator execution for DELTA/MoM/YoY/SMA/TTM/STDDEV and FIN-01 same source Java parity, SYNTHETIC shadow only | Golden exact numeric/status/period/currency/rounding and 16+ negative cases, no ACTUAL |
 | **W4 Immutable receipts and GC** | versioned plan and results/fencing, N+1 CAS switch, cohort membership barrier, safe DETACH/FINALIZE/DROP reaper | crash replay, stale fences, orphan query, same cohort multiple tenants, no referenced DROP |
@@ -207,14 +225,16 @@ All scenarios require a test case ID, fixture SQL, expected persisted state, Jav
 | ID | Test | Must prove |
 |---|---|---|
 | HTAP-SRC-01 | Source not published / wrong hash / wrong scope | no trusted workspace or method result |
-| HTAP-SRC-02 | Same five-axis key but different source revision/form version/metric/dimension | separate immutable source, no result/cache collision |
+| HTAP-SRC-02 | Same five-axis key but different source revision/form version/metric/dimension | distinct point lineage and appropriate history fingerprint; no result/cache collision |
 | HTAP-ISO-01 | Tenant A and B, identical form/period/currency | zero cross-tenant joins/rows, including pooled connection |
 | HTAP-ISO-02 | Same tenant, same period, KZT and USD | no mixed currency delta/mean/stddev/rollup |
 | HTAP-ISO-03 | Same tenant, form X and Y same month/currency | distinct series; reviewed cross-form method only |
-| HTAP-ISO-04 | Same month vs quarter vs year/AS_OF | no cross-grain window/stock summation |
+| HTAP-ISO-04 | Same month vs quarter vs year/AS_OF | no cross-grain window/stock summation; MONTH/AS_OF closing cadence allowed only when qualified |
 | HTAP-TIME-01 | Monthly Jan, Mar (missing Feb), `LAG(1)` sees Jan | INCOMPLETE/MISSING_PERIODS, not artificial MoM |
 | HTAP-TIME-02 | Duplicate/overlap/partial month, fiscal policy mismatch | fail closed, no `CALCULATED` |
 | HTAP-TIME-03 | Year-end month/quarter, leap year, 4-4-5/53-week case | only exact approved calendar equivalent selected |
+| HTAP-HISTORY-01..05 | Distinct approved source revisions within same published history; ambiguous multi-FactSet candidate; restatement | trusted comparison-set identity, one authoritative point per period, no accidental history merge |
+| HTAP-CLOSE-01..04 | Monthly stock closing dates vs interval flows and midmonth observations | calendar closing semantics, no STOCK summation or flow-stock mix |
 | HTAP-CALC-01 | MONTH Jan=100 Feb=120 Mar=180 | Mar DELTA=60, PCT=50, SMA3=133.333333333333 |
 | HTAP-CALC-02 | Prior 0/negative, missing, explicit zero, ESTIMATED ACTUAL | exact legacy blocked reasons and status; no imputed amount |
 | HTAP-CALC-03 | STDDEV population vs sample, zero variance, tie HALF_EVEN | exact qualified decimal/reference, not float approximation |
