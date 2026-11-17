@@ -105,6 +105,11 @@ class HtapFinancialSliceKeyCalendarTest {
                 ()->key("kzt",SHA_A,"M1",ReportingPeriodV5.Type.MONTH,
                         ReportingPeriodV5.Coverage.PERIOD_ONLY,"2026.01",
                         EconomicKernel.TimeKind.INTERVAL));
+        assertEquals("FIN_HTAP_CURRENCY_NOT_ISO4217",
+                assertThrows(IllegalArgumentException.class,
+                        ()->key("ZZZ",SHA_A,"M1",ReportingPeriodV5.Type.MONTH,
+                                ReportingPeriodV5.Coverage.PERIOD_ONLY,"2026.01",
+                                EconomicKernel.TimeKind.INTERVAL)).getMessage());
         assertThrows(IllegalArgumentException.class,
                 ()->key(null,SHA_A,"M1",ReportingPeriodV5.Type.MONTH,
                         ReportingPeriodV5.Coverage.PERIOD_ONLY,"2026.01",
