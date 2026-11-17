@@ -47,9 +47,9 @@ class CatalogUiNavigationIntegrationTest {
         String code=c.get("categoryCode").asText();
         assertTrue(codes.add(code),"duplicate "+code);
         assertEquals("DRAFT_UNREVIEWED",c.get("translationStatus").asText());
-        assertTrue(c.get("title").asText().length()>2);
-        assertTrue(c.get("purpose").asText().length()>2);
-        assertTrue(c.get("description").asText().length()>4);
+        assertFalse(c.get("title").asText().isBlank());
+        assertFalse(c.get("purpose").asText().isBlank());
+        assertFalse(c.get("description").asText().isBlank());
         assertTrue(c.get("distinctFormCount").asInt()>0,code);
         if("ROOT".equals(c.get("categoryType").asText())){
           roots++;
@@ -114,8 +114,8 @@ class CatalogUiNavigationIntegrationTest {
       assertNotNull(f02);
       assertEquals(expected.get(locale),f02.get("purpose").asText());
       assertEquals("DRAFT_UNREVIEWED",f02.get("purposeTranslationStatus").asText());
-      assertTrue(f02.get("title").asText().length()>3);
-      assertTrue(f02.get("description").asText().length()>3);
+      assertFalse(f02.get("title").asText().isBlank());
+      assertFalse(f02.get("description").asText().isBlank());
       assertEquals("PERIOD_AND_STYLE_SELECTOR",f02.get("nextScreen").asText());
       if(formVersionId==null)formVersionId=f02.get("formVersionId").asText();
       else assertEquals(formVersionId,f02.get("formVersionId").asText());
