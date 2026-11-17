@@ -271,4 +271,82 @@ class ConcentrationTypedContractPostgresIntegrationTest {
             WHERE method_code='CON-02/ABC_SALES'
             """,Long.class));
     }
+
+    @Test void r24bSemanticBindingRejectsFalseConfigAndStillGrantsNoPermit() throws Exception {
+        var bindings=jdbc.queryForList("""
+            SELECT method_code,candidate_code,semantic_kind,runtime_key,
+                   review_state,approved_by_binding,executable_by_binding
+            FROM fin_calc.concentration_parameter_binding_v1
+            ORDER BY method_code,candidate_code
+            """);
+        assertEquals(8,bindings.size());
+        assertEquals(6,bindings.stream()
+                .filter(m -> "CONFIG_TYPED".equals(m.get("semantic_kind"))).count());
+        assertEquals(1,bindings.stream()
+                .filter(m -> "UNSUPPORTED_REPORT_ONLY".equals(m.get("semantic_kind"))).count());
+        assertEquals(1,bindings.stream()
+                .filter(m -> "UPSTREAM_RESULT_LINEAGE".equals(m.get("semantic_kind"))).count());
+        for(var row:bindings) {
+            assertEquals("PROPOSED_UNREVIEWED",row.get("review_state"));
+            assertEquals(false,row.get("approved_by_binding"));
+            assertEquals(false,row.get("executable_by_binding"));
+        }
+        var cutoff=bindings.stream()
+                .filter(m -> "reportCutoffPercent".equals(m.get("candidate_code")))
+                .findFirst().orElseThrow();
+        assertEquals("UNSUPPORTED_REPORT_ONLY",cutoff.get("semantic_kind"));
+        assertNull(cutoff.get("runtime_key"));
+        var upstream=bindings.stream()
+                .filter(m -> "sourceParetoVersion".equals(m.get("candidate_code")))
+                .findFirst().orElseThrow();
+        assertEquals("UPSTREAM_RESULT_LINEAGE",upstream.get("semantic_kind"));
+        assertNull(upstream.get("runtime_key"));
+
+        var reportOnly=json.readTree("""
+            {"tieSortPolicy":"AMOUNT_DESC_SKU_CODE_ASC","populationMetric":"NET_SALES",
+             "returnsPolicy":"REVIEWED_NET_RECONCILED","reportCutoffPercent":80}
+            """);
+        assertThrows(IllegalArgumentException.class,
+                () -> ConcentrationTypedParameters.pareto(reportOnly));
+        var injectedLineage=json.readTree("""
+            {"aLimitPercent":80,"bLimitPercent":95,
+             "boundaryCrossingPolicy":"CROSSING_ITEM_PREVIOUS_CLASS_UNROUNDED",
+             "sourceParetoVersion":"CON01_PARETO_V1"}
+            """);
+        assertThrows(IllegalArgumentException.class,
+                () -> ConcentrationTypedParameters.abc(injectedLineage,
+                        ConcentrationAnalysisEngine.PARETO_VERSION));
+    }
+
+    @Test void r24bGoldenBoundariesUseExactContributionsAndNotRoundedDisplay() throws Exception {
+        var source=ConcentrationAnalysisEngine.pareto(List.of(
+                new ConcentrationAnalysisEngine.SkuAmount("SKU_A",new BigDecimal("79.999999999999")),
+                new ConcentrationAnalysisEngine.SkuAmount("SKU_B",new BigDecimal("15.000000000001")),
+                new ConcentrationAnalysisEngine.SkuAmount("SKU_C",new BigDecimal("5.000000000000"))),
+                new BigDecimal("100.000000000000"));
+        var policy=ConcentrationTypedParameters.abc(
+                json.readTree(ABC_PARAMS),source.methodVersion());
+        var classified=ConcentrationAnalysisEngine.abc(source,policy);
+        assertEquals(List.of("A","A","B"),classified.rows().stream()
+                .map(ConcentrationAnalysisEngine.AbcRow::classification).toList());
+        // Unrounded cumulative amount BEFORE the next SKU is used for boundaries.
+        var strict=json.readTree("""
+            {"aLimitPercent":79.999999999998,"bLimitPercent":95,
+             "boundaryCrossingPolicy":"CROSSING_ITEM_PREVIOUS_CLASS_UNROUNDED"}
+            """);
+        var changed=ConcentrationTypedParameters.abc(strict,source.methodVersion());
+        assertEquals(List.of("A","B","B"),
+                ConcentrationAnalysisEngine.abc(source,changed).rows().stream()
+                        .map(ConcentrationAnalysisEngine.AbcRow::classification).toList());
+
+        for(String bad:List.of("0","100","-0.1")) {
+            var params=json.readTree("""
+                {"aLimitPercent":%s,"bLimitPercent":95,
+                 "boundaryCrossingPolicy":"CROSSING_ITEM_PREVIOUS_CLASS_UNROUNDED"}
+                """.formatted(bad));
+            assertThrows(IllegalArgumentException.class,
+                    () -> ConcentrationTypedParameters.abc(params,source.methodVersion()));
+        }
+    }
+
 }
