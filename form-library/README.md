@@ -1,6 +1,6 @@
 # FIN Form Library — standalone backend
 
-**Working branch:** `feat/fin-form-library-standalone`; existing FIN Analyzer remains intact.
+**Working branch:** `feat/fin-form-library-standalone`. This branch contains only FIN Form Library; the original FIN Analyzer is preserved on `main` and in Git history.
 
 Java 21 · Spring Boot 3.5.7 · Spring Data JPA · Liquibase · H2 in-memory · **no Spring Security**.
 
@@ -65,6 +65,14 @@ Current backend supports a **versioned presentation edit workflow** without Reac
 **Publishing this catalog revision is not financial approval**. Existing finance metric codes and field semantics are immutable in R7.A. Field creation/retyping, financial metric management, currency metadata edits and independent reviewer approval are **not implemented**. Supplied `actor` is not authenticated; this API must remain on localhost.
 
 Specification: [FIN-FORM-LIB-R7.A](docs/FIN-FORM-LIB-R7A-CATALOG-MANAGEMENT.md).
+
+## Architectural ownership
+
+- **`fin_lib`** — system-owned form/indicator codes, versioned definitions, translations and presentation; source of generated input templates, not entered values.
+- **`fin_intake`** — drafts, data revisions, period- and metric-addressed cells, author metadata and evidence references.
+- **No trusted `fin_fact` or FIN HTAP writer** in this standalone module. Financial approval remains a separate integration concern.
+- Existing `FormDraftService` supports `projectId` and `createdBy`, whereas `ReportGridService` does not yet carry a project identity: unification is still pending. Do not claim complete fact-capture support for project+author codes.
+- The R1 document includes a *future* Excel/React scenario, but no frontend or JavaScript workspace is retained in this branch.
 
 ## Boundaries
 

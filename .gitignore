@@ -1,8 +1,12 @@
-node_modules/
-dist/
-coverage/
+# FIN Form Library standalone (Java / Maven)
+form-library/target/
+**/target/
+*.class
 *.log
 .DS_Store
+.idea/
+*.iml
+.vscode/
 .env
 .env.*
 !.env.example
