@@ -62,6 +62,18 @@ class InputTemplatePreviewIntegrationTest {
     assertEquals("LEFT",p.get("pinned").asText());
     assertEquals("ROWS",v.get("presentation").get("banding").asText());
     assertTrue(v.get("presentation").get("showGridlines").asBoolean());
+    var scroll=v.get("presentation").get("scrolling");
+    assertEquals(2,v.get("presentation").get("styleVersion").asInt());
+    assertEquals("AUTO",scroll.get("overflowX").asText());
+    assertEquals("AUTO",scroll.get("overflowY").asText());
+    assertEquals("100%",scroll.get("viewportWidth").asText());
+    assertEquals(520,scroll.get("maxViewportHeightPx").asInt());
+    assertEquals(2,scroll.get("frozenHeaderRows").asInt());
+    assertEquals(2,scroll.get("frozenLeadingColumns").asInt());
+    assertEquals(28,scroll.get("columnLettersHeightPx").asInt());
+    assertEquals(36,scroll.get("columnTitlesHeightPx").asInt());
+    assertTrue(scroll.get("overscrollContain").asBoolean());
+    assertTrue(scroll.get("keepActiveCellVisible").asBoolean());
     assertEquals("ACTIVE_BLUE_BORDER_2PX",
       v.get("presentation").get("highlights").get("active").asText());
     assertEquals("A",v.get("columnHeaders").get(0).get("excelColumn").asText());
@@ -131,6 +143,59 @@ class InputTemplatePreviewIntegrationTest {
     assertEquals("AA",InputTemplatePreviewService.excelColumn(27));
     assertEquals("AZ",InputTemplatePreviewService.excelColumn(52));
     assertThrows(IllegalArgumentException.class,()->InputTemplatePreviewService.excelColumn(0));
+  }
+
+  @Test void scrollPolicyIsCompatibleWithAllTemplateStyles()throws Exception{
+    for(String style:List.of("EXCEL_GRID","TRANSPOSED_GRID","SECTION_FORM")){
+      JsonNode v=preview("F02","ru",style,"2026-01");
+      var s=v.get("presentation").get("scrolling");
+      assertEquals("AUTO",s.get("overflowY").asText());
+      assertEquals(520,s.get("maxViewportHeightPx").asInt());
+      assertEquals("100%",s.get("viewportWidth").asText());
+      assertEquals("CENTER",v.get("presentation").get("rowNumberColumn")
+        .get("horizontalAlign").asText());
+      if("SECTION_FORM".equals(style)){
+        assertEquals("HIDDEN",s.get("overflowX").asText());
+        assertEquals(1,s.get("frozenHeaderRows").asInt());
+        assertEquals(0,s.get("frozenLeadingColumns").asInt());
+        assertFalse(v.get("presentation").get("freezeFirstColumn").asBoolean());
+      }else{
+        assertEquals("AUTO",s.get("overflowX").asText());
+        assertEquals(2,s.get("frozenHeaderRows").asInt());
+        assertEquals(2,s.get("frozenLeadingColumns").asInt());
+        assertTrue(v.get("presentation").get("freezeFirstColumn").asBoolean());
+      }
+    }
+    var rowset=preview("DF-CSH-01","ru","ROWSET_TABLE","2026-01");
+    var scroll=rowset.get("presentation").get("scrolling");
+    assertEquals("AUTO",scroll.get("overflowX").asText());
+    assertEquals("AUTO",scroll.get("overflowY").asText());
+    assertEquals(2,scroll.get("frozenLeadingColumns").asInt());
+    assertEquals(36,rowset.get("presentation").get("rowNumberColumn").get("widthPx").asInt());
+    assertEquals(0,rowset.get("cells").size());
+  }
+
+  @Test void maximum60PeriodsSupportHorizontalAndVerticalScrollingWithoutChangingKeys()throws Exception{
+    var periods=new ArrayList<String>();
+    for(int year=2022;year<=2026;year++)
+      for(int month=1;month<=12;month++)
+        periods.add(java.time.YearMonth.of(year,month).toString());
+    assertEquals(60,periods.size());
+    var columns=preview("F02","ru","EXCEL_GRID",periods.toArray(String[]::new));
+    var rows=preview("F02","ru","TRANSPOSED_GRID",periods.toArray(String[]::new));
+    assertEquals(61,columns.get("columnHeaders").size());
+    assertEquals("BI",columns.get("columnHeaders").get(60).get("excelColumn").asText());
+    assertEquals(60,rows.get("rowHeaders").size());
+    assertEquals(61,rows.get("rowHeaders").get(59).get("excelRow").asInt());
+    assertEquals(180,columns.get("cells").size());
+    assertEquals(180,rows.get("cells").size());
+    assertEquals(keys(columns),keys(rows));
+    for(var v:List.of(columns,rows)){
+      assertEquals("AUTO",v.get("presentation").get("scrolling").get("overflowX").asText());
+      assertEquals("AUTO",v.get("presentation").get("scrolling").get("overflowY").asText());
+      assertFalse(v.get("persisted").asBoolean());
+      assertTrue(v.get("cells").get(0).get("value").isNull());
+    }
   }
 
   @Test void readOnlyTemplatePreviewNeverWritesIntake()throws Exception{

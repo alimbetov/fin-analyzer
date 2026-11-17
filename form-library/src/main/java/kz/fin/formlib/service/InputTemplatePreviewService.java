@@ -23,11 +23,21 @@ public class InputTemplatePreviewService {
       String pinned,int fontSizePx) {}
   public record HighlightPolicy(String active,String editable,String requiredMissing,
       String invalid,String changed,String readOnly,String selectedRange) {}
+  /**
+   * Renderer scroll contract, NOT a server-side window of financial observations.
+   * Two leading columns are Excel row numbers (36px) and form labels/periods.
+   * frozenHeaderRows=2 means column letters + semantic title/period row.
+   */
+  public record ScrollPolicy(String overflowX,String overflowY,String viewportWidth,
+      int maxViewportHeightPx,int frozenHeaderRows,int frozenLeadingColumns,
+      int columnLettersHeightPx,int columnTitlesHeightPx,boolean overscrollContain,
+      boolean keepActiveCellVisible) {}
   public record PresentationProfile(String styleCode,int styleVersion,
       boolean showCoordinates,boolean showGridlines,String banding,
       boolean freezeHeader,boolean freezeFirstColumn,boolean showMetricCode,
       String density,int indicatorColumnWidthPx,int valueColumnWidthPx,
-      RowNumberColumn rowNumberColumn,HighlightPolicy highlights) {}
+      RowNumberColumn rowNumberColumn,HighlightPolicy highlights,
+      ScrollPolicy scrolling) {}
   public record SectionDescriptor(String sectionCode,int sectionOrder,String layoutKind,
       String title,String translationStatus) {}
   public record FieldDescriptor(String fieldCode,String metricCode,String sectionCode,
@@ -96,8 +106,15 @@ public class InputTemplatePreviewService {
     if(!SINGLE_STYLES.contains(styleCode)&&
        !"ROWSET_TABLE".equals(styleCode)&&!"EVIDENCE_INFO".equals(styleCode))
       throw invalid("UNSUPPORTED_TEMPLATE_STYLE");
-    return new PresentationProfile(styleCode,1,true,true,"ROWS",true,true,false,
-      "COMPACT",260,140,ROW_NUMBERS,HIGHLIGHTS);
+    boolean grid="EXCEL_GRID".equals(styleCode)
+        ||"TRANSPOSED_GRID".equals(styleCode)||"ROWSET_TABLE".equals(styleCode);
+    // A single bounded viewport scrolls on both axes; the renderer must keep
+    // column letters/title headings and the 36px gutter visible. SECTION_FORM
+    // and EVIDENCE_INFO are vertically scrollable card-style presentations.
+    ScrollPolicy scrolling=new ScrollPolicy(grid?"AUTO":"HIDDEN","AUTO","100%",
+      520,grid?2:1,grid?2:0,28,36,true,true);
+    return new PresentationProfile(styleCode,2,true,true,"ROWS",true,grid,false,
+      "COMPACT",260,140,ROW_NUMBERS,HIGHLIGHTS,scrolling);
   }
 
   private static String indicatorHeader(String locale){

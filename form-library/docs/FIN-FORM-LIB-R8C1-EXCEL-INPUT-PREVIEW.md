@@ -23,6 +23,18 @@ Supported styles for `SINGLE_RECORD`:
 - `showGridlines=true`, `banding=ROWS`, `freezeHeader=true`, `freezeFirstColumn=true`, `density=COMPACT`.
 - `highlights.active=ACTIVE_BLUE_BORDER_2PX`, `selectedRange=SELECTION_PALE_BLUE`, `requiredMissing=REQUIRED_MISSING_AMBER`, `invalid=INVALID_RED_BORDER`, `changed=CHANGED_DOT`, `readOnly=READ_ONLY_MUTED`.
 
+### Scroll profile v2
+
+`presentation.scrolling` now declares one bounded, independently scrollable sheet viewport:
+- Width `100%`, maximum height **520 px**, CSS-equivalent `overflow-y:auto`; scroll the table body, **not the entire form header or page**.
+- `EXCEL_GRID`, `TRANSPOSED_GRID`, `ROWSET_TABLE`: `overflow-x:auto`, `frozenHeaderRows=2` (Excel letter row 28px and column title row 36px), `frozenLeadingColumns=2` (36px numbered gutter and 260px identity label). The row number stays centered and pinned at the far left.
+- `SECTION_FORM` and `EVIDENCE_INFO`: `overflow-x:hidden`, `overflow-y:auto`, no frozen leading columns. These are card-style/metadata-only, not tabular.
+- `overscrollContain=true` avoids propagating scroll to surrounding panes. `keepActiveCellVisible=true` instructs the renderer to scroll the selected cell into view during keyboard navigation.
+- Sticky headers/left cells must be layered without overlap; the top-left intersection needs the highest z-index. Horizontal scrolling moves the data area while labels remain visible.
+- Small sheets simply do not show scrollbars. Tests cover **60 periods**, the built-in maximum, in either orientation; all `metricCode + periodCode` identities remain unchanged.
+
+These are **renderer instructions only**, not proof of a working browser scrollbar. Do not add scroll position, viewport offsets or frozen rows to the financial content hash or `fin_intake`. No new database tables are required.
+
 These are renderer tokens. **Active selection, edit/dirty/error events, actual focus and keyboard handling require a UI renderer.** This release provides the data/appearance contract only: no React, HTML renderer, style CRUD or database migration.
 
 ## Safety invariants
