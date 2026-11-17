@@ -3,6 +3,8 @@ package kz.fin.formlib.api;
 import kz.fin.formlib.domain.*;
 import kz.fin.formlib.repository.*;
 import kz.fin.formlib.service.PeriodResolver;
+import kz.fin.formlib.service.CatalogReadCache;
+import kz.fin.formlib.service.CatalogPaging;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,6 +19,7 @@ import java.util.*;
 @RequestMapping("/api/v1/catalog")
 public class ReferenceCatalogController {
   private static final Set<String> LOCALES=Set.of("ru","kk","en","zh-Hans");
+  private final CatalogReadCache cache;
   private final LibCurrencyRepository currencies;
   private final LibCurrencyTranslationRepository currencyTranslations;
   private final LibPeriodTypeRepository periods;
@@ -36,7 +39,9 @@ public class ReferenceCatalogController {
       FormDefinitionRepository forms,FormVersionRepository versions,
       LibFormTranslationRepository formTranslations,FormSectionRepository sections,
       FormFieldRepository fields,FormFieldTranslationRepository fieldTranslations,
-      LibMetricDefinitionRepository metrics,LibMetricTranslationRepository metricTranslations) {
+      LibMetricDefinitionRepository metrics,LibMetricTranslationRepository metricTranslations,
+      CatalogReadCache cache) {
+    this.cache=cache;
     this.currencies=currencies;this.currencyTranslations=currencyTranslations;
     this.periods=periods;this.periodTranslations=periodTranslations;
     this.forms=forms;this.versions=versions;this.formTranslations=formTranslations;
@@ -76,6 +81,7 @@ public class ReferenceCatalogController {
   @GetMapping("/currencies")
   public List<CurrencyView> currencies(@RequestParam(defaultValue="ru") String locale) {
     String l=locale(locale);
+    return cache.get("currencies",l,()->{
     Map<String,LibCurrencyTranslation> localized=new HashMap<>();
     currencyTranslations.findByLocale(l).forEach(t->localized.put(t.getCurrencyCode(),t));
     return currencies.findAllByOrderByCodeAsc().stream().map(c->{
@@ -84,11 +90,13 @@ public class ReferenceCatalogController {
         c.getStatus(),l,t==null?null:t.getTitle(),t==null?null:t.getDescription(),
         t==null?"PENDING_TRANSLATION":t.getReviewStatus());
     }).toList();
+    });
   }
 
   @GetMapping("/period-types")
   public List<PeriodTypeView> periodTypes(@RequestParam(defaultValue="ru") String locale) {
     String l=locale(locale);
+    return cache.get("period-types",l,()->{
     Map<String,LibPeriodTypeTranslation> tr=new HashMap<>();
     periodTranslations.findByLocale(l).forEach(t->tr.put(t.getPeriodType(),t));
     return periods.findAllByOrderBySortOrderAsc().stream().map(p->{
@@ -96,6 +104,7 @@ public class ReferenceCatalogController {
       if(t==null)throw new IllegalStateException("MISSING_PERIOD_LOCALE");
       return new PeriodTypeView(p.getCode(),p.getSortOrder(),l,t.getTitle(),t.getDescription());
     }).toList();
+    });
   }
 
   @GetMapping("/periods/resolve")
@@ -130,11 +139,13 @@ public class ReferenceCatalogController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"INVALID_METRIC_KIND");
     if(formCode!=null&&!forms.findByFormCode(formCode).isPresent())
       throw new ResponseStatusException(HttpStatus.NOT_FOUND,"FORM_NOT_FOUND");
+    return cache.get("metrics",l+"|"+kind+"|"+formCode,()->{
     List<LibMetricDefinition> items=formCode==null?
         metrics.findAllByOrderByMetricCodeAsc():
         metrics.findByFormCodeOrderByMetricCodeAsc(formCode);
     if(kind!=null)items=items.stream().filter(m->kind.equals(m.getMetricKind())).toList();
     return listMetrics(items,l);
+    });
   }
 
   @GetMapping("/metrics/{code}")
@@ -142,7 +153,8 @@ public class ReferenceCatalogController {
                            @RequestParam(defaultValue="ru") String locale){
     var m=metrics.findByMetricCode(code)
       .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"METRIC_NOT_FOUND"));
-    return listMetrics(List.of(m),locale).getFirst();
+    return cache.get("metric-detail",locale(locale)+"|"+code,
+      ()->listMetrics(List.of(m),locale).getFirst());
   }
 
   private Map<UUID,LibFormTranslation> formTranslationMap(String locale) {
@@ -165,15 +177,18 @@ public class ReferenceCatalogController {
   @GetMapping("/forms")
   public List<FormView> forms(@RequestParam(defaultValue="ru") String locale){
     String l=locale(locale);
-    var tr=formTranslationMap(l);
-    return forms.findAllByOrderByFormCodeAsc().stream()
-      .map(f->formView(f,l,tr)).toList();
+    return cache.get("forms",l,()->{
+      var tr=formTranslationMap(l);
+      return forms.findAllByOrderByFormCodeAsc().stream()
+        .map(f->formView(f,l,tr)).toList();
+    });
   }
 
   @GetMapping("/forms/{code}")
   public FormDetail form(@PathVariable String code,
                          @RequestParam(defaultValue="ru") String locale){
     String l=locale(locale);
+    return cache.get("form-detail",l+"|"+code,()->{
     var f=forms.findByFormCode(code)
       .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"FORM_NOT_FOUND"));
     var view=formView(f,l,formTranslationMap(l));
@@ -206,5 +221,48 @@ public class ReferenceCatalogController {
     var sectionViews=orderedSections.stream()
       .map(s->new SectionView(s.getSectionCode(),s.getSectionOrder(),s.getLayoutKind())).toList();
     return new FormDetail(view,sectionViews,fieldViews);
+    });
+  }
+
+  @GetMapping("/forms/page")
+  public CatalogPaging.Page<FormView> formsPage(
+      @RequestParam(defaultValue="ru") String locale,
+      @RequestParam(defaultValue="0") int page,
+      @RequestParam(defaultValue="24") int size,
+      @RequestParam(required=false) String q,
+      @RequestParam(defaultValue="CARDS") String viewMode,
+      @RequestParam(defaultValue="CODE") String sort){
+    String needle=CatalogPaging.normalizedSearch(q);
+    String order=CatalogPaging.sortMode(sort);
+    CatalogPaging.viewMode(viewMode);
+    var filtered=new ArrayList<>(forms(locale).stream().filter(f->
+      CatalogPaging.matches(needle,f.formCode(),f.title(),f.purpose(),f.description())).toList());
+    if("TITLE".equals(order))filtered.sort(
+      Comparator.comparing((FormView f)->f.title()==null?"":f.title(),
+        String.CASE_INSENSITIVE_ORDER).thenComparing(FormView::formCode));
+    else filtered.sort(Comparator.comparing(FormView::formCode));
+    return CatalogPaging.page(filtered,page,size,viewMode,order);
+  }
+
+  @GetMapping("/metrics/page")
+  public CatalogPaging.Page<MetricView> metricsPage(
+      @RequestParam(defaultValue="ru") String locale,
+      @RequestParam(required=false) String kind,
+      @RequestParam(required=false) String formCode,
+      @RequestParam(defaultValue="0") int page,
+      @RequestParam(defaultValue="24") int size,
+      @RequestParam(required=false) String q,
+      @RequestParam(defaultValue="LIST") String viewMode,
+      @RequestParam(defaultValue="CODE") String sort){
+    String needle=CatalogPaging.normalizedSearch(q);
+    String order=CatalogPaging.sortMode(sort);
+    CatalogPaging.viewMode(viewMode);
+    var filtered=new ArrayList<>(metrics(locale,kind,formCode).stream().filter(m->
+      CatalogPaging.matches(needle,m.metricCode(),m.formCode(),m.title(),m.description())).toList());
+    if("TITLE".equals(order))filtered.sort(
+      Comparator.comparing((MetricView m)->m.title()==null?"":m.title(),
+        String.CASE_INSENSITIVE_ORDER).thenComparing(MetricView::metricCode));
+    else filtered.sort(Comparator.comparing(MetricView::metricCode));
+    return CatalogPaging.page(filtered,page,size,viewMode,order);
   }
 }
