@@ -22,6 +22,26 @@ public class ReportGridController {
   public ReportGridService.CreateReceipt create(@RequestBody ReportGridService.CreateReport req){
     return service.create(req);
   }
+
+  /**
+   * Convenience creator; delegates to the EXISTING multi-period report writer.
+   * It does not create a second intake fact store or change data validation.
+   */
+  public record CreateFromRange(java.util.UUID organizationId,String reportCode,String title,
+      String currencyCode,String periodType,String startPeriod,Integer periodCount,
+      List<String> metricCodes,String timeAxis) {}
+  @PostMapping("/from-period-range")
+  public ReportGridService.CreateReceipt createFromRange(@RequestBody CreateFromRange req){
+    if(req==null)
+      throw new org.springframework.web.server.ResponseStatusException(
+        org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,"RANGE_REQUEST_REQUIRED");
+    var batch=kz.fin.formlib.service.PeriodBatchPlanner.plan(
+      req.periodType(),req.startPeriod(),req.periodCount());
+    return service.create(new ReportGridService.CreateReport(
+      req.organizationId(),req.reportCode(),req.title(),req.currencyCode(),
+      batch.periodType(),batch.periods().stream().map(p->p.periodCode()).toList(),
+      req.metricCodes(),req.timeAxis()));
+  }
   @PostMapping("/{id}/revisions")
   public ReportGridService.SaveReceipt save(@PathVariable UUID id,
       @RequestHeader("Idempotency-Key") String idempotencyKey,

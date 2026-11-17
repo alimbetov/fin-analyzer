@@ -54,7 +54,9 @@ public class InputTemplatePreviewService {
       String formCode,UUID formVersionId,String formVersionLabel,
       String qualificationState,String captureMode,String contentMode,String locale,
       String title,String titleTranslationStatus,String periodType,
-      List<PeriodResolver.Range> periods,PresentationProfile presentation,
+      List<PeriodResolver.Range> periods,
+      List<PeriodBatchPlanner.CalendarPeriod> periodCalendar,
+      PresentationProfile presentation,
       List<SectionDescriptor> sections,List<FieldDescriptor> fields,
       List<ColumnHeader> columnHeaders,List<RowHeader> rowHeaders,
       List<CellDescriptor> cells,List<String> warnings) {}
@@ -313,7 +315,9 @@ public class InputTemplatePreviewService {
     return new TemplatePreview(true,false,definition.getFormCode(),version.getId(),
       version.getVersionLabel(),version.getQualificationState(),
       definition.getLegacyCaptureMode(),contentMode,locale,title,titleStatus,
-      periods.getFirst().periodType(),periods,profile,List.copyOf(outputSections),
+      periods.getFirst().periodType(),periods,
+      periods.stream().map(PeriodBatchPlanner::decorate).toList(),
+      profile,List.copyOf(outputSections),
       List.copyOf(outputFields),List.copyOf(columns),List.copyOf(rows),
       List.copyOf(cells),List.copyOf(warnings));
   }
