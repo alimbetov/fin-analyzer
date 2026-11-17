@@ -1,0 +1,20 @@
+server:
+  address: 127.0.0.1
+  port: 8086
+spring:
+  application:
+    name: fin-form-library
+  datasource:
+    url: jdbc:h2:mem:finformlib;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  h2:
+    console:
+      enabled: false
