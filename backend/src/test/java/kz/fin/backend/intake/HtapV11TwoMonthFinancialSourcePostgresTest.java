@@ -3,6 +3,7 @@ package kz.fin.backend.intake;
 import kz.fin.backend.analytics.AnalysisContext;
 import kz.fin.backend.domain.EconomicKernel;
 import kz.fin.backend.persistence.FactSetPublicationService;
+import kz.fin.backend.execution.HtapV12Fin01BlockedPlanService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,6 +46,7 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
     @Autowired FactSetPublicationService publications;
     @Autowired HtapMappingGovernanceService governance;
     @Autowired HtapV11MonthlyRevenueSourceService sources;
+    @Autowired HtapV12Fin01BlockedPlanService fin01Plans;
 
     private record Fixture(UUID org, UUID entity, UUID scope, UUID source,
                            UUID factSet, UUID mapping, String snapshotSha) {}
@@ -190,4 +192,61 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
         assertThrows(IllegalArgumentException.class,
                 ()->resolve(f,token(f.org(),"reader","FIN_READ","FIN_ANALYZE")));
     }
+
+    @Test void v12PinsTwoExactPublishedMonthsAndCommitsOnlyBlockedPlanIdempotently() {
+        Fixture f=publishedTwoMonths("KZT",false,false);
+        Jwt reader=token(f.org(),"planner","FIN_READ","FIN_ANALYZE");
+        var req=new HtapV12Fin01BlockedPlanService.Request(f.org(),f.entity(),
+                f.scope(),f.factSet(),f.snapshotSha(),f.source(),f.mapping(),1,
+                YearMonth.of(2026,1),YearMonth.of(2026,2));
+        var preview=fin01Plans.preview(req,reader);
+        assertEquals(preview,fin01Plans.preview(req,reader));
+        assertFalse(preview.executionPermitted());
+        assertEquals("REV_NET",preview.previousSlice().metricCode());
+        assertEquals(f.factSet(),preview.pair().factSetRevisionId());
+        assertEquals(64,preview.algorithmClassSha256().length());
+        assertTrue(preview.reasons().contains("FIN_HTAP_BUILD_ARTIFACT_NOT_ATTESTED"));
+        assertTrue(preview.reasons().contains("FIN_HTAP_INDEPENDENT_METHOD_S2_PENDING"));
+
+        var committed=fin01Plans.commitBlocked(req,reader);
+        assertEquals(committed,fin01Plans.commitBlocked(req,reader));
+        assertFalse(committed.executionPermitted());
+        assertEquals("BLOCKED_PLAN_ONLY",committed.state());
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.htap_fin01_two_month_blocked_plan
+            WHERE organization_id=? AND fact_set_revision_id=?
+              AND previous_fact_id<>current_fact_id
+              AND previous_month=DATE '2026-01-01'
+              AND current_month=DATE '2026-02-01'
+              AND catalog_epoch=1 AND currency_code='KZT'
+              AND NOT execution_permitted
+            """,Long.class,f.org(),f.factSet()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.htap_blocked_method_plan
+            WHERE organization_id=? AND plan_state='BLOCKED_PLAN_ONLY'
+            """,Long.class,f.org()));
+        assertThrows(org.springframework.dao.DataAccessException.class,
+                ()->jdbc.update("""
+                    UPDATE fin_exec.htap_fin01_two_month_blocked_plan
+                    SET execution_permitted=true WHERE id=?
+                    """,committed.id()));
+        assertThrows(org.springframework.dao.DataAccessException.class,
+                ()->jdbc.update("""
+                    DELETE FROM fin_exec.htap_fin01_two_month_blocked_plan WHERE id=?
+                    """,committed.id()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run WHERE organization_id=?
+            """,Long.class,f.org()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_calc.report_run WHERE organization_id=?
+            """,Long.class,f.org()));
+
+        assertThrows(IllegalArgumentException.class,()->fin01Plans.preview(
+                new HtapV12Fin01BlockedPlanService.Request(f.org(),f.entity(),
+                    f.scope(),f.factSet(),f.snapshotSha(),f.source(),f.mapping(),2,
+                    YearMonth.of(2026,1),YearMonth.of(2026,2)),reader));
+        assertThrows(AccessDeniedException.class,()->fin01Plans.preview(req,
+                token(UUID.randomUUID(),"foreign","FIN_READ","FIN_ANALYZE")));
+    }
+
 }
