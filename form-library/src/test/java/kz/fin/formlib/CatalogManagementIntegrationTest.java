@@ -123,6 +123,17 @@ class CatalogManagementIntegrationTest {
     assertEquals(5,history.size());
     assertEquals("CREATED",history.get(0).get("type").asText());
     assertEquals("CATALOG_PUBLISHED",history.get(4).get("type").asText());
+    JsonNode page0=get(base(id)+"/events/page?page=0&size=2");
+    JsonNode page1=get(base(id)+"/events/page?page=1&size=2");
+    JsonNode page2=get(base(id)+"/events/page?page=2&size=2");
+    assertEquals(5,page0.get("totalElements").asInt());
+    assertEquals(3,page0.get("totalPages").asInt());
+    assertEquals(2,page0.get("items").size());
+    assertEquals("CREATED",page0.get("items").get(0).get("type").asText());
+    assertEquals(2,page1.get("items").size());
+    assertEquals(1,page2.get("items").size());
+    assertEquals("CATALOG_PUBLISHED",page2.get("items").get(0).get("type").asText());
+    assertFalse(page2.get("hasNext").asBoolean());
     http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(base(id)+"/publish").contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.FinishRequest(4,baseVersionId,"retry"))))
       .andExpect(status().isConflict());
@@ -167,5 +178,10 @@ class CatalogManagementIntegrationTest {
         "После закрытия","Описание","tester"))))
       .andExpect(status().isConflict());
     assertEquals(3,events.findByEditSessionIdOrderByEditRevisionAsc(id).size());
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+      base(id)+"/events/page?size=1000")).andExpect(status().isUnprocessableEntity());
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+      "/api/v1/catalog-admin/drafts/"+UUID.randomUUID()+"/events/page"))
+      .andExpect(status().isNotFound());
   }
 }

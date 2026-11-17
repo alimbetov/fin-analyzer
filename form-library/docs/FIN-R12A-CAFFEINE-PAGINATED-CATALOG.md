@@ -11,10 +11,10 @@ Branch `feat/fin-form-library-standalone`. No React client added. Backend return
 | `FormUseCaseController` | Cache localized use-case-to-form references, return pageable form list |
 | `FormNavigationController` | Composite sector/purpose facet filters NOT cached; uses cached reference forms |
 | `FormLibraryController` | Cache only old `GET /forms` and `GET /forms/{code}`; paginate form summaries; `POST /drafts` and `GET /drafts` uncached |
-| `CatalogManagementController` | Uncached editor writes and mutable draft/event reads; after successful publish invalidates the public cache AFTER commit |
+| `CatalogManagementController` | Uncached editor writes and mutable draft/event reads; append-only history has database-backed pageable endpoint, and after publish invalidates the public cache AFTER commit |
 | `InputTemplatePreviewController` | Uncached version/period/style preview; schema qualification and immutable version pinning still required |
 | `PeriodBatchController` | Cheap pure date range computation; uncached |
-| `FormWorkflowController` | No caching: instance status is organization-scoped and mutable |
+| `FormWorkflowController` | No caching: instance status is organization-scoped and mutable; status event history paged at JPA/SQL layer after scoped existence check |
 | `ReportGridController` | No caching: finance values/revisions, rules and grants are user/organization scoped or mutable |
 
 ### Caffeine settings
@@ -72,6 +72,8 @@ GET /api/v1/catalog/use-cases/BANK_FINANCING/forms/page?page=0&size=10
 GET /api/v1/catalog/forms/page?locale=kk&page=0&size=25&q=&sort=CODE
 GET /api/v1/catalog/metrics/page?locale=en&kind=SOURCE_FIELD&page=0&size=24
 GET /api/v1/forms/page?page=0&size=24
+GET /api/v1/drafts/{instanceId}/status/events/page?organizationId={uuid}&page=0&size=24
+GET /api/v1/catalog-admin/drafts/{editSessionId}/events/page?page=0&size=24
 ```
 
 Users still transition from `/catalog/ui/forms/{code}/entry` to period/style chooser (`/api/v1/templates/{code}/preview`) and subsequently to the Excel renderer. No new fact writer.
@@ -83,5 +85,7 @@ Users still transition from `/catalog/ui/forms/{code}/entry` to period/style cho
 3. Repeated GET increments cache hits, cache TTL expires with deterministic fake ticker, nested cached lookups do not throw.
 4. Catalog edit remains invisible until publish; after commit, cached locale-specific entry and category title refreshes.
 5. No new `fin_intake` instances or revisions from read-only listing.
+
+History pages use JPA §PageRequest§ and explicit §OrderByStatusVersionAsc§ / §OrderByEditRevisionAsc§, rather than materializing the full event history. Query is uncached and limited to 50 items per page. Existing unpaged history paths are retained for backward compatibility but should be deprecated for large histories.
 
 **Production blockers:** no tenant IAM, no React implementation, no PostgreSQL negative regression, no multi-node invalidation, no approved per-form period policies, no verified S2 statuses.

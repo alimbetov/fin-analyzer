@@ -90,6 +90,16 @@ class FormWorkflowIntegrationTest {
    assertEquals("READY_FOR_REVIEW",events.get(0).get("toStatus").asText());
    assertEquals("DRAFT",events.get(1).get("toStatus").asText());
    assertEquals(2,eventRepo.findByInstanceIdOrderByStatusVersionAsc(id).size());
+   var page0=ok(get(path(id)+"/status/events/page").param("organizationId",org.toString())
+     .param("page","0").param("size","1"));
+   assertEquals(2,page0.get("totalElements").asInt());
+   assertEquals(2,page0.get("totalPages").asInt());
+   assertEquals(1,page0.get("items").get(0).get("statusVersion").asInt());
+   assertTrue(page0.get("hasNext").asBoolean());
+   var page1=ok(get(path(id)+"/status/events/page").param("organizationId",org.toString())
+     .param("page","1").param("size","1"));
+   assertEquals(2,page1.get("items").get(0).get("statusVersion").asInt());
+   assertFalse(page1.get("hasNext").asBoolean());
  }
 
  @Test void staleCrossOrganizationAndInvalidTransitionsFailClosed()throws Exception{
@@ -100,6 +110,12 @@ class FormWorkflowIntegrationTest {
      .andExpect(status().isNotFound());
    mvc.perform(get(path(id)+"/status/events").param("organizationId",wrongOrg.toString()))
      .andExpect(status().isNotFound());
+   mvc.perform(get(path(id)+"/status/events/page")
+     .param("organizationId",wrongOrg.toString()))
+     .andExpect(status().isNotFound());
+   mvc.perform(get(path(id)+"/status/events/page")
+     .param("organizationId",org.toString()).param("size","51"))
+     .andExpect(status().isUnprocessableEntity());
    mvc.perform(post(path(id)+"/status-transitions")
      .contentType(MediaType.APPLICATION_JSON)
      .content(json(new FormWorkflowService.TransitionRequest(wrongOrg,1,0,

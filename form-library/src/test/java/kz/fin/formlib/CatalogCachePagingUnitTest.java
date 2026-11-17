@@ -51,6 +51,13 @@ class CatalogCachePagingUnitTest {
     assertEquals("F02",cache.get("ui-launch","ru|F02",()->"not-evaluated"));
   }
 
+  @Test void databasePagingBoundsAreSameAsCatalogPaging(){
+    CatalogPaging.validateBounds(0,24);
+    CatalogPaging.validateBounds(1_000_000,50);
+    assertThrows(ResponseStatusException.class,()->CatalogPaging.validateBounds(-1,10));
+    assertThrows(ResponseStatusException.class,()->CatalogPaging.validateBounds(0,51));
+  }
+
   @Test void paginationBoundsAndSliceDeterministically(){
     var first=CatalogPaging.page(List.of("a","b","c","d","e"),0,2,"CARDS","CODE");
     assertEquals(List.of("a","b"),first.items());
