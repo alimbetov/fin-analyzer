@@ -143,8 +143,12 @@ public class FormDraftService {
     if("EVIDENCE".equals(version.getContentMode())) throw bad("EVIDENCE_UPLOAD_NOT_IMPLEMENTED");
 
     // Hash the caller's exact request (before generation of row UUIDs), with map keys ordered.
-    String canonicalRequest=json(List.of(String.valueOf(req.instanceId()),req.organizationId().toString(),
-      req.formCode(),req.periodType(),req.periodCode(),req.expectedRevision(),
+    String canonicalRequest=json(List.of(String.valueOf(req.instanceId()),
+      req.organizationId().toString(),req.economicEntityId().toString(),
+      req.businessScopeId().toString(),req.projectId().toString(),
+      req.formCode(),req.periodType(),req.periodCode(),req.currency(),req.coverage(),
+      req.reportingBasis(),req.dataSpace(),req.expectedRevision(),
+      req.createdBy(),req.changeReason(),
       json(req.values()==null?Map.of():new TreeMap<>(req.values())),
       json(req.rows()==null?List.of():req.rows().stream()
         .map(r->List.of(String.valueOf(r.rowId()),r.rowPosition(),
@@ -208,9 +212,14 @@ public class FormDraftService {
       prepared.sort(Comparator.comparingInt(RowInput::rowPosition).thenComparing(RowInput::rowId));
     }
 
-    String content=json(List.of(req.formCode(),version.getVersionLabel(),req.periodType(),
-      req.periodCode(),req.currency(),normalized,
-      prepared.stream().map(r->List.of(r.rowId().toString(),r.rowPosition(),r.values())).toList()));
+    // Financial content identity is independent of purely visual row_position.
+    // Scope and revision-pinned form version remain part of the domain hash.
+    String content=json(List.of(req.organizationId().toString(),req.economicEntityId().toString(),
+      req.businessScopeId().toString(),req.projectId().toString(),req.formCode(),
+      version.getVersionLabel(),req.periodType(),req.periodCode(),req.coverage(),
+      req.currency(),req.reportingBasis(),req.dataSpace(),normalized,
+      prepared.stream().sorted(Comparator.comparing(RowInput::rowId))
+        .map(r->List.of(r.rowId().toString(),r.values())).toList()));
     String contentHash=sha("FIN-LIB-CONTENT-V1|"+content);
     String orderHash=sha("FIN-LIB-ROW-ORDER-V1|"+
        prepared.stream().map(r->r.rowPosition()+":"+r.rowId()).toList());
