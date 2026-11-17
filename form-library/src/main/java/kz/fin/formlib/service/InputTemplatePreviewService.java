@@ -220,8 +220,15 @@ public class InputTemplatePreviewService {
     var warnings=new ArrayList<String>();
     if(!"QUALIFIED".equals(version.getQualificationState()))
       warnings.add("UNQUALIFIED_TEMPLATE");
-    boolean inputAllowed="TYPED_DRAFT".equals(definition.getLegacyCaptureMode())
-      &&!"EVIDENCE".equals(contentMode);
+    // F02 has a real FIN-FORM-V2 pilot structure and an existing local draft writer,
+    // but its legacy catalog capture tag is SCHEMA_NOT_APPROVED. Allow editing in
+    // the unqualified preview ONLY for this exact versioned pilot.
+    boolean f02Pilot="F02".equals(definition.getFormCode())
+      &&"FIN-FORM-V2".equals(version.getVersionLabel())
+      &&"SINGLE_RECORD".equals(contentMode);
+    boolean inputAllowed=("TYPED_DRAFT".equals(definition.getLegacyCaptureMode())
+      &&!"EVIDENCE".equals(contentMode))||f02Pilot;
+    if(f02Pilot)warnings.add("F02_PILOT_UNQUALIFIED");
     if(!inputAllowed)warnings.add("INPUT_NOT_ALLOWED_FOR_CAPTURE_MODE");
     for(var field:orderedFields){
       String section=sectionCodes.get(field.getSectionId());
