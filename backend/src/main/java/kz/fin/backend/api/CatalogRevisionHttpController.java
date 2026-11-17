@@ -1,6 +1,7 @@
 package kz.fin.backend.api;
 
 import kz.fin.backend.intake.CatalogIssuedTemplateService;
+import kz.fin.backend.intake.CatalogHistoricalSchemaService;
 import kz.fin.backend.intake.CatalogXlsxRevisionService;
 import kz.fin.backend.intake.CatalogXlsxRoundTripService;
 import kz.fin.backend.intake.FinancialReportSnapshotService;
@@ -34,21 +35,24 @@ public class CatalogRevisionHttpController {
     private static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     private static final long MAX_XLSX_SIZE = 2_000_000L;
-    private static final long MAX_DOCUMENT_SIZE = 10_000_000L;
+    private static final long MAX_DOCUMENT_SIZE = 2_000_000L;
 
     private final FinanceAccessPolicy access;
     private final CatalogIssuedTemplateService issued;
     private final CatalogXlsxRevisionService revisions;
     private final FinancialReportSnapshotService snapshots;
+    private final CatalogHistoricalSchemaService historicalSchemas;
 
     public CatalogRevisionHttpController(FinanceAccessPolicy access,
                                          CatalogIssuedTemplateService issued,
                                          CatalogXlsxRevisionService revisions,
-                                         FinancialReportSnapshotService snapshots) {
+                                         FinancialReportSnapshotService snapshots,
+                                         CatalogHistoricalSchemaService historicalSchemas) {
         this.access = access;
         this.issued = issued;
         this.revisions = revisions;
         this.snapshots = snapshots;
+        this.historicalSchemas = historicalSchemas;
     }
 
     public record TemplateRequest(UUID economicEntityId, UUID businessScopeId,
@@ -191,6 +195,18 @@ public class CatalogRevisionHttpController {
                 amountScale, revisionId, null);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(snapshots.load(query));
+    }
+
+    /** Historic format qualification never upgrades source trust or publication state. */
+    @GetMapping("/revisions/{revisionId}/schema")
+    public ResponseEntity<CatalogHistoricalSchemaService.Qualification> historicalSchema(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID organizationId,
+            @PathVariable UUID projectId, @PathVariable String formCode,
+            @PathVariable UUID revisionId) {
+        access.require(jwt, organizationId, Permission.FIN_READ);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(historicalSchemas.qualify(organizationId, projectId,
+                        formCode, revisionId));
     }
 
 }
