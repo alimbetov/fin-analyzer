@@ -23,3 +23,11 @@ jobs:
           cache-dependency-path: form-library/pom.xml
       - name: Run JPA Liquibase H2 integration tests
         run: mvn --batch-mode -f form-library/pom.xml clean verify
+      - name: Upload synthetic mock templates (no financial facts)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-form-library-mock-templates
+          path: form-library/target/mock-templates/*.json
+          if-no-files-found: error
+          retention-days: 30
