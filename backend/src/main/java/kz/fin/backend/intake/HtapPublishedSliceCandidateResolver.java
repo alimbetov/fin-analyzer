@@ -18,7 +18,7 @@ import java.util.UUID;
  * establish a trusted metric mapping or produce an ExecutionPermit.
  */
 @Component
-public final class HtapPublishedSliceCandidateResolver {
+public class HtapPublishedSliceCandidateResolver {
     public enum Status {
         SOURCE_NOT_FOUND,
         SOURCE_AMBIGUOUS,
