@@ -7,6 +7,7 @@ import kz.fin.formlib.support.MockTemplateGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Production catalog -> test-only mock templates, with no facts/revisions created. */
 @SpringBootTest
+@AutoConfigureMockMvc
 class MockTemplateCatalogIntegrationTest {
   @Autowired ReferenceCatalogController catalog;
   @Autowired FormDefinitionRepository forms;
