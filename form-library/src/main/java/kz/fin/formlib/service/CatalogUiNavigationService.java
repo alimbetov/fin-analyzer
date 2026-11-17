@@ -37,6 +37,8 @@ public class CatalogUiNavigationService {
       String nextScreen,String formPeriodPolicyStatus) {}
   public record CategoryFormsView(CategoryView category,String locale,
       int totalForms,List<FormCard> forms) {}
+  public record CategoryTile(String iconKey,CategoryView category){}
+  public record FormTile(String iconKey,FormCard form){}
   public record LaunchView(String formCode,UUID formVersionId,String versionLabel,
       String locale,String title,String purpose,String description,
       String contentMode,String captureMode,String qualificationState,
@@ -54,13 +56,15 @@ public class CatalogUiNavigationService {
       "PRIMARY","DOMAIN","SECTOR","CORE","SUPPORTING","EVIDENCE");
   private final ReferenceCatalogController catalog;
   private final FormDefinitionRepository forms;
+  private final CatalogReadCache cache;
   private final Map<String,CategoryMeta> categories;
   private final Map<String,List<FormLink>> links;
 
   public CatalogUiNavigationService(ReferenceCatalogController catalog,
-      FormDefinitionRepository forms) {
+      FormDefinitionRepository forms,CatalogReadCache cache) {
     this.catalog=catalog;
     this.forms=forms;
+    this.cache=cache;
     Map<String,CategoryMeta> defs=new LinkedHashMap<>();
     var validFormCodes=new HashSet<String>();
     for(var line:read("catalog/form-navigation-r10.tsv",4)){
@@ -191,12 +195,14 @@ public class CatalogUiNavigationService {
   @Transactional(readOnly=true)
   public CategoriesView listCategories(String locale){
     validateLocale(locale);
+    return cache.get("ui-categories",locale,()->{
     var all=categories.values().stream()
       .sorted(Comparator.comparing((CategoryMeta x)->x.parent().isBlank()?0:1)
         .thenComparing(CategoryMeta::parent)
         .thenComparingInt(CategoryMeta::sort).thenComparing(CategoryMeta::code))
       .map(c->asCategory(c,locale)).toList();
     return new CategoriesView(locale,1,166,47,389,all);
+    });
   }
   private static String fieldStatus(String text,String recordStatus) {
     return text==null||text.isBlank()?"PENDING_TRANSLATION":recordStatus;
@@ -208,6 +214,7 @@ public class CatalogUiNavigationService {
   public CategoryFormsView listForms(String categoryCode,String locale){
     validateLocale(locale);
     var cat=requireCategory(categoryCode);
+    return cache.get("ui-category-forms",locale+"|"+cat.code(),()->{
     Map<String,ReferenceCatalogController.FormView> localized=new HashMap<>();
     for(var value:catalog.forms(locale))
       if(localized.putIfAbsent(value.formCode(),value)!=null)
@@ -228,10 +235,12 @@ public class CatalogUiNavigationService {
     }
     return new CategoryFormsView(asCategory(cat,locale),locale,cards.size(),
       List.copyOf(cards));
+    });
   }
   @Transactional(readOnly=true)
   public LaunchView launch(String formCode,String locale){
     validateLocale(locale);
+    return cache.get("ui-launch",locale+"|"+formCode,()->{
     var f=catalog.form(formCode,locale).form();
     var definition=forms.findByFormCode(formCode).orElseThrow();
     var styles=switch(f.contentMode()){
@@ -247,5 +256,72 @@ public class CatalogUiNavigationService {
       List.of("PER_FORM_PERIOD_POLICY_NOT_QUALIFIED",
         "FORM_PURPOSE_REQUIRES_EDITORIAL_REVIEW",
         "FORM_VERSION_MUST_BE_PINNED_BEFORE_SUBMIT"));
+    });
+  }
+
+  private static String categoryIcon(CategoryView c){
+    return switch(c.categoryCode()){
+      case "GROUP_FINANCE" -> "chart-no-axes-combined";
+      case "GROUP_LEDGERS" -> "notebook-tabs";
+      case "GROUP_PLANNING" -> "calendar-range";
+      case "GROUP_DETAIL" -> "layers";
+      case "GROUP_SECTOR" -> "factory";
+      case "GROUP_EVIDENCE" -> "files";
+      case "GROUP_PURPOSE" -> "target";
+      default -> switch(c.categoryType()){
+        case "DOMAIN" -> "folder-open";
+        case "SECTOR" -> "factory";
+        case "PURPOSE" -> "target";
+        default -> "folder";
+      };
+    };
+  }
+  private static String formIcon(FormCard f){
+    return switch(f.contentMode()){
+      case "SINGLE_RECORD" -> "file-spreadsheet";
+      case "ROWSET" -> "table-2";
+      case "EVIDENCE" -> "file-check-2";
+      default -> "file";
+    };
+  }
+  @Transactional(readOnly=true)
+  public CatalogPaging.Page<CategoryTile> pageCategories(String locale,int page,int size,
+      String q,String view,String sort){
+    String search=CatalogPaging.normalizedSearch(q);
+    String order=CatalogPaging.sortMode(sort);
+    CatalogPaging.viewMode(view);
+    var items=new ArrayList<>(listCategories(locale).categories().stream()
+      .filter(c->CatalogPaging.matches(search,c.categoryCode(),c.title(),
+        c.purpose(),c.description())).toList());
+    if("TITLE".equals(order))items.sort(Comparator.comparing(
+      (CategoryView c)->c.title(),String.CASE_INSENSITIVE_ORDER)
+      .thenComparing(CategoryView::categoryCode));
+    if("CODE".equals(order))items.sort(Comparator.comparing(CategoryView::categoryCode));
+    var tiles=items.stream().map(c->new CategoryTile(categoryIcon(c),c)).toList();
+    return CatalogPaging.page(tiles,page,size,view,order);
+  }
+  @Transactional(readOnly=true)
+  public CatalogPaging.Page<FormTile> pageForms(String categoryCode,String locale,
+      int page,int size,String q,String view,String sort){
+    String search=CatalogPaging.normalizedSearch(q);
+    String order=CatalogPaging.sortMode(sort);
+    CatalogPaging.viewMode(view);
+    List<FormCard> source;
+    if(categoryCode==null||categoryCode.isBlank()){
+      var distinct=new LinkedHashMap<String,FormCard>();
+      for(String group:List.of("GROUP_FINANCE","GROUP_LEDGERS","GROUP_PLANNING",
+          "GROUP_DETAIL","GROUP_SECTOR","GROUP_EVIDENCE"))
+        for(var card:listForms(group,locale).forms())distinct.putIfAbsent(card.formCode(),card);
+      if(distinct.size()!=166)throw new IllegalStateException("CATALOG_PAGE_COVERAGE");
+      source=List.copyOf(distinct.values());
+    }else source=listForms(categoryCode,locale).forms();
+    var items=new ArrayList<>(source.stream().filter(f->CatalogPaging.matches(
+      search,f.formCode(),f.title(),f.purpose(),f.description())).toList());
+    if("TITLE".equals(order))items.sort(Comparator.comparing(
+      (FormCard f)->f.title()==null?"":f.title(),String.CASE_INSENSITIVE_ORDER)
+      .thenComparing(FormCard::formCode));
+    if("CODE".equals(order))items.sort(Comparator.comparing(FormCard::formCode));
+    var tiles=items.stream().map(f->new FormTile(formIcon(f),f)).toList();
+    return CatalogPaging.page(tiles,page,size,view,order);
   }
 }
