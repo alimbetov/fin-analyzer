@@ -85,6 +85,44 @@ Do **not** assume partitioning is faster. Before freezing the Flyway partition c
 
 **Primary acceptance inventory (implement RED before GREEN):** `W0-MODE-01..05`, `W1-ISOL-01..08`, `W1-SEAL-01..08`, `W1-PART-01..04`, `W2-ADMIT-01..06`, `W2-STAGE-01..04`, `W2-BULK-01..05`, `W3-PARITY-01..10`, `W4-PLAN-01..07`, `W4-FENCE-01..06`, `W4-RESULT-01..08`, `W6-SLO-01..09`, `W7-SEC-01..08`, `W7-GC-01..06`. Each ID needs a concrete test, expected DB state, evidence SHA and CI job; a named scenario alone is not PASS.
 
+
+## 0.B. Executable P0 RED acceptance scenarios — exact minimum cases
+
+These are **future tests**, not claims of existing test execution. Every case requires test code against **real PostgreSQL 16 Testcontainers**, a deterministic fixture, expected DB row state, test log and same HEAD SHA. Unit-only mocks cannot close concurrent claims or tenant isolation gates. A method may not report GREEN if any required case is absent, skipped or quarantined.
+
+| ID | Setup / action | Mandatory assertion |
+|---|---|---|
+| W0-MODE-01 | `fin.execution.mode=OFF`, old flag false, issued published synthetic FactSet | No scheduler claim; no workspace materialization and no result receipt |
+| W0-MODE-02 | Legacy auto execution flag true AND workspace mode SHADOW or WORKSPACE | Application startup fails explicitly, no dual task |
+| W1-SEAL-01 | Published FactSet with two trustworthy REV_NET months; materialize exact selection | `SEALED` only after verified count/identities/source hash, deterministic content hash equals independent oracle |
+| W1-SEAL-02 | Two independent nodes request identical WorkspaceKey at once | Exactly one sealed logical workspace/generation; other reuses same hash or receives retriable conflict, no duplicate trusted input |
+| W1-SEAL-03 | Pause after first load batch; reader tries method calculation | Reader cannot see incomplete staging as trusted; task remains blocked |
+| W1-SEAL-04 | Old builder with generation/fence N tries insert or seal after N+1 SEALED | DB rejects stale writer; sealed hash and rows unchanged |
+| W1-SEAL-05 | Population missing one selected assertion or contains duplicate/mismatched value state | Seal rejects with reason code and no READY task; never infer zero |
+| W1-ISOL-01 | Tenants A/B have equal `REV_NET=150` but different source revisions, attempt workspace reuse | Two workspace keys; B can neither read A rows nor link A workspace |
+| W1-ISOL-02 | User authorized A sends B org/scope UUID through API | Access rejected before workspace creation; no B leakage in error/trace |
+| W1-ISOL-03 | Reuse the same pooled SQL connection for tenant A then B | No residual tenant context; B cannot select A rows, including RLS and explicit joins |
+| W1-ISOL-04 | Workspace fact row tries attaching assertion of B to A's workspace | Composite FK/guard rejects; no orphan/foreign attachment |
+| W1-PART-01 | Seed same representative rows into unpartitioned and HASH candidate; query exact workspace_id | Equal canonical results; record pruning, planning time, buffers, WAL and p95; no performance assertion without measured evidence |
+| W2-ADMIT-01 | Global SQL slots=2, A SQL slots=1, B SQL slots=1; 8 ready tasks and 2 app nodes | At most 2 global, at most 1 per tenant at every committed state; no negative counters |
+| W2-ADMIT-02 | Hold capacity bucket lock; another worker attempts claim | No task is RUNNING without all required reservations; failed claim rolls back bucket and lease |
+| W2-ADMIT-03 | A has 50 HEAVY_SQL and B has 2 LIGHT ready; both eligible | B receives service under predeclared bounded dispatch rounds despite A backlog; no hard real-time guarantee under exhausted capacity |
+| W2-ADMIT-04 | One worker loses network after lease write but before transaction commit | Lease/task/counters all rollback or all commit; recovery reconciles zero orphaned accounting |
+| W2-STAGE-01 | PREPARE slots exhausted, SQL slots free; three workspace builders | No additional materialization query starts; SQL slots do not bypass PREPARE admission |
+| W2-STAGE-02 | CLEANUP competes with OLTP and HEAVY_SQL under disk/WAL pressure | Cleanup pauses by budget; expensive new tasks are deferred; reserved OLTP connections available |
+| W4-FENCE-01 | SQL worker holds statement beyond lease; reaper observes expiry | Lease becomes REVOKING; stale attempts cannot write/commit; physical capacity not released until confirmed cancellation |
+| W4-FENCE-02 | Worker 1 loses fence; worker 2 retries and commits | Exactly one logical result; late worker 1 cannot seal stage, overwrite receipt or publish CORE |
+| W4-PLAN-01 | Same event/source with new method implementation version/SQL checksum | New immutable PlanKey created without reusing `analysis_run.event_id`; historical run remains readable |
+| W4-RESULT-01 | Two workers compute identical canonical result simultaneously | Unique logical result receipt, exact hash comparison; one valid receipt, no mutable overwrite |
+| W4-RESULT-02 | Same logical key but different output payload/hash | Fail closed BLOCKED_COLLISION, never accept last-writer-wins |
+| W7-SEC-01 | SQL worker DB role tries bypass with owner privileges, arbitrary `search_path` or RLS-disallowed tenant | Rejected by role/policy; worker cannot own or modify schema |
+| W7-GC-01 | TTL elapsed but workspace has live lease, pending plan or legal hold | No deletion; cleanup retries safely after conditions cleared |
+| W7-GC-02 | Kill cleanup halfway through bounded batch deletion, restart and rerun | No source/receipt loss, no inconsistent tombstone and eventual idempotent completion |
+
+**FIN-01 isolated SQL parity** is an additional W3 gate, not covered by simply returning 50% for 100→150. Mandatory cases: 100→150 yields 50; 0→150 returns `NOT_COMPUTABLE/ZERO_BASELINE`; negative baseline returns `NEGATIVE_BASELINE_PERCENT_UNDEFINED`; adjacent year boundaries, period gap/overlap, currency/basis mismatch, explicit zero vs missing, duplicate source and HALF_EVEN repeating decimals. Status, reason, input provenance and normalized numeric value must agree with existing Java reference on the *same* published revision. New calculation remains SYNTHETIC only until separately permitted.
+
+**Capacity/performance acceptance registration template** (complete *before* W6 run): hardware + DB version/settings, count/size tenants and workspaces, input distributions, API load, worker counts, max_connections/reserves, CPU/memory/WAL/disk limits, baseline OLTP p95/p99, admissible p95 relative regression (candidate ≤20% until engineering review), queuing max wait under stated finite demand, fairness weights, worker throughput p95/p99, and overload shed/recovery criteria. Thresholds must be approved and frozen before the run, not tuned after outcomes. Correctness remains an absolute gate, performance a measured gate. Separate cold/warm cache runs, repetitions and confidence intervals where feasible.
+
 ## 0. Goal, non-negotiable safety boundaries, acceptance state
 
 Provide a **single efficient governed calculation platform** for all qualified FIN method variants, with independent per-tenant capacity controls, repeatable high-volume SQL ETL, deterministic sequential/parallel method DAG, Java finance algorithms, materialized reusable trusted populations, immutable results, crash resilience and auditable trace. **Not** 60 parallel auto-enabled services, **not** automatic approval of all 60 method families.
