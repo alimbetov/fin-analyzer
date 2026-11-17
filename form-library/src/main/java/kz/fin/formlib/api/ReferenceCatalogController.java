@@ -6,6 +6,7 @@ import kz.fin.formlib.service.PeriodResolver;
 import kz.fin.formlib.service.CatalogReadCache;
 import kz.fin.formlib.service.CatalogPaging;
 import kz.fin.formlib.service.FormEditorialDraftLookup;
+import kz.fin.formlib.service.FieldMetricLabelCandidateLookup;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,6 +23,7 @@ public class ReferenceCatalogController {
   private static final Set<String> LOCALES=Set.of("ru","kk","en","zh-Hans");
   private final CatalogReadCache cache;
   private final FormEditorialDraftLookup editorial;
+  private final FieldMetricLabelCandidateLookup labelCandidates;
   private final LibCurrencyRepository currencies;
   private final LibCurrencyTranslationRepository currencyTranslations;
   private final LibPeriodTypeRepository periods;
@@ -42,9 +44,11 @@ public class ReferenceCatalogController {
       LibFormTranslationRepository formTranslations,FormSectionRepository sections,
       FormFieldRepository fields,FormFieldTranslationRepository fieldTranslations,
       LibMetricDefinitionRepository metrics,LibMetricTranslationRepository metricTranslations,
-      CatalogReadCache cache,FormEditorialDraftLookup editorial) {
+      CatalogReadCache cache,FormEditorialDraftLookup editorial,
+      FieldMetricLabelCandidateLookup labelCandidates) {
     this.cache=cache;
     this.editorial=editorial;
+    this.labelCandidates=labelCandidates;
     this.currencies=currencies;this.currencyTranslations=currencyTranslations;
     this.periods=periods;this.periodTranslations=periodTranslations;
     this.forms=forms;this.versions=versions;this.formTranslations=formTranslations;
@@ -124,12 +128,16 @@ public class ReferenceCatalogController {
     String l=locale(locale);
     Map<UUID,LibMetricTranslation> tr=new HashMap<>();
     metricTranslations.findByLocale(l).forEach(t->tr.put(t.getMetricId(),t));
+    var candidates=labelCandidates.metrics(l);
     return items.stream().map(m->{
       var t=tr.get(m.getId());
+      var c=candidates.get(m.getMetricCode());
+      if(c==null)throw new IllegalStateException("MISSING_METRIC_DRAFT_LABEL");
+      boolean versioned=t!=null&&filled(t.getTitle());
       return new MetricView(m.getMetricCode(),m.getMetricKind(),m.getFormCode(),
         m.getSourceFieldCode(),m.getUnitPolicy(),m.getQualificationState(),l,
-        t==null?null:t.getTitle(),t==null?null:t.getDescription(),
-        t==null?"PENDING_TRANSLATION":t.getReviewStatus());
+        versioned?t.getTitle():c.title(),t==null?null:t.getDescription(),
+        versioned?t.getReviewStatus():c.reviewStatus());
     }).toList();
   }
 
@@ -216,6 +224,7 @@ public class ReferenceCatalogController {
     var unitPolicies=new HashMap<String,String>();
     metrics.findByFormCodeOrderByMetricCodeAsc(code)
       .forEach(m->unitPolicies.put(m.getSourceFieldCode(),m.getUnitPolicy()));
+    var labelDrafts=labelCandidates.fields(code,l);
     var fieldViews=fields.findByFormVersionIdOrderByDisplayOrderAsc(f.getCurrentVersionId())
       .stream()
       .sorted(Comparator.comparingInt((FormField field)->
@@ -223,12 +232,16 @@ public class ReferenceCatalogController {
         .thenComparingInt(FormField::getDisplayOrder).thenComparing(FormField::getFieldCode))
       .map(field->{
         var t=translated.get(field.getFieldCode());
+        var c=labelDrafts.get(field.getFieldCode());
+        if(c==null)throw new IllegalStateException("FIELD_DRAFT_LABEL_MISSING");
+        boolean versioned=t!=null&&filled(t.getTitle())
+          &&!"PENDING_TRANSLATION".equals(t.getReviewStatus());
         var sec=sectionById.get(field.getSectionId());
         return new FieldView(field.getFieldCode(),field.getFieldType(),
           field.getInputMode(),Boolean.TRUE.equals(field.getRequired()),
           field.getDisplayOrder(),sec.getSectionCode(),
-          t==null?null:("PENDING_TRANSLATION".equals(t.getReviewStatus())?null:t.getTitle()),
-          t==null?"PENDING_TRANSLATION":t.getReviewStatus(),
+          versioned?t.getTitle():c.title(),
+          versioned?t.getReviewStatus():c.reviewStatus(),
           unitPolicies.getOrDefault(field.getFieldCode(),"PENDING_UNIT_REVIEW"));
       }).toList();
     var sectionViews=orderedSections.stream()
