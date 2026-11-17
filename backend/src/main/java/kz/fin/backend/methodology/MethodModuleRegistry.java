@@ -3,6 +3,7 @@ package kz.fin.backend.methodology;
 import kz.fin.backend.execution.MethodTaskAdapter;
 import kz.fin.backend.execution.MethodVariantRegistry;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -20,6 +21,7 @@ import java.util.TreeMap;
 public final class MethodModuleRegistry {
     private final Map<String, MethodModule> modules;
 
+    @Autowired
     public MethodModuleRegistry(List<MethodTaskAdapter> adapters, MethodVariantRegistry variants) {
         this(bindLegacy(adapters, variants));
     }
