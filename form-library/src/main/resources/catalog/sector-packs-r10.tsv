@@ -1,0 +1,22 @@
+sectorCode	titleRu	titleEn	audience
+A	Сельское хозяйство	Agriculture	ORGANIZATION_OR_PROGRAM
+B	Горнодобывающая промышленность	Mining	ORGANIZATION_OR_PROGRAM
+C	Промышленное производство	Manufacturing	ORGANIZATION_OR_PROGRAM
+D	Энергетика	Energy	ORGANIZATION_OR_PROGRAM
+E	Коммунальные услуги	Utilities	ORGANIZATION_OR_PROGRAM
+F	Строительство	Construction	ORGANIZATION_OR_PROGRAM
+G	Оптовая и розничная торговля	Trade	ORGANIZATION_OR_PROGRAM
+H	Логистика и транспорт	Logistics	ORGANIZATION_OR_PROGRAM
+I	Гостиницы и общепит	Hospitality	ORGANIZATION_OR_PROGRAM
+J	IT и разработка ПО	Software and IT	ORGANIZATION_OR_PROGRAM
+K	Финансовые услуги	Financial services	ORGANIZATION_OR_PROGRAM
+L	Недвижимость	Real estate	ORGANIZATION_OR_PROGRAM
+M	Профессиональные услуги	Professional services	ORGANIZATION_OR_PROGRAM
+N	Сервис и аутсорсинг	Support services	ORGANIZATION_OR_PROGRAM
+O	Государственные и общественные услуги	Public services	ORGANIZATION_OR_PROGRAM
+P	Образование	Education	ORGANIZATION_OR_PROGRAM
+Q	Здравоохранение	Healthcare	ORGANIZATION_OR_PROGRAM
+R	Мероприятия и досуг	Events and recreation	ORGANIZATION_OR_PROGRAM
+S	Бытовые и персональные услуги	Personal services	ORGANIZATION_OR_PROGRAM
+T	Домохозяйства (не компания)	Households (not a company)	HOUSEHOLD
+U	Международные и грантовые программы	International and grant programs	ORGANIZATION_OR_PROGRAM
