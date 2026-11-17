@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/003-lib-report-grid.sql
   - include:
       file: db/changelog/004-lib-report-format.sql
+  - include:
+      file: db/changelog/005-lib-report-validation.sql

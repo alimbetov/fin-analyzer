@@ -16,6 +16,8 @@ public class LibReportRevision {
 @Column(name="change_reason",nullable=false) private String changeReason;
 @Column(name="source_kind",nullable=false) private String sourceKind;
 @Column(name="qualification_state",nullable=false) private String qualificationState;
+@Column(name="validation_version",nullable=false) private Integer validationVersion;
+@Column(name="validation_sha256") private String validationSha256;
 public LibReportRevision(){}
 public UUID getId(){return id;}
 public void setId(UUID v){id=v;}
@@ -33,6 +35,10 @@ public String getChangeReason(){return changeReason;}
 public void setChangeReason(String v){changeReason=v;}
 public String getSourceKind(){return sourceKind;}
 public void setSourceKind(String v){sourceKind=v;}
+public Integer getValidationVersion(){return validationVersion;}
+public void setValidationVersion(Integer v){validationVersion=v;}
+public String getValidationSha256(){return validationSha256;}
+public void setValidationSha256(String v){validationSha256=v;}
 public String getQualificationState(){return qualificationState;}
 public void setQualificationState(String v){qualificationState=v;}
 }
