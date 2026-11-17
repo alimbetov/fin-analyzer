@@ -127,6 +127,7 @@ class ConcentrationTypedContractPostgresIntegrationTest {
                 "{\"tieSortPolicy\":\"NET_SALES_ASC_SKU_ASC\",\"populationMetric\":\"NET_SALES\",\"returnsPolicy\":\"REVIEWED_NET_RECONCILED\"}",
                 "{\"tieSortPolicy\":\"AMOUNT_DESC_SKU_CODE_ASC\",\"populationMetric\":99,\"returnsPolicy\":\"REVIEWED_NET_RECONCILED\"}",
                 "{\"tieSortPolicy\":\"AMOUNT_DESC_SKU_CODE_ASC\",\"populationMetric\":\"100\",\"returnsPolicy\":\"REVIEWED_NET_RECONCILED\"}",
+                "{\"tieSortPolicy\":\"AMOUNT_DESC_SKU_CODE_ASC\",\"populationMetric\":\"NET_SALES\",\"unexpected\":\"x\"}",
                 "{\"tieSortPolicy\":\"AMOUNT_DESC_SKU_CODE_ASC\",\"populationMetric\":\"NET_SALES\",\"returnsPolicy\":\"REVIEWED_NET_RECONCILED\",\"reportCutoffPercent\":80}")) {
             assertThrows(DataAccessException.class, () ->
                     version("CON-01","PARETO_SALES",contract,config,2,bad,
