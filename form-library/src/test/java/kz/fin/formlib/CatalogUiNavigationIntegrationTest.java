@@ -126,11 +126,14 @@ class CatalogUiNavigationIntegrationTest {
       assertEquals(0,entry.get("approvedPeriodTypes").size());
     }
 
-    // Untranslated form must stay explicitly null, not a fabricated name/purpose.
+    // The current version may be untranslated, but a separate provisional
+    // candidate now supplies the card without changing the pinned form SHA.
     var pending=getView("/api/v1/catalog/ui/forms/T04/entry?locale=zh-Hans");
-    assertTrue(pending.get("title").isNull());
-    assertTrue(pending.get("purpose").isNull());
-    assertTrue(pending.get("description").isNull());
+    assertFalse(pending.get("title").asText().isBlank());
+    assertFalse(pending.get("purpose").asText().isBlank());
+    assertFalse(pending.get("description").asText().isBlank());
+    var gaps=getView("/api/v1/catalog/ui/translation-gaps?locale=zh-Hans&size=50");
+    assertTrue(gaps.get("totalElements").asInt()>=150);
   }
 
   @Test void errorsFailClosedAndEvidenceRouteSkipsPeriodSelector()throws Exception{

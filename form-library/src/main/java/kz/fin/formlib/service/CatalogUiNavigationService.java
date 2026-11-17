@@ -45,7 +45,8 @@ public class CatalogUiNavigationService {
       int categoriesTranslated,int categoryFormLinks,int namedForms,
       int describedForms,int purposefulForms,int fullyDocumentedForms,
       int typedDraftForms,int evidenceOnlyForms,int schemaNotApprovedForms,
-      int financiallyUnqualifiedForms){}
+      int financiallyUnqualifiedForms,int editorialDraftForms,
+      int displayCompleteForms,int needVersionedEditorialReviewForms){}
   public record TranslationGap(String formCode,UUID formVersionId,
       String captureMode,String qualificationState,boolean missingTitle,
       boolean missingPurpose,boolean missingDescription){}
@@ -346,6 +347,12 @@ public class CatalogUiNavigationService {
       SELECT COUNT(*) FROM fin_lib.lib_catalog_category_translation
       WHERE locale=?
       """,Integer.class,locale);
+    Integer editorialDraftForms=jdbc.queryForObject("""
+      SELECT COUNT(*) FROM fin_lib.lib_form_editorial_draft
+      WHERE locale=? AND review_status='AUTO_DRAFT_REVIEW_REQUIRED'
+      """,Integer.class,locale);
+    if(editorialDraftForms==null||editorialDraftForms!=166)
+      throw new IllegalStateException("EDITORIAL_DISPLAY_COVERAGE_DRIFT");
     return jdbc.queryForObject("""
       SELECT COUNT(*) AS forms,
         SUM(CASE WHEN t.title IS NOT NULL AND trim(t.title)<>'' THEN 1 ELSE 0 END) AS named,
@@ -367,7 +374,9 @@ public class CatalogUiNavigationService {
          Objects.requireNonNull(categoriesLocalized),
          389,rs.getInt("named"),rs.getInt("described"),rs.getInt("purposeful"),
          rs.getInt("documented"),rs.getInt("typed"),rs.getInt("evidence"),
-         rs.getInt("schema_missing"),rs.getInt("unqualified")),locale);
+         rs.getInt("schema_missing"),rs.getInt("unqualified"),
+         editorialDraftForms,editorialDraftForms,
+         editorialDraftForms-rs.getInt("documented")),locale);
   }
 
   /** Small 166-form candidate backlog; bounded paging and no private data. */
