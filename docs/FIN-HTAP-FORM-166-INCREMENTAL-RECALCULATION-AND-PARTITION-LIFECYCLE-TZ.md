@@ -196,6 +196,10 @@ A **separate trusted maintenance role** with exact allowlisted parent+child iden
 
 The existing read-only `WorkspacePartitionMaintenanceUtility` remains an inspector. The user-supplied generic daily `TablePartitionService` can contribute **dry-run/metrics/backoff** patterns only; never transfer its date-only deletion criteria or arbitrary table name DDL to FIN. Destructive execution only after W4/W7 tests, independent S2 and a separate OFF-by-default operator approval.
 
+## 5.5. PostgreSQL batch execution within controlled form recalculation
+
+[ADR-R2-11](ADR-R2-11-POSTGRES-BATCH-CALCULATION-EXECUTION.md) governs SQL execution for impacted form/period/currency slices. Form update may enqueue a **versioned, qualified** SQL batch task only after trusted FactSet publication, plan approval, tenant/global admission, and SEALED input. Existing Java orchestrator selects immutable method→routine signature and passes typed workspace/generation/attempt/fence parameters; approved SQL procedure/function runs a bounded batch, never arbitrary SQL text read from a configuration table. PostgreSQL does not poll 166 forms or start another scheduler. Cross-period methods must include verified read-only historical halo even if their target output anchor range is small. On any error, old generation remains current; immutable source/receipt survives. A routine may not create/drop physical partitions; maintenance remains separate. Required `SQLB-01..14` PostgreSQL 16 negative and performance tests.
+
 ## 6. Queue, admission, idempotency and failure semantics
 
 **One Java dispatcher with durable stage states**; old `fin.execution.enabled` and new modes cannot both execute the same plan. `fin.execution.mode=OFF|LEGACY_TEST|WORKSPACE_SHADOW|WORKSPACE`, default OFF, startup fails on conflict. `WORKSPACE_SHADOW` performs only permitted SYNTHETIC shadow calculations and cannot publish approved ACTUAL/CORE.
