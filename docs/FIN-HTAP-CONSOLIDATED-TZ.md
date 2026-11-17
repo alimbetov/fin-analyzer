@@ -1,11 +1,19 @@
-# FIN HTAP — Consolidated Technical Specification v1.1
+# FIN HTAP — Consolidated Technical Specification v1.2
 
 **Project:** FIN Analyzer · `alimbetov/fin-analyzer` · only branch `feat/fin-r0-r1a`  
-**Date:** 2026-11-17 · **Revision:** v1.1 (trusted cross-period history hardening) · **Decision status:** CONSOLIDATED DESIGN BASELINE / W0 INDEPENDENT S2 HOLD / NOT IMPLEMENTED  
+**Date:** 2026-11-17 · **Revision:** v1.2 (post FIN-MR-R2.1 readiness and sequencing hardening) · **Decision status:** CONSOLIDATED DESIGN BASELINE / R2.2 + W1.2.A CONTRACT GO / INDEPENDENT S2 AND HTAP RELEASE HOLD  
 **Technology:** Java 21, Spring Boot, PostgreSQL 16, Flyway; Backend only.  
-**Audit:** [FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17](FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17.md). **Reviewed baseline:** `eef1360aee1b39fa4ba590fb1e472592732c238e` (before this documentation change).  
+**Audit:** [FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17](FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17.md). **Historical consolidation baseline:** `eef1360aee1b39fa4ba590fb1e472592732c238e`. **Post-R2.1 audit baseline:** `45d3f37a895ae73d3934ae9979495d28c1b1626b`.  
 **Supersedes as implementation authority:** execution, workspace, aggregation, derived metrics and physical partition implementation strategies scattered across [ADR-R2-05](ADR-R2-05-METHOD-MODULE-DUAL-ENGINE-IMMUTABLE-RESULTS.md), [ADR-R2-06](ADR-R2-06-TENANT-AWARE-CALCULATION-WORKSPACE.md), [ADR-R2-07](ADR-R2-07-VERSIONED-FINANCIAL-AGGREGATE-LAYER.md), [ADR-R2-08](ADR-R2-08-LIFECYCLE-PARTITION-RECALCULATION.md), [ADR-R2-09](ADR-R2-09-HTAP-DERIVED-INDICATORS-PERIOD-CURRENCY-ISOLATION.md), and the old [FIN-BE-R2-W](FIN-BE-R2-WORKSPACE-ORCHESTRATION-TZ.md). They remain cited rationale and historical acceptance evidence. **Never weaken their stricter trust, permission, data-space, audit, financial S2, immutable history or RELEASE_HOLD controls.**  
 **Terminology:** FIN HTAP is a proposed hybrid OLTP/OLAP *application architecture* on PostgreSQL, **not** a claim that PostgreSQL automatically isolates analytics or that 60 methodologies are production-qualified.
+
+## Post-R2.1 readiness decision and controlling references (2026-11-17)
+
+**Normative audit:** [FIN HTAP — Technical Specification Readiness Audit after R2.1](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) is the current change-control and stop/go matrix. It reconciles this specification, the W0–W8 strategy, ADR-R2-12, FIN-BE-R2 and F166. Historical reviews remain evidence at their own earlier SHA, not evidence of current implementation.
+
+**Proven engineering state on 45d3f37:** FIN CI and Backend Domain SUCCESS, 1,972 PostgreSQL-backed backend tests, 0 failures/errors/skips; FIN-MR-R2.0 JPA CHAR(64) hardening, R2.0.1 fail-closed legacy executor, and R2.1 typed CON-01/CON-02 contracts are **implemented**. Specifically, Flyway V20261117_07 introduces `CON01_PARETO_FIXED_V1` and `CON02_ABC_TYPED_V2` alongside historic `CON02_ABC_BOUNDARIES_V1`. `ConcentrationTypedParameters` is a pure decoder, not an execution binding. `sourceParetoVersion` is trusted upstream **result lineage**, never client JSON config. `reportCutoffPercent` is a non-executable candidate. The entire 60-family/259-candidate read model is still unqualified for new production ACTUAL execution.
+
+**Next engineering gates:** FIN-MR-R2.2 (trusted moderator identity, immutable authority and config-to-S2 binding) and HTAP-W1.2.A (source event/PeriodType/Coverage/catalog epoch contract and RED tests). Separate FIN-BE-R2.A read-only applicability and F166 impact preview from FIN-BE-R2.B immutable PlanCommit. PlanCommit is a **predecessor** of W2 activation; W4.1 introduces immutable result receipts and report-head CAS, **not** the first plan. W3 SQL pilots remain SYNTHETIC SHADOW until W4.1 trusted receipt path exists. No S2 or ACTUAL authority is inferred from CI.
 
 ## MR-R1 — methodological entity and parameter association
 
@@ -15,7 +23,7 @@
 
 **Normative design and initial implementation:** [ADR-R2-12 — Versioned Methodology Registry, Moderation & SHA-256 Parameters](ADR-R2-12-VERSIONED-METHODOLOGY-REGISTRY-MODERATION-AND-PARAMETERS.md). PostgreSQL migrations `V20261117_02`/ `V20261117_03` seed all 60 real method-family codes and provide immutable method-specific parameter contract, config version, independent review, CAS active pointer and activation audit, plus one `fin_calc.methodology_catalog_view` row per family with nested active/latest variant configs and evidence. These are **configuration and engineering-status controls, not method implementation or financial S2/ACTUAL approval**.
 
-A parameter change (e.g. CON-02 ABC A/B thresholds 80/95→75/90) creates a distinct effective SHA-256 without requiring a changed Java algorithm SHA. A formula/tie policy change instead requires a new independently reviewed implementation version. The runtime ResultKey will pin exact algorithm+contract+config+tenant/form/PeriodType/Period/Currency+published source. Current database profile validates **CON-02 ABC boundary parameters only**; the other families have NO invented approved defaults or executables. No activation event yet triggers calculation; no new scheduler or SQL text vault is introduced. MR-R0 PostgreSQL Testcontainers + independent S2 required before integrating read/write APIs or enabling runtime use.
+A parameter change (e.g. CON-02 ABC A/B thresholds 80/95→75/90) creates a distinct effective SHA-256 without requiring a changed Java algorithm SHA. A formula/tie policy change instead requires a new independently reviewed implementation version. The runtime ResultKey will pin exact algorithm+contract+config+tenant/form/PeriodType/Period/Currency+published source. Historic V02/V04 validated **only CON-02 ABC boundary numeric parameters**. Additive V07 now also validates explicit fixed CON-01 policy and CON-02 typed V2 parameters, without approving either variant or providing runtime adapter binding. Other families have NO invented approved defaults or executables. No activation event yet triggers calculation; no new scheduler or SQL text vault is introduced. MR-R0 PostgreSQL Testcontainers + independent S2 required before integrating read/write APIs or enabling runtime use.
 
 ## Methodology implementation truth and P0 remediation
 
@@ -218,7 +226,7 @@ A cohort's lifecycle:
 
 ## 5. Tenant-aware orchestration, quotas and predictable failure
 
-One effective `fin.execution.mode = OFF|LEGACY_TEST|WORKSPACE_SHADOW|WORKSPACE`, default OFF. Fail startup on conflicting legacy `fin.execution.enabled` / new feature mode; no dual task claim/result write. SHADOW is SYNTHETIC-only, read/compare, no production receipt/CORE side effects. Preview is read-only; Commit persists immutable plan without execution; Activation requires explicit server permit, source authority, DAG and resources.
+**Target, not yet implemented:** one effective production `fin.execution.mode = OFF|PLAN_ONLY|SYNTHETIC_SHADOW|WORKSPACE`, default OFF. `LEGACY_TEST` is permitted ONLY as explicit `src/test` golden-fixture authorization; R2.0.1 production `DenyAllLegacyExecutionPermitGuard` blocks the old `SingleExecutorScheduler` even when `fin.execution.enabled=true`. Never enable a legacy production mode to bypass the new permit. Fail startup on conflicting legacy `fin.execution.enabled` / new feature mode; no dual task claim/result write. SHADOW is SYNTHETIC-only, read/compare, no production receipt/CORE side effects. Preview is read-only; Commit persists immutable plan without execution; Activation requires explicit server permit, source authority, DAG and resources.
 
 Stages `PREPARE`, `SQL`, `JAVA`, `CLEANUP` all consume **global+tenant+class** capacity, plus PostgreSQL connection and disk/WAL/CPU pressure guardrails. Prevent heavy aggregate-building and DDL cleanup from bypassing worker quotas. Schedule with persisted bounded weighted-fair tenant dispatch, queue quotas and resource classes; current `SingleExecutorScheduler` is not yet that system.
 
@@ -244,6 +252,19 @@ Use reviewed value objects and explicit statuses. Proposed contracts (not yet cl
 
 DB migrations must be **additive, forward-only Flyway** with fresh DB and upgrade-from-existing fixtures. Do not change historical Flyway content or rewrite source/CORE histories. Data backfill/migration cannot silently manufacture `PeriodType`, fiscal calendars, form associations, approvals or impute missing data. Runtime mode OFF until security/qualification/CI/DB proof.
 
+## 6.A. Mandatory cross-roadmap predecessor gates (new in v1.2)
+
+1. **W0 DESIGN CONTRACT**: reconcile financial source/event classes and coverage/calendar semantics, reviewable moderator identity, exact config/S2 lineage, performance threshold owners; independent architecture S2 remains pending.
+2. **R2.2 and W1.2.A:** may be implemented in separate small backend commits, but both are necessary before making a config/source-driven runnable plan.
+3. **R2.A + F166 W1.2.B:** read-only, distinct Applicability and FormImpact previews. A draft never becomes a FactSet; neither preview grants an execution permit.
+4. **R2.B PlanPreview/PlanCommit (PLAN_ONLY):** after exact trusted source, config, contract SHA, implementation SHA, calendar and profile identity are frozen; no `analysis_task`, report or SQL computation from plan commits.
+5. **W1.3 + W2:** trusted selection and bounded admission/permit/lease/cancellation are necessary before execution.
+6. **W3 read-only SYNTHETIC SHADOW:** allowed for independent SQL/Java parity and bounded performance experiments; no trusted result promotion.
+7. **W4.1 result generation/receipt and complete report-set CAS:** before persistent trusted outputs; **W4.2** destructive cohort lifecycle has its own independent DBA/ops gate.
+8. **W5→W8:** only qualified method DAG, measured capacity benefit, least-privileged operations and independently signed-off release.
+
+If the legacy R2 method execution document, an older ADR or a W-stage table appears to allow earlier execution, **the stricter hold and this predecessor graph control**. Do not silently rename current implemented features into proposed runtime capabilities.
+
 ## 7. Work plan W0–W8 (one delivery order)
 
 | Gate | Deliverable | Required proof |
@@ -252,7 +273,7 @@ DB migrations must be **additive, forward-only Flyway** with fresh DB and upgrad
 | **W1 Trusted data plane** | PeriodCalendar versioning including monthly AS_OF closing, slice/series resolution and sealed single-FactSet comparison history; composite `TrustedComparisonSet` only behind separate S2 gate, optional fin_agg and workspace schema | PostgreSQL 16 fresh+upgrade, no cross-tenant/form/currency/period/version mixing, independent per-period source revisions, concurrent seal race |
 | **W2 Governed admission** | single mode, fair tenant scheduler, global/tenant/class capacity/leases and cancellation, bounded PREPARE/SQL/JAVA/CLEANUP | two-worker/two-node contention, no overadmission, no starving eligible tenant, OLTP reserve |
 | **W3 Pilot indicators and FIN-01** | SQL typed indicator execution for DELTA/MoM/YoY/SMA/TTM/STDDEV and FIN-01 same source Java parity, SYNTHETIC shadow only | Golden exact numeric/status/period/currency/rounding and 16+ negative cases, no ACTUAL |
-| **W4 Immutable receipts and GC** | versioned plan and results/fencing, N+1 CAS switch, cohort membership barrier, safe DETACH/FINALIZE/DROP reaper | crash replay, stale fences, orphan query, same cohort multiple tenants, no referenced DROP |
+| **W4 Immutable receipts and GC** | immutable result receipts/fencing **after R2.B plan**, N+1 required-report-set CAS switch, cohort membership barrier, safe DETACH/FINALIZE/DROP reaper | crash replay, stale fences, orphan query, same cohort multiple tenants, no referenced DROP |
 | **W5 DAG and methods** | other reviewed financial variants, qualified cross-form bindings, one ordered/parallel DAG, no duplicate scheduling | sequential vs parallel equality, source/module S2 per method, old adapters regression |
 | **W6 Performance** | compare DIRECT / unpartitioned AGG / HASH AGG / RANGE workspace, 1/2/4/8 workers, tenant skew, high volume GC | measured p50/p95/p99, end-to-end including build+cleanup, WAL/temp/locks/disk, OLTP p95, numeric thresholds frozen before run |
 | **W7 Security and operations** | runtime roles/RLS hardening, audit and telemetry, DDL/GC operator controls, quotas, legal holds, incident/runbooks | RLS pool reset, impersonation, denial, disk/DB pressure and recovery drills |
@@ -299,9 +320,9 @@ All scenarios require a test case ID, fixture SQL, expected persisted state, Jav
 
 ## 9. Non-goals, blockers and release decision
 
-Not delivered by this spec: migrated 60 methods, full HTAP infrastructure, approved PeriodCalendar/fiscal models, live aggregate table, physical cohort tables and reaper, tenant capacity scheduler, new SQL indicator implementation, independently reviewed FX or new sources. W1 code cannot be called GREEN without published FactSet/PostgreSQL negative tests and S2. `RELEASE_HOLD` and `ACTUAL` execution HOLD persist.
+Not delivered by this spec: migrated 60 methods, full HTAP infrastructure, approved PeriodCalendar/fiscal models, live aggregate table, physical cohort tables and reaper, tenant capacity scheduler, new SQL indicator implementation, independently reviewed FX or new sources. W1.1 journal's **engineering CI is GREEN** at the audited SHA; that status neither proves W1.2+ execution readiness nor independently approves architecture/method S2. `RELEASE_HOLD` and `ACTUAL` execution HOLD persist.
 
-**Next correct engineering commit:** W0 contract-test RED fixtures for `FinancialSliceKey`, `FinancialSeriesKey`, period/calendar and currency policy and tenant/source inheritance; then smallest additive W1 schema/test. Keep `WorkspacePartitionMaintenanceUtility` read-only until a durable cohort barrier exists. Provide exact SHA, files, tests and CI for each claim.
+**Next correct engineering commits:** R2.2 moderator identity/authority RED fixtures and HTAP-W1.2.A source/period/catalog epoch contract RED fixtures; then minimal independently reviewed backend/schema changes. Freeze `FinancialSliceKey`, `FinancialSeriesKey`, calendar and tenant/source inheritance before R2.B PlanCommit. Keep `WorkspacePartitionMaintenanceUtility` read-only until a durable cohort barrier exists. Provide exact SHA, files, tests and CI for each claim.
 
 ## 10. External PostgreSQL constraints (official documentation)
 

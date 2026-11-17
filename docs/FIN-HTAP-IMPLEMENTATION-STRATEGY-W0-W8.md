@@ -1,6 +1,6 @@
-# FIN HTAP — Execution Strategy and Iterative Implementation Plan (W0–W8), v1.1
+# FIN HTAP — Execution Strategy and Iterative Implementation Plan (W0–W8), v1.2
 
-**Date:** 2026-11-17 · **Version:** 1.1 / S1 TECH REVIEW HARDENED · **Status:** W1.1 CI GREEN; W1.2.A RED NEXT; INDEPENDENT S2 / ACTUAL RELEASE HOLD  
+**Date:** 2026-11-17 · **Version:** 1.2 / POST FIN-MR-R2.1 READINESS HARDENED · **Status:** W1.1 + MR-R2.0/R2.0.1/R2.1 engineering CI GREEN; R2.2 + W1.2.A RED NEXT; independent S2 / ACTUAL / HTAP release HOLD  
 **Repository:** `alimbetov/fin-analyzer` · **sole branch:** `feat/fin-r0-r1a` · never merge to `main` automatically.  
 **Contract hierarchy:** [FIN-HTAP-CONSOLIDATED-TZ.md](FIN-HTAP-CONSOLIDATED-TZ.md) is the overall business and technical normative source; [F166 change, impact and partition](FIN-HTAP-FORM-166-INCREMENTAL-RECALCULATION-AND-PARTITION-LIFECYCLE-TZ.md) governs tenant form/catalog change lifecycle; [ADR-R2-10](ADR-R2-10-FORM-FINGERPRINTS-AND-INCREMENTAL-RECALCULATION.md) versioned form SHA-256; [ADR-R2-11](ADR-R2-11-POSTGRES-BATCH-CALCULATION-EXECUTION.md) SQL routine execution; [ADR-R2-08](ADR-R2-08-LIFECYCLE-PARTITION-RECALCULATION.md) eligible cohort GC. Stricter source/trust, R2 execution-permit, immutable-report and independent financial S2 controls survive all precedence decisions.
 
@@ -9,6 +9,14 @@
 [ADR-R2-12](ADR-R2-12-VERSIONED-METHODOLOGY-REGISTRY-MODERATION-AND-PARAMETERS.md) adds one PostgreSQL read view for all **60** method families and immutable `(methodCode,variantCode,algorithmVersion,parameterContractVersion,configVersion,params/effective SHA-256)` configuration semantics with independent moderation and audited CAS activation. This is **a safe parallel read-only catalogue foundation**, not automatic method execution. V20261117_02 creates the initial registry and 60 rows; V20261117_03 adds latest review/progress read status; financial S2/ExecutionPermit remains separate. First code-validated parameters: CON-02/ABC_SALES A/B thresholds (0 < A < B < 100). Other method families must acquire specific parameter contracts and independent financial goldens before activation. A generic JSONB configuration is not executable by default.
 
 **Additional acceptance gate MR-R0:** PostgreSQL 16 Testcontainers prove 60 exact catalogue rows, duplicate and immutability protection, invalid thresholds, SHA-256 on input change, moderator separation of duties, rejection/no-review block, pointer CAS/activation audit, and zero method execution. Cross-tenant/form/period/currency ResultKey and regeneration remain W3/W4. S2 and code-level access control remain HOLD.
+
+## Current engineering baseline and approved work boundary (2026-11-17)
+
+**Readiness audit:** [FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) supersedes outdated assumptions about method config validation, legacy execution and R2.A/B timing. Checked code SHA `45d3f37a895ae73d3934ae9979495d28c1b1626b`; FIN CI #44037588595 and FIN Backend Domain #44037588533 succeeded with 1,972 backend tests. This is **engineering** proof, not architecture S2 or financial qualification.
+
+R2.0 fixed JPA/Flyway CHAR(64); R2.0.1 installed a production deny-all guard for `SingleExecutorScheduler` (also when legacy flag is enabled). R2.1 added versioned explicit `CON01_PARETO_FIXED_V1` / `CON02_ABC_TYPED_V2` PostgreSQL profiles and a pure Java decoder. R2.1 **did not** bind config to runtime adapters, permit new ACTUAL work, publish 60 methods or add a PlanPreview. The historic CON-02 numeric-only profile remains valid history, not a free pass for future execution.
+
+**NEXT:** FIN-MR-R2.2 immutable moderator identity, authorization/approval and version/S2 binding; HTAP-W1.2.A source+period+catalog-epoch contracts and RED tests. Independent R2.A applicability and W1.2.B impact preview are read-only. R2.B immutable PlanCommit is blocked until exact config/source lineage is pinned.
 
 ## 0.0. Methodology coverage and actual P0 implementation snapshot
 
@@ -57,20 +65,35 @@ New semantics:
 - published source changes => newly sealed comparison set and recalculation of **qualified descendants**, never old result UPDATE.
 - same content hash across two tenants or currencies cannot share access, event or result solely by digest equality.
 
+## 3.A. Cross-roadmap sequence — method PlanCommit cannot wait until W4
+
+```text
+R2.0/R2.0.1/R2.1 GREEN -> W0
+                       -> R2.2 + W1.2.A (independent safe contracts/RED)
+                       -> R2.A + W1.2.B (read-only separate previews)
+                       -> R2.B PlanPreview + immutable PlanCommit, NO EXECUTION
+                       -> W1.3 trusted source + W2 permit/capacity/fencing
+                       -> W3 SYNTHETIC SHADOW, read-only/no trusted receipt
+                       -> W4.1 immutable result/report CAS -> W4.2 reaper gate
+                       -> W5 qualified DAG -> W6 perf -> W7 ops -> W8 signoff
+```
+
+A **form-change impact preview is not a methodology PlanPreview**. A draft event cannot become a trusted `FACT_SET_PUBLISHED` event by reclassification. R2.B plan authority is a predecessor of W2, whereas W4.1 is the first production-grade receipt/report-head generation. `LEGACY_TEST` is a `src/test` fixture permission only and MUST NOT become a production `fin.execution.mode`; target modes, all default disabled, are `OFF|PLAN_ONLY|SYNTHETIC_SHADOW|WORKSPACE`. R2.0.1 deny-all legacy execution must stay effective until a separately accepted executor replaces it.
+
 ## 4. Work breakdown, with stop/go proof (do not skip predecessors)
 
 | Gate | Build in one branch, small incremental commits | Required PASS before advancing |
 |---|---|---|
-| **W0 / Freeze** | Define trusted FinancialSliceKey/FinancialSeriesKey, PeriodCalendar, input status and hash policy; dependency/permission and DB role threat review; mark S2 pending | Spec consistency, 166 readiness classifications and negative-model tests documented |
+| **W0 / Freeze** | Define trusted FinancialSliceKey/FinancialSeriesKey, PeriodCalendar, input status and hash policy; dependency/permission and DB role threat review; integrate R2.2 and R2.B prerequisites; mark S2 pending | Spec consistency, 166 readiness classifications and negative-model tests documented |
 | **W1.1 / Form signal (FIRST EXECUTABLE INCREMENT)** | Additive Flyway `V20261117_01__htap_form_change_journal.sql`; append event ONLY for new confirmed `catalog_xlsx_revision` in SAME `CatalogXlsxRevisionService.confirm` DB transaction | `F166-EVT-01..04`, no-op, rollback, concurrent CAS, immutable event, cross-tenant FK, all 166 draft forms, no fact publication |
 | **W1.2.A / Freeze Source, Period/Coverage & Catalog Epoch** | Confirm 166 catalog vs F02/V5 event scope; total mapping for `ReportingPeriodV5.Type` WEEK/MONTH/QUARTER/HALF_YEAR/YEAR/AS_OF and Coverage PERIOD_ONLY/YEAR_TO_DATE/LIFE_TO_DATE/AS_OF; schema+mapping hash and approved catalog epoch; immutable joined event read DTO | RED: unsupported source periods and YTD/LTD cannot become monthly flow, changed schema/mapping with same cells is not invisible NO_OP, wrong tenant/slot/revision is rejected, two catalog deploy versions cannot silently mix. S2 review of contract before consumer |
-| **W1.2.B / Read-only Impact & Durable Delivery** | Exactly one Java dispatcher; separate delivery/checkpoint, idempotent tenant-scoped event reader and explicit versioned reverse dependency bindings; read-only ImpactPreview with bounded period horizon | 166/166 deterministic classification, no ACTUAL, no extra fact publication, 2-node duplicate-safe impact replay; WAITING_QUALIFICATION for nonnumeric contracts |
+| **W1.2.B / Read-only Impact & Durable Delivery** | Exactly one Java dispatcher; separate delivery/checkpoint, idempotent tenant-scoped event reader and explicit versioned reverse dependency bindings; read-only **FormImpactPreview**, never MethodologyPlanPreview, with bounded period horizon | 166/166 deterministic classification, no ACTUAL, no extra fact publication, 2-node duplicate-safe impact replay; WAITING_QUALIFICATION for nonnumeric contracts |
 
 | **W1.3 / Trusted source and history** | PeriodCalendar source completeness, versioned source selection, TrustedComparisonSet and sealed financial slice, source publication event wiring | PostgreSQL row/period/currency/tenant/source negatives and sealed count/hash concurrency tests |
-| **W2 / Admission** | One effective `fin.execution.mode` OFF by default, global+tenant+resource SQL/JAVA/PREPARE/CLEANUP capacity, durable lease/fence, tenant fairness, physical SQL stop | 2 JVM competing tests: zero oversubscription or stale commit, OLTP connection reserve |
+| **W2 / Admission** | **After R2.B PLAN_ONLY**: one effective `fin.execution.mode` OFF by default, exact ExecutionPermit, global+tenant+resource SQL/JAVA/PREPARE/CLEANUP capacity, durable lease/fence, tenant fairness, physical SQL stop | 2 JVM competing tests: zero oversubscription or stale commit, OLTP connection reserve |
 | **W3.1 / SQL Batch SHADOW pilot** | One FIN-01 REV_NET MoM SYNTHETIC **read-only/shadow** trial; static or versioned function; parameter allowlist and SHA; window completeness with batch halo; exact SQL/Java BigDecimal reason/value parity | SQLB-01..14 subset and full FIN-01 golden/negative, no ACTUAL, **no new trusted receipt/current-generation promotion before W4.1** |
 | **W3.2 / Auto indicators** | DELTA, MoM/QoQ/YoY, SMA3/6/12, TTM12 FLOW, STDDEV separate versioned descriptors, same SeriesKey; exact period/currency | Java vs SQL deterministic status, windows, rounding, missing/negative and source |
-| **W4.1 / Immutable calculation result** | Gen N+1 attempts, fenced batch stage writes and seal, atomic per-method ResultKey and **complete required-report-set manifest** head CAS, old pinned generations safe | restart/retry/crash and out-of-order r2/r3 2-node tests, no lost immutable receipts, **no partially refreshed report marked current** |
+| **W4.1 / Immutable calculation result** | **After R2.B immutable plan**: Gen N+1 attempts, fenced batch stage writes and seal, atomic per-method ResultKey and **complete required-report-set manifest** head CAS, old pinned generations safe | restart/retry/crash and out-of-order r2/r3 2-node tests, no lost immutable receipts, **no partially refreshed report marked current** |
 | **W4.2 / Partition lifecycle** | Durable complete membership ledger, privileged precreate and allowlisted detached-child catalog, reader/lease drain barrier, PostgreSQL 16 `DETACH CONCURRENTLY`/FINALIZE/DROP journal | multi-tenant pinned cohort must not drop; crash between DDL steps; no DEFAULT; workers denied DDL; real PostgreSQL |
 | **W5 / Qualified DAG** | Cross-form method dependency DAG, method migration, versioned catalog form definition activation and paged targeted fan-out | Only reviewed input bindings, actual S2 per variant and no launch of unqualified forms |
 | **W6 / Performance** | Compare DIRECT, unpartitioned AGG, fixed HASH AGG, RANGE lifecycle stages; direct SQL vs reviewed FUNCTION vs bounded batches; DELETE vs DETACH/DROP | Real workloads, tenant skew, 1/2/4/8 SQL workers, WAL/temp, OLTP p95/p99, end-to-end including build+cleanup, thresholds frozen in advance |
@@ -117,7 +140,7 @@ To mark W1.1 GREEN, record evidence for:
 4. Cross-tenant forged event denied, irreversible/immutable journal row tested, no event for unsuccessful confirm.
 5. Current HEAD's `FIN Backend Domain` and `FIN CI` outcomes explicitly known and attributed; no skipped test or stale run claims.
 
-Then implement W1.2: a **read-only, tenant-verified form-change impact preview** backed by the existing catalog form classification and explicit method-binding registry, not any financial SQL executor. Keep W2–W4 blocked until their own RED proofs exist.
+Alongside R2.2 moderator/contract authority hardening, implement W1.2: a **read-only, tenant-verified form-change impact preview** backed by the existing catalog form classification and explicit method-binding registry, not any financial SQL executor. Keep W2–W4 blocked until their own RED proofs exist.
 
 ## 8. Rollback and recovery
 

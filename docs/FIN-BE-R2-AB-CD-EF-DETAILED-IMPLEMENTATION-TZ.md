@@ -5,7 +5,7 @@
 # FIN-BE-R2 — детализированное ТЗ: R2.A+B, R2.C+D, R2.E+F
 
 **Редакция:** v1.0, 17 ноября 2026.  
-**Статус:** TECHNICAL SPECIFICATION / CODE NOT IMPLEMENTED / INDEPENDENT S2 REVIEW PENDING.  
+**Статус:** TECHNICAL SPECIFICATION / R2.A registry/applicability + FIN-MR-R2.0–R2.1 foundation PARTIALLY IMPLEMENTED / R2.B–F NOT ACCEPTED / INDEPENDENT S2 REVIEW PENDING.  
 **Базовая спецификация:** FIN-BE-R2-METHODOLOGY-ORCHESTRATION-TZ.md (v2.0).  
 **Репозиторий:** alimbetov/fin-analyzer. **Рабочая ветка:** feat/fin-r0-r1a, без создания веток и без merge в main.  
 **Code-backed baseline для требований:** 28a62cee670c1c920ffa7f40cf46513b9baf352f. Перед разработкой заново определить HEAD и сверить все контракты.  
@@ -13,6 +13,18 @@
 **Главный результат:** инженерно доказать Published FactSet → объяснимый и детерминированный plan → единственный разрешённый расчёт → immutable CORE → авторизованное чтение → evidence/CI. Это не автоматическое финансовое утверждение методик.
 
 **Пред-R2.B аудит:** [FIN-BE-R2-PRE-B-TECHNICAL-AUDIT-2026-11-17.md](FIN-BE-R2-PRE-B-TECHNICAL-AUDIT-2026-11-17.md). Зафиксированы code-backed дефекты R2.A1/A2, исправления, негативные PostgreSQL-тесты, ограничения legacy executor и обязательные gates перед неизменяемым PlanPreview/PlanCommit. Технический GREEN не заменяет независимую приёмку или ACTUAL-полномочие.
+
+## Актуальное нормативное уточнение после FIN-MR-R2.1 (2026-11-17)
+
+**Проверенный code baseline:** `45d3f37a895ae73d3934ae9979495d28c1b1626b` (в отличие от исторического commit выше); FIN Backend Domain/FIN CI **SUCCESS**, 1 972 backend теста. **Источник согласования приоритетов:** [FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) и [FIN-HTAP-CONSOLIDATED-TZ.md v1.2](FIN-HTAP-CONSOLIDATED-TZ.md). Эти документы уточняют ранее описанный порядок, не снижают финансовые и security-гейты.
+
+- Реализованы R2.A1/A2 read-only registry/applicability **foundation**, но отсутствуют подтверждённые R2.B immutable PlanPreview/PlanCommit, новый production ExecutionPermit, полноценный executor, pinned immutable result store и complete CORE acceptance.
+- R2.0/R2.0.1/R2.1 завершили JPA CHAR(64), production deny-all legacy execution и типизированные immutable CON-01/CON-02 профили. Ни `ConcentrationTypedParameters`, ни V07, ни одобренная конфигурация не предоставляют runtime S2/ACTUAL permit. Тестовый fixture в `src/test` не является production режимом `LEGACY_TEST`.
+- До R2.B: **R2.2** проверка доверенной идентичности автора/модератора, реальной роли и CAS, effectiveConfig SHA, artifact SHA, финансового S2/отзыва, а также **HTAP W1.2.A** точные PeriodType/Coverage/epoch/source-контракты.
+- R2.A `MethodologyPlanPreview` строится только для опубликованного FactSet; F166 `FormImpactPreview` работает с неутверждённым изменением формы и не создаёт исполняемые задачи. R2.B `PlanCommit` должен быть готов **раньше W2 admission и W3 execution**, хотя W4.1 immutable result and report CAS выполняется позже.
+- При отсутствии новых входных данных или independent financial S2 все бизнес-варианты остаются `BLOCKED/UNQUALIFIED`; нельзя заменять на значения по умолчанию 259 предложенных параметров.
+
+**Решение:** GO для R2.2 RED/контрактов и W1.2.A; строго PLAN_ONLY для следующих R2.A/B работ до разрешения условий; HOLD для ACTUAL и выпуска. Исторические разделы ниже отражают исходные требования, а не новое свидетельство их реализации.
 
 ## 0. Контракт приоритетов, критерии завершения и определения
 

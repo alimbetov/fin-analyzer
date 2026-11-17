@@ -105,6 +105,21 @@ The Java entity model is `kz.fin.backend.methodology.persistence.MethodologyEnti
 
 **Minimum acceptance:** real PostgreSQL 16 Flyway upgrade, JPA `ddl-auto=validate`, 60 methods, 259 parameters, 60 represented methods, no duplicate candidates, FK integrity, irreversible parameter rows, correct FIN-01 and CON-02 parent-child association, single view row per method with nested candidate arrays, zero new `ACTUAL` or `releaseQualified`. Exact SHA of CI required. A future moderation stage will add typed versioned **approved** parameter contracts and safely display candidate-vs-approved status per variant; no arbitrary string parameter should reach Java/SQL executors.
 
+## 5.B. Post MR-R2.0 / R2.0.1 / R2.1 code-backed addendum (2026-11-17)
+
+**Normative consistency decision:** see [FIN HTAP post-R2.1 readiness audit](FIN-HTAP-TZ-READINESS-AUDIT-2026-11-17-R21.md) and the [updated W0–W8 sequence](FIN-HTAP-IMPLEMENTATION-STRATEGY-W0-W8.md). The §5 statement that only CON-02 numeric boundaries were executable is a correct **historic description of V02**, not the current total validation surface.
+
+**Verified at GitHub HEAD `45d3f37a895ae73d3934ae9979495d28c1b1626b`:**
+- R2.0: Hibernate CHAR(64) SHA field metadata now agrees with Flyway/PostgreSQL.
+- R2.0.1: production `DenyAllLegacyExecutionPermitGuard` prevents planning, task execution and completion through legacy `SingleExecutorScheduler`; TEST-ONLY golden fixtures in `src/test` are not authority for production.
+- R2.1: additive `V20261117_07__concentration_typed_parameter_contracts.sql` provides `CON01_PARETO_FIXED_V1` and `CON02_ABC_TYPED_V2`. It does NOT mutate the old `CON02_ABC_BOUNDARIES_V1` configs and does NOT approve any of 259 candidate parameters. `ConcentrationTypedParameters` is a strict pure Java decoder, not runtime wiring, reviewed source selection or a financial execution permit.
+- `CON-01/PARETO_SALES`: `populationMetric=NET_SALES`, `tieSortPolicy=AMOUNT_DESC_SKU_CODE_ASC`, `returnsPolicy=REVIEWED_NET_RECONCILED`; `reportCutoffPercent` stays non-executable until an independently qualified algorithm/result contract exists.
+- `CON-02/ABC_SALES`: `0 < aLimitPercent < bLimitPercent < 100` and the sole implemented `boundaryCrossingPolicy=CROSSING_ITEM_PREVIOUS_CLASS_UNROUNDED`; `sourceParetoVersion` is an **input receipt lineage claim**, NOT a mutable configuration parameter. Future R2.B must require exact verified Pareto result ID/version/source SHA and detect stale/missing input, not trust a caller-supplied string.
+
+**Strict MR-R2.2 gate, not yet implemented:** identity must be derived from authenticated trusted actor context, not database `submitted_by/reviewed_by` strings alone; active config pointer CAS and immutable moderation are necessary but insufficient; bind approved schema/params/effective SHA + allowlisted algorithm **artifact SHA** + method/form/basis S2 revocation state to any proposed `ExecutionPermit`. A config or contract approval never permits ACTUAL. Legacy numeric-only historical CON-02 profile is not silently promoted to the new runtime contract. R2.B immutable PlanPreview/PlanCommit is `PLAN_ONLY`, before W2 admission and W4 result receipt.
+
+**Evidence:** [FIN CI #44037588595](https://github.com/alimbetov/fin-analyzer/actions/runs/44037588595) and [Backend Domain #44037588533](https://github.com/alimbetov/fin-analyzer/actions/runs/44037588533): success, 1,972 backend tests on the same SHA; financial S2 and production release remain HOLD.
+
 ## 6. Mandatory follow-up tests and blockers
 
 | ID | Required proof | Gate |
