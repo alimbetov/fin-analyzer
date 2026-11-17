@@ -15,6 +15,11 @@ public class FieldMetricContractAuditController {
   public FieldMetricContractAuditService.Coverage coverage(){
     return service.coverage();
   }
+  @GetMapping("/metrics/{metricCode}")
+  public FieldMetricContractAuditService.MetricBindingView metric(
+      @PathVariable String metricCode){
+    return service.metric(metricCode);
+  }
   @GetMapping("/forms/{formCode}")
   public FieldMetricContractAuditService.FormView form(
       @PathVariable String formCode,@RequestParam(defaultValue="ru") String locale){

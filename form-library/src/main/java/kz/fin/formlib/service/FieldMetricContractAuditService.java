@@ -14,6 +14,10 @@ import java.util.*;
  */
 @Service
 public class FieldMetricContractAuditService {
+  public record MetricBindingView(String metricCode,String legacyMetricKind,
+      String semanticRole,String formCode,String sourceFieldCode,
+      String formulaCandidate,String qualificationState,
+      String reviewState,boolean hasPhysicalBinding,boolean financialQualified) {}
   public record Coverage(int forms,int physicalFields,int sourceBindings,
       int evidenceMetadataFields,int unboundDerivedCandidates,int analyticalOutputs,
       int financialQualifiedBindings,int staleSchemaBindings) {}
@@ -68,6 +72,35 @@ public class FieldMetricContractAuditService {
       """);
     return new Coverage(formCount,all,source,evidence,derived,outputs,
       approved,stale);
+  }
+
+  @Transactional(readOnly=true)
+  public MetricBindingView metric(String metricCode){
+    var items=db.query("""
+      SELECT m.metric_code,m.metric_kind,m.form_code,m.source_field_code,
+             m.qualification_state,c.semantic_role AS contract_role,
+             e.semantic_role AS exception_role,e.formula_expression,
+             c.review_state AS contract_review,e.review_state AS exception_review
+      FROM fin_lib.lib_metric_definition m
+      LEFT JOIN fin_lib.lib_field_binding_contract c ON c.metric_code=m.metric_code
+      LEFT JOIN fin_lib.lib_metric_binding_exception e ON e.metric_code=m.metric_code
+      WHERE m.metric_code=?
+      """,(rs,n)->{
+        String role=rs.getString("exception_role");
+        if(role==null)role=rs.getString("contract_role");
+        if(role==null)role="ANALYTICAL_OUTPUT".equals(rs.getString("metric_kind"))
+          ?"ANALYTICAL_OUTPUT":"UNBOUND_SOURCE_METRIC";
+        String review=rs.getString("exception_review");
+        if(review==null)review=rs.getString("contract_review");
+        if(review==null)review="CANDIDATE_UNQUALIFIED";
+        return new MetricBindingView(rs.getString("metric_code"),
+          rs.getString("metric_kind"),role,rs.getString("form_code"),
+          rs.getString("source_field_code"),rs.getString("formula_expression"),
+          rs.getString("qualification_state"),review,
+          rs.getString("contract_role")!=null,false);
+      },metricCode);
+    if(items.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"METRIC_NOT_FOUND");
+    return items.getFirst();
   }
 
   @Transactional(readOnly=true)
