@@ -174,6 +174,37 @@ class HtapPublishedSliceCandidateResolverPostgresTest {
             DELETE FROM fin_exec.htap_blocked_method_plan WHERE plan_id=?
             """,committed.planId()));
 
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            INSERT INTO fin_exec.htap_blocked_method_plan(
+                plan_id,organization_id,economic_entity_id,business_scope_id,
+                fact_set_revision_id,snapshot_hash,data_space,catalog_epoch,
+                registry_fingerprint,plan_payload,plan_sha256,created_by)
+            SELECT gen_random_uuid(),organization_id,economic_entity_id,business_scope_id,
+                   fact_set_revision_id,snapshot_hash,data_space,catalog_epoch,
+                   registry_fingerprint,
+                   jsonb_set(plan_payload,'{0,status}',to_jsonb('READY'::text)),
+                   plan_sha256,'forged'
+            FROM fin_exec.htap_blocked_method_plan WHERE plan_id=?
+            """,committed.planId()));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            INSERT INTO fin_exec.htap_blocked_method_plan(
+                plan_id,organization_id,economic_entity_id,business_scope_id,
+                fact_set_revision_id,snapshot_hash,data_space,catalog_epoch,
+                registry_fingerprint,plan_payload,plan_sha256,created_by)
+            SELECT gen_random_uuid(),organization_id,economic_entity_id,business_scope_id,
+                   fact_set_revision_id,snapshot_hash,data_space,catalog_epoch,
+                   registry_fingerprint,
+                   jsonb_set(plan_payload,'{0,reasonCodes}','null'::jsonb),
+                   plan_sha256,'forged'
+            FROM fin_exec.htap_blocked_method_plan WHERE plan_id=?
+            """,committed.planId()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run WHERE organization_id=?
+            """,Long.class,org));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.core_report_snapshot WHERE organization_id=?
+            """,Long.class,org));
+
         var wrongSource=new HtapFinancialSliceKey(
                 org,entity,scope,revision,published.snapshotHash(),UUID.randomUUID(),
                 "F01","1.0","SYNTHETIC","MANAGEMENT",
