@@ -76,12 +76,16 @@ public class InputTemplatePreviewService {
   private final LibFormTranslationRepository formTranslations;
   private final FormFieldTranslationRepository fieldTranslations;
   private final LibMetricDefinitionRepository metrics;
+  private final FieldMetricLabelCandidateLookup labelCandidates;
+  private final FormEditorialDraftLookup formEditorial;
 
   public InputTemplatePreviewService(FormDefinitionRepository definitions,
       FormVersionRepository versions,FormSectionRepository sections,
       FormFieldRepository fields,LibFormTranslationRepository formTranslations,
       FormFieldTranslationRepository fieldTranslations,
-      LibMetricDefinitionRepository metrics) {
+      LibMetricDefinitionRepository metrics,
+      FieldMetricLabelCandidateLookup labelCandidates,
+      FormEditorialDraftLookup formEditorial) {
     this.definitions=definitions;
     this.versions=versions;
     this.sections=sections;
@@ -89,6 +93,8 @@ public class InputTemplatePreviewService {
     this.formTranslations=formTranslations;
     this.fieldTranslations=fieldTranslations;
     this.metrics=metrics;
+    this.labelCandidates=labelCandidates;
+    this.formEditorial=formEditorial;
   }
 
   private static ResponseStatusException invalid(String code){
@@ -196,7 +202,11 @@ public class InputTemplatePreviewService {
     String title=translatedForm.map(LibFormTranslation::getTitle).orElse(null);
     String titleStatus=translatedForm.map(LibFormTranslation::getReviewStatus)
       .orElse("PENDING_TRANSLATION");
-    if("PENDING_TRANSLATION".equals(titleStatus))title=null;
+    if(title==null||title.isBlank()||"PENDING_TRANSLATION".equals(titleStatus)){
+      var candidate=formEditorial.byLocale(locale).get(formCode);
+      if(candidate==null)throw new IllegalStateException("MISSING_FORM_DRAFT_LABEL");
+      title=candidate.title();titleStatus=candidate.reviewStatus();
+    }
 
     Map<String,FormFieldTranslation> translations=new HashMap<>();
     for(var translation:fieldTranslations.findByFormVersionId(version.getId())){
@@ -233,6 +243,7 @@ public class InputTemplatePreviewService {
         return rank;
       }).thenComparingInt(FormField::getDisplayOrder).thenComparing(FormField::getFieldCode)).toList();
     if(orderedFields.size()>40)throw invalid("TOO_MANY_TEMPLATE_FIELDS");
+    var draftLabels=labelCandidates.fields(formCode,locale);
     var outputFields=new ArrayList<FieldDescriptor>();
     var fieldCodes=new HashSet<String>();
     var fieldPositions=new HashSet<String>();
@@ -259,14 +270,20 @@ public class InputTemplatePreviewService {
          !fieldPositions.add(section+"|"+field.getDisplayOrder()))
         throw new IllegalStateException("CATALOG_FIELD_BINDING_DRIFT");
       var translation=translations.get("FIELD|"+field.getFieldCode());
-      if(codeOrNull(translation)==null)
-        warnings.add("FIELD_TRANSLATION_MISSING:"+field.getFieldCode());
+      var candidate=draftLabels.get(field.getFieldCode());
+      if(candidate==null)throw new IllegalStateException("MISSING_FIELD_DRAFT_LABEL");
+      String versionedTitle=codeOrNull(translation);
+      if(versionedTitle==null)
+        warnings.add("FIELD_TRANSLATION_DRAFT:"+field.getFieldCode());
       String metricCode=sourceMetrics.get(field.getFieldCode());
-      if(metricCode==null&&"MANUAL".equals(field.getInputMode()))
+      if(metricCode==null&&"MANUAL".equals(field.getInputMode())
+          &&!"EVIDENCE".equals(contentMode))
         warnings.add("SYSTEM_METRIC_BINDING_MISSING:"+field.getFieldCode());
       outputFields.add(new FieldDescriptor(field.getFieldCode(),metricCode,section,
-        codeOrNull(translation),translationStatus(translation),field.getFieldType(),
-        field.getInputMode(),field.getRequired(),field.getUnitCode(),field.getDisplayOrder()));
+        versionedTitle==null?candidate.title():versionedTitle,
+        versionedTitle==null?candidate.reviewStatus():translationStatus(translation),
+        field.getFieldType(),field.getInputMode(),field.getRequired(),
+        field.getUnitCode(),field.getDisplayOrder()));
     }
     if("EVIDENCE".equals(contentMode))warnings.add("EVIDENCE_UPLOAD_NOT_IMPLEMENTED");
     var columns=new ArrayList<ColumnHeader>();
