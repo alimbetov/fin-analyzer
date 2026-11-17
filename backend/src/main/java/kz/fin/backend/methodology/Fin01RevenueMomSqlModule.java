@@ -19,7 +19,7 @@ import java.util.*;
  * No ACTUAL permit, result publication or independent S2 approval is implied.
  */
 @Component
-public final class Fin01RevenueMomSqlModule implements MethodModule {
+public class Fin01RevenueMomSqlModule implements MethodModule {
     public static final String CODE = "FIN-01/REV_NET_MOM";
     public static final String VERSION = "R2_SQL_PILOT_1";
     private final JdbcTemplate jdbc;
