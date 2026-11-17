@@ -4,6 +4,7 @@ import kz.fin.backend.analytics.AnalysisContext;
 import kz.fin.backend.domain.EconomicKernel;
 import kz.fin.backend.persistence.FactSetPublicationService;
 import kz.fin.backend.execution.HtapV12Fin01BlockedPlanService;
+import kz.fin.backend.execution.HtapFin01AdmissionPreflight;
 import kz.fin.backend.execution.MethodTaskAdapter;
 import kz.fin.backend.methodology.Fin01RevenueMomSqlModule;
 import java.math.RoundingMode;
@@ -50,6 +51,7 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
     @Autowired HtapMappingGovernanceService governance;
     @Autowired HtapV11MonthlyRevenueSourceService sources;
     @Autowired HtapV12Fin01BlockedPlanService fin01Plans;
+    @Autowired HtapFin01AdmissionPreflight v13Preflight;
     @Autowired Fin01RevenueMomSqlModule fin01Sql;
 
     private record Fixture(UUID org, UUID entity, UUID scope, UUID source,
@@ -350,6 +352,60 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
         assertEquals(0,expected.compareTo(result.value()));
         assertEquals(new BigDecimal("33.333333333333"),expected);
         assertFalse(result.executionQualified());
+    }
+
+    @Test void v13PreflightReadsExactBlockedPlanAndNeverIssuesExecutionPermit() {
+        Fixture f=publishedTwoMonths("KZT",false,false);
+        Jwt planner=token(f.org(),"planner","FIN_READ","FIN_ANALYZE");
+        var request=new HtapV12Fin01BlockedPlanService.Request(
+                f.org(),f.entity(),f.scope(),f.factSet(),f.snapshotSha(),
+                f.source(),f.mapping(),1,YearMonth.of(2026,1),YearMonth.of(2026,2));
+        var committed=fin01Plans.commitBlocked(request,planner);
+        var preflight=v13Preflight.inspect(f.org(),committed.id(),planner);
+        assertEquals(HtapFin01AdmissionPreflight.State.HOLD,preflight.state());
+        assertEquals(preflight,v13Preflight.inspect(f.org(),committed.id(),planner));
+        assertEquals(committed.sha256(),preflight.storedPlanSha256());
+        assertFalse(preflight.executionPermitted());
+        assertTrue(preflight.reasons().contains(
+                "FIN_HTAP_V13_METHOD_CONFIGURATION_FINANCIAL_QUALIFICATION_PENDING"));
+        assertTrue(preflight.reasons().contains(
+                "FIN_HTAP_V13_DEPLOYED_ARTIFACT_ATTESTATION_MISSING"));
+        assertTrue(preflight.reasons().contains(
+                "FIN_HTAP_V13_DURABLE_EXECUTION_PERMIT_NOT_ISSUED"));
+        assertTrue(preflight.reasons().contains("FIN_HTAP_V13_LEASE_FENCE_NOT_AUTHORIZED"));
+        assertEquals(HtapFin01AdmissionPreflight.State.REJECTED,
+                v13Preflight.inspect(f.org(),UUID.randomUUID(),planner).state());
+        assertThrows(AccessDeniedException.class,()->v13Preflight.inspect(
+                f.org(),committed.id(),token(UUID.randomUUID(),"foreign","FIN_READ","FIN_ANALYZE")));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run WHERE organization_id=?
+            """,Long.class,f.org()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_calc.report_run WHERE organization_id=?
+            """,Long.class,f.org()));
+    }
+
+    @Test void v13PreflightInvalidatesPriorPlanAfterEditorialMappingEpochAdvances() {
+        Fixture f=publishedTwoMonths("KZT",false,false);
+        Jwt planner=token(f.org(),"planner","FIN_READ","FIN_ANALYZE");
+        var request=new HtapV12Fin01BlockedPlanService.Request(
+                f.org(),f.entity(),f.scope(),f.factSet(),f.snapshotSha(),
+                f.source(),f.mapping(),1,YearMonth.of(2026,1),YearMonth.of(2026,2));
+        var committed=fin01Plans.commitBlocked(request,planner);
+        assertFalse(v13Preflight.inspect(f.org(),committed.id(),planner)
+                .reasons().contains("FIN_HTAP_V13_MAPPING_EPOCH_OR_ACTIVE_VERSION_STALE"));
+        UUID replacement=governance.propose(f.org(),"F02","FIN-PILOT-V1","HTAP-V13-REPLACEMENT",
+                "{\"sourceField\":\"netRevenue\",\"metricCode\":\"REV_NET\",\"metricVersion\":\"1.0.0\"}",
+                token(f.org(),"second-author","FIN_SUBMIT"));
+        governance.review(f.org(),replacement,true,"e".repeat(64),
+                token(f.org(),"second-reviewer","FIN_REVIEW"));
+        assertEquals(2L,governance.activate(f.org(),"F02","FIN-PILOT-V1",
+                replacement,1,token(f.org(),"second-publisher","FIN_PUBLISH")));
+        var stale=v13Preflight.inspect(f.org(),committed.id(),planner);
+        assertEquals(HtapFin01AdmissionPreflight.State.HOLD,stale.state());
+        assertTrue(stale.reasons().contains(
+                "FIN_HTAP_V13_MAPPING_EPOCH_OR_ACTIVE_VERSION_STALE"));
+        assertFalse(stale.executionPermitted());
     }
 
 }
