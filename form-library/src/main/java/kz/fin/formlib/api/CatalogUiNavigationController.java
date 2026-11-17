@@ -20,6 +20,18 @@ public class CatalogUiNavigationController {
       @RequestParam(defaultValue="ru") String locale){
     return service.listCategories(locale);
   }
+  @GetMapping("/coverage")
+  public CatalogUiNavigationService.TranslationCoverage coverage(
+      @RequestParam(defaultValue="ru") String locale){
+    return service.coverage(locale);
+  }
+  @GetMapping("/translation-gaps")
+  public CatalogPaging.Page<CatalogUiNavigationService.TranslationGap> translationGaps(
+      @RequestParam(defaultValue="ru") String locale,
+      @RequestParam(defaultValue="0") int page,
+      @RequestParam(defaultValue="24") int size){
+    return service.translationGaps(locale,page,size);
+  }
   @GetMapping("/categories/page")
   public CatalogPaging.Page<CatalogUiNavigationService.CategoryTile> categoriesPage(
       @RequestParam(defaultValue="ru") String locale,

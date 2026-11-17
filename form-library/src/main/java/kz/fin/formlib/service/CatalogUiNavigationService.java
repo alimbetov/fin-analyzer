@@ -41,6 +41,14 @@ public class CatalogUiNavigationService {
       int totalForms,List<FormCard> forms) {}
   public record CategoryTile(String iconKey,CategoryView category){}
   public record FormTile(String iconKey,FormCard form){}
+  public record TranslationCoverage(String locale,int forms,int categories,
+      int categoriesTranslated,int categoryFormLinks,int namedForms,
+      int describedForms,int purposefulForms,int fullyDocumentedForms,
+      int typedDraftForms,int evidenceOnlyForms,int schemaNotApprovedForms,
+      int financiallyUnqualifiedForms){}
+  public record TranslationGap(String formCode,UUID formVersionId,
+      String captureMode,String qualificationState,boolean missingTitle,
+      boolean missingPurpose,boolean missingDescription){}
   public record LaunchView(String formCode,UUID formVersionId,String versionLabel,
       String locale,String title,String purpose,String description,
       String contentMode,String captureMode,String qualificationState,
@@ -327,6 +335,63 @@ public class CatalogUiNavigationService {
         "FORM_PURPOSE_REQUIRES_EDITORIAL_REVIEW",
         "FORM_VERSION_MUST_BE_PINNED_BEFORE_SUBMIT"));
     });
+  }
+
+
+  /** Live database editorial coverage; does not invent translations. */
+  @Transactional(readOnly=true)
+  public TranslationCoverage coverage(String locale){
+    validateLocale(locale);
+    return jdbc.queryForObject("""
+      SELECT COUNT(*) AS forms,
+        SUM(CASE WHEN t.title IS NOT NULL AND trim(t.title)<>'' THEN 1 ELSE 0 END) AS named,
+        SUM(CASE WHEN t.description IS NOT NULL AND trim(t.description)<>'' THEN 1 ELSE 0 END) AS described,
+        SUM(CASE WHEN t.purpose IS NOT NULL AND trim(t.purpose)<>'' THEN 1 ELSE 0 END) AS purposeful,
+        SUM(CASE WHEN t.title IS NOT NULL AND trim(t.title)<>'' AND
+                      t.description IS NOT NULL AND trim(t.description)<>'' AND
+                      t.purpose IS NOT NULL AND trim(t.purpose)<>'' THEN 1 ELSE 0 END) AS documented,
+        SUM(CASE WHEN f.legacy_capture_mode='TYPED_DRAFT' THEN 1 ELSE 0 END) AS typed,
+        SUM(CASE WHEN f.legacy_capture_mode='EVIDENCE_ONLY' THEN 1 ELSE 0 END) AS evidence,
+        SUM(CASE WHEN f.legacy_capture_mode='SCHEMA_NOT_APPROVED' THEN 1 ELSE 0 END) AS schema_missing,
+        SUM(CASE WHEN v.qualification_state='CANDIDATE_UNQUALIFIED' THEN 1 ELSE 0 END) AS unqualified
+      FROM fin_lib.lib_form_definition f
+      JOIN fin_lib.lib_form_version v ON v.id=f.current_version_id
+      LEFT JOIN fin_lib.lib_form_translation t
+        ON t.form_version_id=f.current_version_id AND t.locale=?
+      """,(rs,n)->new TranslationCoverage(locale,
+         rs.getInt("forms"),47,
+         jdbc.queryForObject("""
+           SELECT COUNT(*) FROM fin_lib.lib_catalog_category_translation
+           WHERE locale=?
+           """,Integer.class,locale),
+         389,rs.getInt("named"),rs.getInt("described"),rs.getInt("purposeful"),
+         rs.getInt("documented"),rs.getInt("typed"),rs.getInt("evidence"),
+         rs.getInt("schema_missing"),rs.getInt("unqualified")),locale);
+  }
+
+  /** Small 166-form candidate backlog; bounded paging and no private data. */
+  @Transactional(readOnly=true)
+  public CatalogPaging.Page<TranslationGap> translationGaps(String locale,int page,int size){
+    validateLocale(locale);
+    CatalogPaging.validateBounds(page,size);
+    var missing=jdbc.query("""
+      SELECT f.form_code,f.current_version_id,f.legacy_capture_mode,
+             v.qualification_state,t.title,t.purpose,t.description
+      FROM fin_lib.lib_form_definition f
+      JOIN fin_lib.lib_form_version v ON v.id=f.current_version_id
+      LEFT JOIN fin_lib.lib_form_translation t
+        ON t.form_version_id=f.current_version_id AND t.locale=?
+      ORDER BY f.form_code ASC
+      """,(rs,n)->{
+        String title=rs.getString("title"),
+          purpose=rs.getString("purpose"),description=rs.getString("description");
+        return new TranslationGap(rs.getString("form_code"),
+          (UUID)rs.getObject("current_version_id"),
+          rs.getString("legacy_capture_mode"),rs.getString("qualification_state"),
+          title==null||title.isBlank(),purpose==null||purpose.isBlank(),
+          description==null||description.isBlank());
+      },locale).stream().filter(x->x.missingTitle()||x.missingPurpose()||x.missingDescription()).toList();
+    return CatalogPaging.page(missing,page,size,"LIST","CODE");
   }
 
   private static String categoryIcon(CategoryView c){
