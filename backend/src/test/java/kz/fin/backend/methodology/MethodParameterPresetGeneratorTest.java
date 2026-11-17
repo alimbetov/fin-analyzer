@@ -15,8 +15,10 @@ class MethodParameterPresetGeneratorTest {
         var b=MethodParameterPresetGenerator.abcNear(bd("80.00"),bd("95.0"),bd("5.0"),10);
         assertEquals(a,b);
         assertEquals(10,a.size());
-        assertEquals(bd("80"),a.getFirst().parameters().get("aLimitPercent"));
-        assertEquals(bd("95"),a.getFirst().parameters().get("bLimitPercent"));
+        assertEquals(0,bd("80").compareTo(
+                (BigDecimal)a.getFirst().parameters().get("aLimitPercent")));
+        assertEquals(0,bd("95").compareTo(
+                (BigDecimal)a.getFirst().parameters().get("bLimitPercent")));
         var seen=new HashSet<String>();
         for(int i=0;i<a.size();i++) {
             var p=a.get(i);
