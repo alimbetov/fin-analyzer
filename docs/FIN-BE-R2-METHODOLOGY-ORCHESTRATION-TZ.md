@@ -32,7 +32,7 @@
 Сквозной путь:
 1. Проверенная публикация FactSet с хешем и tenant context.
 2. Снимок исходных метрик и методически релевантных характеристик; сверка источника, unit, periods и dataSpace.
-3. Серверный versioned registry и безпобочный PlanPreview.
+3. Серверный versioned registry и PlanPreview без побочных эффектов.
 4. Выпуск сохранённого immutable analysis manifest / applicability decisions / typed DAG.
 5. Delivery из уже существующего outbox, короткий транзакционный claim по PostgreSQL, выполнение без удержания DB transaction, fencing + retry.
 6. Проверка результата, immutable task provenance и сборка CORE по квалифицированному profile.
@@ -392,7 +392,7 @@ Fail-closed при missing policy, suspect source, broken review store, disabled
 
 **R2 минимально полезный доказуемый вертикальный срез:** настоящая опубликованная SYNTHETIC FactSetRevision -> scoped PlanPreview -> versioned accepted DAG -> SYS/VERIFY_PUBLISHED_FACT_SET + один допустимый пилот -> PostgreSQL task result -> immutable CORE_PILOT_V1 с PARTIAL/BLOCKED и source hash -> read-only authorized API. После квалификации отдельного варианта и соблюдения permit gates — ACTUAL вертикаль как отдельная приёмка, не результат первого среза.
 
-## 14. Независимое техническое ревью этого ТЗ — решение по несогласованностям
+## 14. Критическое техническое ревью ТЗ (не независимый S2) — решение по несогласованностям
 
 | ID | Противоречие первоначального ТЗ | Корректировка v2.0 |
 |---|---|---|
@@ -409,4 +409,4 @@ Fail-closed при missing policy, suspect source, broken review store, disabled
 | S2-R2-11 P1 | idempotency не учитывала дочерние fin_calc.report_run и source hash | exact downstream idempotency + crash-after-publication proof |
 | S2-R2-12 P1 | Общее формулирование качества без воспроизводимых test-oracles | 36 acceptance IDs, Testcontainers, independent golden and CI evidence |
 
-**Статус ревью:** документально согласовано с кодом на указанном baseline; **это не S2 APPROVE**, не изменение application code и не доказательство реализации R2. После параллельных коммитов пересмотреть исходный HEAD, повторить consistency check и работать в той же ветке без merge в main.
+**Статус ревью:** внутреннее code-backed ревью и согласование с кодом на указанном baseline; **это не независимый S2 APPROVE**, не изменение application code и не доказательство реализации R2. После параллельных коммитов пересмотреть исходный HEAD, повторить consistency check и работать в той же ветке без merge в main.
