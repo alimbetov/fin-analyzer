@@ -51,17 +51,26 @@ public class MethodConfigVersionEntity {
     @Column(name = "algorithm_version", length = 64, nullable = false)
     private String algorithmVersion;
 
-    @Column(name = "algorithm_sha256", length = 64, nullable = false)
+    // V20261117_02 stores SHA-256 digests as PostgreSQL CHAR(64) (bpchar).
+    // Keep Hibernate JDBC metadata aligned with Flyway rather than altering historic migrations.
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "algorithm_sha256", length = 64, columnDefinition = "char(64)", nullable = false)
     private String algorithmSha256;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "parameters", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> parameters;
 
-    @Column(name = "params_sha256", length = 64, nullable = false)
+    // V20261117_02 stores SHA-256 digests as PostgreSQL CHAR(64) (bpchar).
+    // Keep Hibernate JDBC metadata aligned with Flyway rather than altering historic migrations.
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "params_sha256", length = 64, columnDefinition = "char(64)", nullable = false)
     private String paramsSha256;
 
-    @Column(name = "effective_sha256", length = 64, nullable = false)
+    // V20261117_02 stores SHA-256 digests as PostgreSQL CHAR(64) (bpchar).
+    // Keep Hibernate JDBC metadata aligned with Flyway rather than altering historic migrations.
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "effective_sha256", length = 64, columnDefinition = "char(64)", nullable = false)
     private String effectiveSha256;
 
     @Column(name = "hash_contract_version", length = 32, nullable = false)
