@@ -481,10 +481,16 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
         assertEquals("EVIDENCE_BOUND_HOLD",bound.state());
         assertFalse(bound.executionPermitted());
         assertEquals(64,bound.bindingSha256().length());
-        assertThrows(IllegalStateException.class,()->evidenceBindings.bindUnverified(
-                f.org(),new HtapFin01EvidenceBindingService.Evidence(
-                    plan.id(),config,review,"f".repeat(64),lock,manifest,
-                    "test-untrusted-key","A".repeat(88)),planner));
+        assertThrows(org.springframework.dao.DataAccessException.class,
+                ()->evidenceBindings.bindUnverified(
+                    f.org(),new HtapFin01EvidenceBindingService.Evidence(
+                        plan.id(),config,review,"f".repeat(64),lock,manifest,
+                        "test-untrusted-key","A".repeat(88)),planner));
+        assertThrows(IllegalStateException.class,
+                ()->evidenceBindings.bindUnverified(
+                    f.org(),new HtapFin01EvidenceBindingService.Evidence(
+                        plan.id(),config,review,artifact,lock,manifest,
+                        "other-untrusted-key","A".repeat(88)),planner));
         assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
             UPDATE fin_exec.htap_fin01_evidence_binding
             SET execution_permitted=true WHERE id=?
@@ -514,7 +520,7 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
                 algorithm_sha256,parameters,params_sha256,effective_sha256,created_by)
             VALUES (?,'FIN-01','REV_NET_MOM',2,?,?,'SQL','FIN-01/REV_NET_MOM',
                 'R2_SQL_PILOT_1',?,?::jsonb,?,?,'new-config-author')
-            """,newConfig,config,contract,classSha,policy,"0".repeat(64),"0".repeat(64));
+            """,newConfig,config,contract,"d".repeat(64),policy,"0".repeat(64),"0".repeat(64));
         jdbc.update("""
             INSERT INTO fin_calc.method_config_review(
                 review_id,config_id,submitted_by,reviewed_by,decision,
