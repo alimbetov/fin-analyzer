@@ -66,6 +66,15 @@ class CatalogFactSeparationIntegrationTest {
         .content(json(new CatalogManagementService.FinishRequest(1,base,"local-editor"))));
 
     assertNotEquals(base,forms.findByFormCode("F02").orElseThrow().getCurrentVersionId());
+    // The editor's presentation-only revision must not disable F02's local
+    // draft input preview, nor change the fixed Excel gutter.
+    JsonNode template=ok(get("/api/v1/templates/F02/preview")
+        .param("locale","ru").param("periodType","M").param("periodCodes","2026-02")
+        .param("styleCode","EXCEL_GRID"));
+    assertEquals(36,template.get("presentation").get("rowNumberColumn").get("widthPx").asInt());
+    assertTrue(template.get("cells").get(0).get("editable").asBoolean());
+    assertEquals("F02.netRevenue",template.get("cells").get(0).get("metricCode").asText());
+    assertEquals("CANDIDATE_UNQUALIFIED",template.get("qualificationState").asText());
     JsonNode second=ok(post(intake).header("Idempotency-Key","second-"+org)
         .contentType(MediaType.APPLICATION_JSON)
         .content(json(draft(instanceId,org,project,1,"110"))));

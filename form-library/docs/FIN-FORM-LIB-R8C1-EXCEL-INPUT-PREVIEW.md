@@ -30,6 +30,7 @@ These are renderer tokens. **Active selection, edit/dirty/error events, actual f
 - System metric codes come only from `fin_lib.lib_metric_definition`. No invented derived/system codes.
 - Cell `value=null`, `state=MISSING` until real data is submitted to a separate intake writer.
 - Only source fields with `inputMode=MANUAL`, a known source metric and compatible form capture mode are marked `editable=true`. Other fields are read-only. Missing translations are shown with status, not guessed.
+- The explicit **F02 local pilot** is an exception to the legacy `SCHEMA_NOT_APPROVED` capture tag: only the exact populated, compatible three-field F02 structure is editable in a preview, remains `CANDIDATE_UNQUALIFIED`, and emits `F02_PILOT_UNQUALIFIED`. This permission persists through presentation-only catalog versions and is not generalized to other unapproved schemas.
 - The ordering/labels/style does not affect canonical financial identity or SHA. This API never touches `fin_intake`.
 - Unsupported styles, malformed periods, duplicated canonical periods and unknown locale/form are rejected.
 
