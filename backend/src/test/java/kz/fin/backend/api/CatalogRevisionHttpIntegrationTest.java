@@ -250,15 +250,17 @@ class CatalogRevisionHttpIntegrationTest {
         JsonNode next = json.readTree(correctedUpload.getContentAsString());
         String nextDraft = next.path("id").asText();
         String nextHash = next.path("normalizedFingerprint").asText();
-        String missingReason = "{\\"normalizedFingerprint\\":\\"" + nextHash
-                + "\\",\\"expectedRevision\\":1,\\"changeReason\\":\\"\\"}";
+        String missingReason = """
+                {"normalizedFingerprint":"%s","expectedRevision":1,"changeReason":""}
+                """.formatted(nextHash);
         mvc.perform(post(base + "/drafts/" + nextDraft + "/confirm")
                 .with(user(org, "FIN_SUBMIT")).contentType(MediaType.APPLICATION_JSON)
                 .content(missingReason))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("FIN_CATALOG_CHANGE_REASON_REQUIRED"));
-        String correctedConfirm = "{\\"normalizedFingerprint\\":\\"" + nextHash
-                + "\\",\\"expectedRevision\\":1,\\"changeReason\\":\\"Source correction\\"}";
+        String correctedConfirm = """
+                {"normalizedFingerprint":"%s","expectedRevision":1,"changeReason":"Source correction"}
+                """.formatted(nextHash);
         mvc.perform(post(base + "/drafts/" + nextDraft + "/confirm")
                 .with(user(org, "FIN_SUBMIT")).contentType(MediaType.APPLICATION_JSON)
                 .content(correctedConfirm))
