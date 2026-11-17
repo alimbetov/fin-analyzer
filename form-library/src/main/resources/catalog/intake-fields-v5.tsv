@@ -1,0 +1,4 @@
+formCode	formVersion	rowId	fieldCode	ordinal	required	titleRu	titleKk	titleEn	labelRu	labelKk	labelEn
+F02	FIN-FORM-V2	pnl	netRevenue	1	true	Отчёт о прибылях и убытках	Пайда мен залал туралы есеп	Statement of Profit or Loss	Чистая выручка	Таза түсім	Net revenue
+F02	FIN-FORM-V2	pnl	cogs	2	true	Отчёт о прибылях и убытках	Пайда мен залал туралы есеп	Statement of Profit or Loss	Себестоимость	Өткізілген өнімнің өзіндік құны	Cost of goods sold
+F02	FIN-FORM-V2	pnl	operatingExpenses	3	true	Отчёт о прибылях и убытках	Пайда мен залал туралы есеп	Statement of Profit or Loss	Операционные расходы	Операциялық шығыстар	Operating expenses
