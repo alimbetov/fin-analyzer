@@ -38,6 +38,8 @@ class MethodologyConfigurationRegistryIntegrationTest {
     }
 
     @Autowired JdbcTemplate jdbc;
+    @Autowired kz.fin.backend.methodology.persistence.MethodologyCatalogReadService methodReadService;
+    @Autowired kz.fin.backend.methodology.persistence.MethodologyRepository methodRepository;
     private static final String ZERO_SHA = "a".repeat(64);
 
     private UUID contract(String code, String variant, String profile) {
@@ -74,6 +76,47 @@ class MethodologyConfigurationRegistryIntegrationTest {
                evidence_sha256,review_reason)
             VALUES (?,?,?,?,?,?,'Synthetic independent parameter review')
             """, UUID.randomUUID(), config, submitted, reviewed, decision, ZERO_SHA);
+    }
+
+    @Test void methodologyEntityContainsAll259PersistedParameterCandidates() {
+        var catalogue = methodReadService.allWithParameters();
+        assertEquals(60, catalogue.size());
+        assertEquals(259, catalogue.stream().mapToInt(m -> m.parameters().size()).sum());
+        assertEquals(259L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_calc.method_parameter_candidate
+                """, Long.class));
+        assertEquals(60L, jdbc.queryForObject("""
+                SELECT count(DISTINCT method_code)
+                FROM fin_calc.method_parameter_candidate
+                """, Long.class));
+
+        var abc = catalogue.stream().filter(m -> m.code().equals("CON-02"))
+                .findFirst().orElseThrow();
+        assertEquals(java.util.Set.of("aLimitPercent", "bLimitPercent",
+                "boundaryCrossingPolicy", "sourceParetoVersion"),
+                abc.parameters().stream().map(p -> p.code()).collect(
+                        java.util.stream.Collectors.toSet()));
+        assertTrue(abc.parameters().stream().allMatch(p ->
+                "PROPOSED_UNREVIEWED".equals(p.reviewState())));
+        assertFalse(abc.releaseQualified());
+        assertFalse(abc.autoRunAllowed());
+
+        assertEquals(60, methodRepository.count());
+        var persisted = methodRepository.findById("FIN-01").orElseThrow();
+        assertEquals("Horizontal Analysis", persisted.getTitle());
+        assertEquals(5, persisted.getParameters().size());
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                UPDATE fin_calc.method_parameter_candidate
+                SET proposed_type='DECIMAL' WHERE method_code='CON-02'
+                """));
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                DELETE FROM fin_calc.method_parameter_candidate
+                WHERE method_code='CON-02' AND parameter_code='aLimitPercent'
+                """));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_calc.methodology_catalog_view
+                WHERE method_execution_permitted OR release_qualified OR auto_run_allowed
+                """, Long.class));
     }
 
     @Test void allSixtyFamiliesAppearExactlyOnceInOneQueryableTable() throws Exception {
