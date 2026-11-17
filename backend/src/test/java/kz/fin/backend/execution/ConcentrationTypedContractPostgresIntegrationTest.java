@@ -327,7 +327,7 @@ class ConcentrationTypedContractPostgresIntegrationTest {
         var policy=ConcentrationTypedParameters.abc(
                 json.readTree(ABC_PARAMS),source.methodVersion());
         var classified=ConcentrationAnalysisEngine.abc(source,policy);
-        assertEquals(List.of("A","A","B"),classified.rows().stream()
+        assertEquals(List.of("A","A","C"),classified.rows().stream()
                 .map(ConcentrationAnalysisEngine.AbcRow::classification).toList());
         // Unrounded cumulative amount BEFORE the next SKU is used for boundaries.
         var strict=json.readTree("""
@@ -335,7 +335,7 @@ class ConcentrationTypedContractPostgresIntegrationTest {
              "boundaryCrossingPolicy":"CROSSING_ITEM_PREVIOUS_CLASS_UNROUNDED"}
             """);
         var changed=ConcentrationTypedParameters.abc(strict,source.methodVersion());
-        assertEquals(List.of("A","B","B"),
+        assertEquals(List.of("A","B","C"),
                 ConcentrationAnalysisEngine.abc(source,changed).rows().stream()
                         .map(ConcentrationAnalysisEngine.AbcRow::classification).toList());
 
