@@ -6,6 +6,10 @@
 **Ответственность Codex:** Principal Architect, Java/Spring Engineer, PostgreSQL Concurrency Engineer, Financial Methodology Engineer, Security Engineer, QA Automation Architect; независимый S2 reviewer должен быть отдельным участником.  
 **Документы-соседи:** FIN-BE-R1-X-FOUR-LANGUAGE-EXPORT-TZ.md, FIN-BE-R1-TECHNICAL-AUDIT-2026-11-16.md, FIN-EXEC-R2-R3-TECH-REVIEW.md, FIN-DIAG-60-IMPLEMENTATION-TZ.md, методический каталог methodology-catalog-r1.json.
 
+## Детализация и порядок приёмки R2.A–R2.F
+
+**Обязательное приложение к этому ТЗ:** [FIN-BE-R2-AB-CD-EF-DETAILED-IMPLEMENTATION-TZ.md](FIN-BE-R2-AB-CD-EF-DETAILED-IMPLEMENTATION-TZ.md). Оно устанавливает измеримые gates M1 (план без исполнения), M2 (один безопасно разрешённый SYNTHETIC расчёт и immutable CORE), M3 (API, безопасность и независимая приёмка), DTO, SQL-совместимость, сценарии и доказательства. Не считать приложение реализацией. При расхождении контрактов выбрать более строгий запрет исполнения, оформить ADR и обновить оба документа до разработки.
+
 ## 0. Управление изменениями и неизменные ограничения
 
 Работать **только** в существующей ветке feat/fin-r0-r1a. Не создавать ветки, не делать merge/rebase/push в main, не переписывать прошлые Flyway-миграции, не редактировать успешные тесты ради GREEN. При параллельных коммитах перепроверять HEAD и сохранять изменения других разработчиков; не использовать force. Каждый этап выполнять на базе реально существующих компонентов и сопровождать unit + PostgreSQL Testcontainers + security + CI evidence. Изменение исторических DB constraints разрешается исключительно новой forward-only миграцией с доказанным clean-install/upgrade; предпочтительны добавочные таблицы и поля.
