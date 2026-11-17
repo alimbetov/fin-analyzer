@@ -68,7 +68,11 @@ class CatalogRevisionHttpIntegrationTest {
                 + "/projects/" + project + "/forms/" + form;
     }
 
-    private static String sample(CatalogCaptureRegistry.Field field) {
+    private static String sample(String form, CatalogCaptureRegistry.Field field) {
+        if (CatalogCaptureRegistry.require(form).captureMode() ==
+                CatalogCaptureRegistry.Mode.SCHEMA_NOT_APPROVED &&
+                (field.type() == CatalogCaptureRegistry.FieldType.MONEY ||
+                 field.type() == CatalogCaptureRegistry.FieldType.DECIMAL)) return "0";
         if ("attachmentRef".equals(field.code())) return "evidence.pdf";
         var type = field.type();
         return switch (type) {
@@ -91,7 +95,7 @@ class CatalogRevisionHttpIntegrationTest {
             row.getCell(0).setCellValue("ROW001");
             var fields = CatalogXlsxRoundTripService.fields(form);
             for (int i = 0; i < fields.size(); i++) {
-                row.createCell(i + 1).setCellValue(sample(fields.get(i)));
+                row.createCell(i + 1).setCellValue(sample(form, fields.get(i)));
             }
             book.write(out);
             return out.toByteArray();
