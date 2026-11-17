@@ -1,3 +1,6 @@
+<!-- FIN-HTAP-CONSOLIDATED-ENTRYPOINT-V1 -->
+> **FIN HTAP consolidation (2026-11-17):** [FIN-HTAP-CONSOLIDATED-TZ.md](FIN-HTAP-CONSOLIDATED-TZ.md) is now the **single normative implementation specification** for tenant/form/PeriodType/Period/Currency financial slices, calculations, aggregation, workload admission, workspace physical partitions, generation switching and DETACH/DROP. [Technical audit](FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17.md) records identified P0/P1 design defects and test gates. Sections below are **historical rationale and preserved acceptance details**; conflicting execution/physical-design prescriptions are superseded. Stricter immutable-source, authorization, independent method-S2, ACTUAL HOLD and RELEASE_HOLD safeguards are **retained**. This header does **not** assert implementation, CI GREEN or financial qualification.
+
 # ADR-R2-08 — Lifecycle-Partitioned Recalculation and DETACH/DROP Garbage Collection
 
 **Decision:** ACCEPTED TARGET ARCHITECTURE / NOT IMPLEMENTED / MEASUREMENT AND INDEPENDENT S2 PENDING  
