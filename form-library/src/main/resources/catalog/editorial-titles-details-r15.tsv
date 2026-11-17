@@ -1,0 +1,60 @@
+formCode	titleRu	titleKk	titleEn	titleZhHans
+DF-AST-01	Реестр основных средств	Негізгі құралдар тізілімі	Fixed assets register	固定资产台账
+DF-AST-02	Ремонты и простои оборудования	Жабдықты жөндеу және тоқтап қалу	Equipment maintenance and downtime	设备维修与停机
+DF-AST-03	Недвижимость и аренда	Жылжымайтын мүлік пен жалдау	Real estate and leases	房地产与租赁
+DF-AST-04	Использование ресурсов и мощностей	Ресурстар мен қуаттарды пайдалану	Resource and capacity utilization	资源与产能利用
+DF-CSH-01	Журнал денежных операций	Ақша операциялары журналы	Cash transactions ledger	现金交易台账
+DF-CSH-02	Реестр платежей по обязательствам	Міндеттемелер бойынша төлемдер тізілімі	Obligation payment register	债务付款台账
+DF-CSH-03	Остатки денежных средств	Ақша қаражатының қалдықтары	Cash balances	现金余额
+DF-CSH-04	Счета к получению и инкассация	Алынуға тиіс шоттар мен инкассация	Receivables collection ledger	应收款回收台账
+DF-CSH-05	Счета поставщиков и оплата	Жеткізуші шоттары мен төлемдер	Supplier invoices and payments	供应商发票与付款
+DF-CSH-06	График платежей по долгу	Қарыз төлемдерінің кестесі	Debt payment schedule	债务支付计划
+DF-CST-01	Детализация затрат	Шығындарды нақтылау	Cost details	成本明细
+DF-CST-02	Себестоимость проданных товаров	Сатылған тауарлардың өзіндік құны	Cost of goods sold	销售商品成本
+DF-CST-03	Распределение косвенных затрат	Жанама шығындарды бөлу	Overhead cost allocation	间接成本分摊
+DF-CST-04	Движение капитала собственников	Меншік иелері капиталының қозғалысы	Owner capital movements	所有者资本变动
+DF-CST-05	Налоговые начисления и платежи	Салық есептеулері мен төлемдері	Tax accruals and payments	税费计提与缴纳
+DF-CTX-01	Профиль и правовая форма бизнеса	Бизнестің профилі мен құқықтық нысаны	Business profile and legal form	企业概况与法律形式
+DF-CTX-02	Филиалы и сегменты бизнеса	Бизнес филиалдары мен сегменттері	Business branches and segments	企业分支机构与业务板块
+DF-CTX-03	Параметры отчётности и валюты	Есептілік пен валютаның параметрлері	Reporting basis and currency settings	报告基础与币种设置
+DF-CTX-04	Цели и финансовые ограничения	Мақсаттар мен қаржылық шектеулер	Objectives and financial constraints	目标与财务约束
+DF-CTX-05	Структура владения и связанные организации	Меншік құрылымы мен байланысты ұйымдар	Ownership structure and related entities	股权结构与关联企业
+DF-CUS-01	Клиентские сегменты и выручка	Клиент сегменттері мен түсім	Customer segments and revenue	客户细分与收入
+DF-CUS-02	Удержание и отток клиентов	Клиенттерді сақтау және кетуі	Customer retention and churn	客户留存与流失
+DF-CUS-03	Обращения и жалобы клиентов	Клиенттердің өтініштері мен шағымдары	Customer requests and complaints	客户请求与投诉
+DF-CUS-04	Клиентские договоры	Клиенттік шарттар	Customer contracts	客户合同
+DF-GOV-01	Участники и доли в капитале	Қатысушылар және капиталдағы үлестер	Owners and equity shares	股东及股权比例
+DF-GOV-02	Корпоративные решения и полномочия	Корпоративтік шешімдер мен өкілеттіктер	Corporate decisions and authorizations	公司决议与授权
+DF-GOV-03	Дивиденды и распределения	Дивидендтер мен үлестірулер	Dividends and distributions	股息与利润分配
+DF-GOV-04	Обязательства по решениям органов управления	Басқару шешімдері бойынша міндеттемелер	Governance decision obligations	公司治理决策义务
+DF-HR-01	Численность и фонд оплаты труда	Қызметкерлер саны мен еңбекақы қоры	Headcount and payroll	员工人数与薪资总额
+DF-HR-02	Рабочее время и производительность	Жұмыс уақыты мен өнімділік	Working time and productivity	工时与生产率
+DF-HR-03	План численности и оплаты	Қызметкерлер саны мен еңбекақы жоспары	Workforce and payroll plan	人员编制与薪酬计划
+DF-HR-04	Текучесть и вакансии	Кадрлардың ауысуы мен бос орындар	Staff turnover and vacancies	员工流动与空缺岗位
+DF-MKT-01	Маркетинговые кампании и расходы	Маркетинг науқандары мен шығыстары	Marketing campaigns and spend	营销活动与支出
+DF-MKT-02	Лиды и этапы продаж	Лидтер мен сату кезеңдері	Leads and sales pipeline stages	销售线索与流程阶段
+DF-MKT-03	Атрибуция рекламных расходов	Жарнама шығындарының атрибуциясы	Advertising spend attribution	广告支出归因
+DF-MKT-04	Гипотезы и исследование рынка	Гипотезалар мен нарықты зерттеу	Market hypotheses and research	市场假设与调研
+DF-OPS-01	Производственные мощности и выпуск	Өндірістік қуат пен өнім шығару	Production capacity and output	产能与产量
+DF-OPS-02	Спецификации материалов и комплектующих	Материалдар мен құрамдас бөліктер спецификациясы	Bill of materials	物料清单
+DF-OPS-03	Брак, переделки и простои	Ақау, қайта өңдеу және тоқтап қалу	Defects, rework and downtime	缺陷、返工与停机
+DF-OPS-04	Исполнение сервисных заказов	Сервистік тапсырыстардың орындалуы	Service job execution	服务订单执行
+DF-OPS-05	Рейсы, топливо и логистические затраты	Рейстер, отын мен логистикалық шығындар	Trips, fuel and logistics costs	运输行程、燃料与物流成本
+DF-PRJ-01	Цели и варианты бизнес-проекта	Бизнес-жобаның мақсаттары мен нұсқалары	Business project objectives and options	商业项目目标与方案
+DF-PRJ-02	Инвестиционный бюджет проекта	Жобаның инвестициялық бюджеті	Project investment budget	项目投资预算
+DF-PRJ-03	Сценарии продаж и затрат проекта	Жобаның сату және шығын сценарийлері	Project sales and cost scenarios	项目销售与成本情景
+DF-PRJ-04	Источники и условия финансирования проекта	Жобаны қаржыландыру көздері мен шарттары	Project funding sources and terms	项目融资来源与条款
+DF-PRJ-05	Предпосылки и чувствительность модели	Модельдің алғышарттары мен сезімталдығы	Model assumptions and sensitivity	模型假设与敏感性
+DF-PRJ-06	Этапы и контрольные точки проекта	Жобаның кезеңдері мен бақылау нүктелері	Project milestones and checkpoints	项目里程碑与检查点
+DF-PRJ-07	Партнёры и ресурсы проекта	Жобаның серіктестері мен ресурстары	Project partners and resources	项目合作伙伴与资源
+DF-SAL-01	Журнал продаж по товарам	Тауарлар бойынша сату журналы	Product sales ledger	商品销售台账
+DF-SAL-02	Заказы и отгрузки	Тапсырыстар мен жөнелтулер	Orders and deliveries	订单与交付
+DF-SAL-03	Возвраты и компенсации	Қайтарымдар мен өтемақылар	Returns and refunds	退货与退款
+DF-SAL-04	Прайс-листы и скидки	Бағалар тізімі мен жеңілдіктер	Price lists and discounts	价目表与折扣
+DF-SAL-05	Продажи по каналам и регионам	Арналар мен өңірлер бойынша сатылымдар	Sales by channel and region	按渠道与地区销售
+DF-SAL-06	Выручка и рабочие часы смен	Ауысымдар түсімі мен жұмыс сағаттары	Shift revenue and working hours	班次收入与工时
+DF-STK-01	Складские остатки по товарам	Тауарлар бойынша қойма қалдықтары	Inventory balances by item	按商品库存余额
+DF-STK-02	Закупки и поступления товара	Тауарды сатып алу және қабылдау	Purchases and goods receipts	采购与收货
+DF-STK-03	Складские движения и списания	Қоймадағы қозғалыстар мен есептен шығару	Stock movements and write-offs	库存变动与核销
+DF-STK-04	Условия поставщиков и сроки поставок	Жеткізушілердің шарттары мен жеткізу мерзімдері	Supplier terms and lead times	供应商条款与交货周期
+DF-STK-05	Планирование потребности в запасах	Қорларға қажеттілікті жоспарлау	Inventory demand planning	库存需求规划
