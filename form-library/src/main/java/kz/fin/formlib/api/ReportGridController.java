@@ -2,6 +2,7 @@ package kz.fin.formlib.api;
 import kz.fin.formlib.service.ReportGridService;
 import kz.fin.formlib.service.ReportFormatService;
 import kz.fin.formlib.service.ReportInputValidationService;
+import kz.fin.formlib.service.ReportDerivedTotalService;
 import java.util.List;
 import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
@@ -12,9 +13,10 @@ public class ReportGridController {
   private final ReportGridService service;
   private final ReportFormatService formats;
   private final ReportInputValidationService validation;
+  private final ReportDerivedTotalService derived;
   public ReportGridController(ReportGridService service,ReportFormatService formats,
-      ReportInputValidationService validation){
-    this.service=service;this.formats=formats;this.validation=validation;
+      ReportInputValidationService validation,ReportDerivedTotalService derived){
+    this.service=service;this.formats=formats;this.validation=validation;this.derived=derived;
   }
   @PostMapping
   public ReportGridService.CreateReceipt create(@RequestBody ReportGridService.CreateReport req){
@@ -32,8 +34,11 @@ public class ReportGridController {
       @RequestParam(required=false) String timeAxis,
       @RequestParam(defaultValue="ru") String locale,
       @RequestParam(required=false) Integer formatVersion,
-      @RequestParam(defaultValue="CODE") String periodLabelStyle){
-    return service.grid(id,organizationId,timeAxis,locale,null,formatVersion,periodLabelStyle);
+      @RequestParam(defaultValue="CODE") String periodLabelStyle,
+      @RequestParam(defaultValue="VIEW") String viewMode,
+      @RequestParam(required=false) Integer derivedVersion){
+    return service.grid(id,organizationId,timeAxis,locale,null,formatVersion,periodLabelStyle,
+      viewMode,derivedVersion);
   }
   @GetMapping("/{id}/revisions/{number}/grid")
   public ReportGridService.GridView oldRevision(@PathVariable UUID id,
@@ -41,8 +46,11 @@ public class ReportGridController {
       @RequestParam(required=false) String timeAxis,
       @RequestParam(defaultValue="ru") String locale,
       @RequestParam(required=false) Integer formatVersion,
-      @RequestParam(defaultValue="CODE") String periodLabelStyle){
-    return service.grid(id,organizationId,timeAxis,locale,number,formatVersion,periodLabelStyle);
+      @RequestParam(defaultValue="CODE") String periodLabelStyle,
+      @RequestParam(defaultValue="VIEW") String viewMode,
+      @RequestParam(required=false) Integer derivedVersion){
+    return service.grid(id,organizationId,timeAxis,locale,number,formatVersion,periodLabelStyle,
+      viewMode,derivedVersion);
   }
   @PutMapping("/{id}/layout")
   public ReportGridService.LayoutReceipt changeLayout(@PathVariable UUID id,
@@ -79,5 +87,17 @@ public class ReportGridController {
   public ReportInputValidationService.ValidationResult previewValidation(@PathVariable UUID id,
       @RequestBody PreviewRequest request) {
     return validation.validateSnapshot(id,request.organizationId(),request.cells());
+  }
+
+  @GetMapping("/{id}/derived-rules")
+  public List<ReportDerivedTotalService.RuleView> derivedRules(@PathVariable UUID id,
+      @RequestParam UUID organizationId,@RequestParam(required=false) Integer derivedVersion){
+    return derived.getRules(id,organizationId,derivedVersion);
+  }
+
+  @PutMapping("/{id}/derived-rules")
+  public ReportDerivedTotalService.UpdateReceipt updateDerivedRules(@PathVariable UUID id,
+      @RequestBody ReportDerivedTotalService.UpdateRequest request){
+    return derived.update(id,request);
   }
 }
