@@ -40,6 +40,9 @@ class MethodVariantRegistryTest {
         var registry=new MethodVariantRegistry(adapters(descriptions),new ObjectMapper());
         assertEquals(7,registry.all().size());
         assertEquals(64,registry.fingerprint().length());
+        assertEquals(64,registry.catalogFingerprint().length());
+        assertNotEquals(MethodVariantRegistry.hash(descriptions),registry.fingerprint());
+        assertThrows(IllegalStateException.class,registry::requireExecutablePlanBinding);
         assertEquals("R2_A1_CANDIDATE_1",registry.require("FIN-01/REV_NET_MOM").variantVersion());
         assertTrue(registry.all().stream().noneMatch(MethodVariantDescriptor::methodS2Qualified));
         assertThrows(IllegalArgumentException.class,()->registry.require("FIN-03/TREND"));
@@ -86,6 +89,27 @@ class MethodVariantRegistryTest {
         assertThrows(IllegalStateException.class,()->MethodVariantRegistry.validate(
                 cycle,adapters(cycle),families()));
     }
+    @Test void registryFingerprintChangesWithCatalogContentsAndUnexpectedRolesAreRejected() {
+        var ds=MethodVariantRegistry.definitions();
+        var registry=new MethodVariantRegistry(adapters(ds),new ObjectMapper());
+        assertEquals(registry.fingerprint(),MethodVariantRegistry.combineWithCatalog(
+                MethodVariantRegistry.hash(ds),registry.catalogFingerprint()));
+        assertNotEquals(registry.fingerprint(),MethodVariantRegistry.combineWithCatalog(
+                MethodVariantRegistry.hash(ds),"f".repeat(64)));
+        var withOptional=new ArrayList<>(ds);
+        var original=withOptional.get(1);
+        withOptional.set(1,new MethodVariantDescriptor(original.methodCode(),
+                original.variantVersion(),original.descriptorVersion(),
+                original.implementationVersion(),original.resultSchemaVersion(),
+                original.supportedDataSpaces(),List.of(
+                    new MethodVariantDescriptor.InputRequirement(
+                        "REV_NET","FLOW","MONEY",MethodVariantDescriptor.Role.OPTIONAL)),
+                original.dependencies(),original.maxExecutionSeconds(),false));
+        assertEquals("R2_DEPENDENCY_KIND_NOT_YET_IMPLEMENTED",
+            assertThrows(IllegalStateException.class,()->MethodVariantRegistry.validate(
+                withOptional,adapters(withOptional),families())).getMessage());
+    }
+
     @Test void invalidUnitsDuplicatesVersionsAndS2PromotionRejected() {
         var d=MethodVariantRegistry.definitions().getFirst();
         assertThrows(IllegalArgumentException.class,()->new MethodVariantDescriptor.InputRequirement(

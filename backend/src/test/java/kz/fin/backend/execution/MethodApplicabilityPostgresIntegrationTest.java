@@ -42,10 +42,15 @@ class MethodApplicabilityPostgresIntegrationTest {
 
     private MethodApplicabilityEvaluator.SourceKey published(
             String qualification,int months,AnalysisContext.DataSpace space) {
-        return published(qualification,months,space,false);
+        return published(qualification,months,space,false,false);
     }
     private MethodApplicabilityEvaluator.SourceKey published(
             String qualification,int months,AnalysisContext.DataSpace space,boolean gap) {
+        return published(qualification,months,space,gap,false);
+    }
+    private MethodApplicabilityEvaluator.SourceKey published(
+            String qualification,int months,AnalysisContext.DataSpace space,
+            boolean gap,boolean differentSource) {
         UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),
                 scope=UUID.randomUUID(),revision=UUID.randomUUID(),source=UUID.randomUUID();
         String version="R2A2"+qualification;
@@ -65,6 +70,12 @@ class MethodApplicabilityPostgresIntegrationTest {
                (id,organization_id,status,approved_at)
             VALUES (?,?,'APPROVED',now())
             """,revision,org);
+        UUID otherSource=UUID.randomUUID();
+        if(differentSource) jdbc.update("""
+            INSERT INTO fin_fact.approved_source_revision
+               (organization_id,source_revision_id,form_code,form_version,approved_at)
+            VALUES (?,?,'DF-SAL-01','1.0',now())
+            """,org,otherSource);
         for(int i=0;i<months;i++) {
             YearMonth ym=YearMonth.of(2026,i+1+(gap && i>0 ? 1 : 0));
             var period=EconomicKernel.TemporalReference.interval(
@@ -77,7 +88,8 @@ class MethodApplicabilityPostgresIntegrationTest {
             facts.saveAndFlush(FactAssertionJpaEntity.from(
                     new EconomicKernel.FactAssertion(id,key,
                         EconomicKernel.EconomicValue.present("150.0000"),
-                        source,Instant.parse("2026-11-16T00:00:00Z"))));
+                        differentSource && i>0 ? otherSource : source,
+                        Instant.parse("2026-11-16T00:00:00Z"))));
             String identity=jdbc.queryForObject(
                     "SELECT fin_fact.fact_identity_hash(?)",String.class,id);
             jdbc.update("""
@@ -115,7 +127,10 @@ class MethodApplicabilityPostgresIntegrationTest {
         assertEquals(MethodApplicabilityEvaluator.Status.UNQUALIFIED,
                 find(rows,"CON-01/PARETO_SALES").status());
         assertEquals(rows,evaluator.evaluate(src));
+        assertEquals(1,find(rows,"SYS/DIAGNOSTIC_PILOT").matchedFacts().size());
         assertThrows(UnsupportedOperationException.class,rows::clear);
+        assertThrows(UnsupportedOperationException.class,()->
+                find(rows,"SYS/DIAGNOSTIC_PILOT").matchedFacts().clear());
         for(var row:rows) {
             assertFalse(row.executionPermitted());
             assertEquals(src.snapshotHash(),row.sourceFingerprint());
@@ -159,6 +174,18 @@ class MethodApplicabilityPostgresIntegrationTest {
                 decision.status());
         assertTrue(decision.reasonCodes().contains("R2_NONCONSECUTIVE_REVENUE_MONTHS"));
         assertFalse(decision.executionPermitted());
+    }
+
+    @Test void conflictingApprovedSourceRevisionsMustNotBecomeComparableRevenueInput() {
+        var src=published("QUALIFIED",2,AnalysisContext.DataSpace.SYNTHETIC,
+                false,true);
+        var row=find(evaluator.evaluate(src),"FIN-01/REV_NET_MOM");
+        assertEquals(MethodApplicabilityEvaluator.Status.BLOCKED_CONFLICT,row.status());
+        assertTrue(row.reasonCodes().contains("R2_INPUT_SOURCE_REVISION_CONFLICT"));
+        assertEquals(2,row.matchedFacts().size());
+        assertNotEquals(row.matchedFacts().getFirst().sourceRevisionId(),
+                row.matchedFacts().getLast().sourceRevisionId());
+        assertFalse(row.executionPermitted());
     }
 
     @Test void foreignTenantWrongSourceHashAndDisabledLabFailClosed() {

@@ -30,6 +30,7 @@ public final class MethodVariantRegistry {
     private static final String UNPINNED_IMPLEMENTATION = "LEGACY_UNPINNED";
     private final Map<String, MethodVariantDescriptor> entries;
     private final String fingerprint;
+    private final String catalogFingerprint;
 
     public MethodVariantRegistry(List<MethodTaskAdapter> adapters, ObjectMapper mapper) {
         Objects.requireNonNull(adapters);
@@ -40,7 +41,8 @@ public final class MethodVariantRegistry {
         var map = new TreeMap<String,MethodVariantDescriptor>();
         for (var descriptor : definitions) map.put(descriptor.methodCode(), descriptor);
         entries = Map.copyOf(map);
-        fingerprint = hash(definitions);
+        catalogFingerprint = hashCatalogResource();
+        fingerprint = combineWithCatalog(hash(definitions), catalogFingerprint);
     }
 
     public MethodVariantDescriptor require(String methodCode) {
@@ -53,6 +55,46 @@ public final class MethodVariantRegistry {
                 .sorted(Comparator.comparing(MethodVariantDescriptor::methodCode)).toList();
     }
     public String fingerprint() { return fingerprint; }
+    public String catalogFingerprint() { return catalogFingerprint; }
+
+    /** Candidate descriptors are not pinned executables; fail closed for R2.B. */
+    public void requireExecutablePlanBinding() {
+        if (entries.values().stream().anyMatch(d ->
+                "LEGACY_UNPINNED".equals(d.implementationVersion())
+                || "LEGACY_RESULT_UNVERIFIED".equals(d.resultSchemaVersion())))
+            throw new IllegalStateException("R2_METHOD_IMPLEMENTATION_NOT_PINNED");
+        throw new IllegalStateException("R2_EXECUTION_PERMIT_NOT_AVAILABLE");
+    }
+
+    private static String hashCatalogResource() {
+        try (var stream=MethodVariantRegistry.class.getResourceAsStream(RESOURCE)) {
+            if (stream==null) throw new IllegalStateException("R2_REGISTRY_CATALOG_NOT_FOUND");
+            return digest(stream.readAllBytes());
+        } catch (IOException e) {
+            throw new IllegalStateException("R2_REGISTRY_CATALOG_READ_FAILED",e);
+        }
+    }
+    static String combineWithCatalog(String descriptorsHash, String catalogHash) {
+        try {
+            var out=new java.io.ByteArrayOutputStream();
+            try (var data=new DataOutputStream(out)) {
+                write(data,"FIN_R2_A1_CATALOG_BOUND_REGISTRY_V2");
+                write(data,descriptorsHash);
+                write(data,catalogHash);
+            }
+            return digest(out.toByteArray());
+        } catch (IOException e) {
+            throw new IllegalStateException("R2_REGISTRY_FINGERPRINT_FAILED",e);
+        }
+    }
+    private static String digest(byte[] bytes) {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("R2_REGISTRY_FINGERPRINT_FAILED",e);
+        }
+    }
 
     static List<MethodVariantDescriptor> definitions() {
         var required = MethodVariantDescriptor.Role.REQUIRED;
@@ -118,6 +160,13 @@ public final class MethodVariantRegistry {
         if (!descriptors.keySet().equals(byAdapter.keySet()))
             throw new IllegalStateException("R2_REGISTRY_ADAPTER_BINDING_MISMATCH");
         for (var descriptor : descriptors.values()) {
+            // The current applicability evaluator and legacy executor only
+            // support REQUIRED. Do not silently downgrade OPTIONAL/EVIDENCE.
+            if (descriptor.inputs().stream().anyMatch(input ->
+                    input.role()!=MethodVariantDescriptor.Role.REQUIRED)
+                    || descriptor.dependencies().stream().anyMatch(edge ->
+                    edge.kind()!=MethodVariantDescriptor.Role.REQUIRED))
+                throw new IllegalStateException("R2_DEPENDENCY_KIND_NOT_YET_IMPLEMENTED");
             var source = byAdapter.get(descriptor.methodCode());
             var expected = descriptor.dependencies().stream()
                     .map(MethodVariantDescriptor.Dependency::methodCode).sorted().toList();
@@ -151,12 +200,18 @@ public final class MethodVariantRegistry {
             if (!"HOLD".equals(root.path("releaseGate").asText()) ||
                     root.path("methods").size()!=60)
                 throw new IllegalStateException("R2_REGISTRY_CATALOG_RELEASE_DRIFT");
+            MethodVariantDescriptor.requireVersion(root.path("catalogVersion").asText(),
+                    "R2_REGISTRY_CATALOG_VERSION_INVALID");
             var families = new HashSet<String>();
             for (var m : root.path("methods")) {
                 if (m.path("releaseQualified").asBoolean(true)
                         || m.path("autoRunAllowed").asBoolean(true))
                     throw new IllegalStateException("R2_REGISTRY_UNQUALIFIED_PROMOTION");
                 String code = m.path("code").asText();
+                if (!code.matches("[A-Z][A-Z0-9-]{1,30}")
+                        || !code.startsWith(m.path("group").asText()+"-")
+                        || m.path("title").asText().isBlank())
+                    throw new IllegalStateException("R2_REGISTRY_INVALID_FAMILY_METADATA");
                 if (!families.add(code))
                     throw new IllegalStateException("R2_REGISTRY_DUPLICATE_FAMILY");
             }

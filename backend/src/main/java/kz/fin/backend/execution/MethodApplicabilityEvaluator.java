@@ -33,22 +33,34 @@ public class MethodApplicabilityEvaluator {
                 throw new IllegalArgumentException("R2_APPLICABILITY_SOURCE_KEY_INVALID");
         }
     }
+    public record MatchedFact(UUID assertionId,UUID sourceRevisionId,
+                              String formCode,String formVersion,String metricCode,
+                              String metricVersion,String fromInclusive,
+                              String untilExclusive,String currency) {}
     public record Decision(String methodCode, String variantVersion, Status status,
                            List<String> reasonCodes, List<String> matchedMetrics,
-                           List<String> missingMetrics, String sourceFingerprint,
-                           String registryFingerprint) {
+                           List<String> missingMetrics, List<MatchedFact> matchedFacts,
+                           String sourceFingerprint, String registryFingerprint) {
         public Decision {
             reasonCodes = List.copyOf(reasonCodes);
             matchedMetrics = List.copyOf(matchedMetrics);
             missingMetrics = List.copyOf(missingMetrics);
+            matchedFacts = List.copyOf(matchedFacts);
         }
         public boolean executionPermitted() { return false; }
     }
     private record Publication(String hash,String dataSpace,String basis) {}
-    private record Fact(String metric,String version,String unit,String timeKind,
+    private record Fact(UUID assertionId,UUID sourceRevisionId,
+                        String formCode,String formVersion,
+                        String metric,String version,String unit,String timeKind,
                         String valueState,String measure,String declaredUnit,
                         String qualification,String basis,String currency,
-                        String startDate,String endDate,String dimensions) {}
+                        String startDate,String endDate,String dimensions) {
+        MatchedFact reference() {
+            return new MatchedFact(assertionId,sourceRevisionId,formCode,formVersion,
+                    metric,version,startDate,endDate,currency);
+        }
+    }
 
     private final JdbcTemplate jdbc;
     private final MethodVariantRegistry registry;
@@ -92,7 +104,8 @@ public class MethodApplicabilityEvaluator {
         // Pin facts in one repeatable-read transaction. LEFT JOIN exposes
         // missing/unqualified metric contracts as conflicts, not verified inputs.
         var facts=jdbc.query("""
-            SELECT a.metric_code,a.metric_version,a.unit_code,a.time_kind,
+            SELECT a.id,a.source_revision_id,sr.form_code,sr.form_version,
+                   a.metric_code,a.metric_version,a.unit_code,a.time_kind,
                    a.value_state,m.measure_kind,m.unit_code,m.qualification,
                    a.reporting_basis,a.currency_code,a.start_inclusive::text,
                    a.end_exclusive::text,a.dimensions::text
@@ -106,13 +119,15 @@ public class MethodApplicabilityEvaluator {
               ON m.metric_code=a.metric_code AND m.metric_version=a.metric_version
             WHERE s.organization_id=? AND s.fact_set_revision_id=?
               AND a.economic_entity_id=? AND a.business_scope_id=?
-            """,(rs,i)->new Fact(rs.getString(1),rs.getString(2),rs.getString(3),
-               rs.getString(4),rs.getString(5),rs.getString(6),rs.getString(7),
-               rs.getString(8),rs.getString(9),rs.getString(10),rs.getString(11),
-               rs.getString(12),rs.getString(13)),
+            """,(rs,i)->new Fact(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
+               rs.getString(3),rs.getString(4),rs.getString(5),rs.getString(6),
+               rs.getString(7),rs.getString(8),rs.getString(9),rs.getString(10),
+               rs.getString(11),rs.getString(12),rs.getString(13),rs.getString(14),
+               rs.getString(15),rs.getString(16),rs.getString(17)),
             source.organizationId(),source.factSetRevisionId(),
             source.economicEntityId(),source.businessScopeId());
 
+        if(facts.isEmpty()) throw new IllegalArgumentException("R2_SOURCE_NO_APPROVED_SELECTION");
         var output=new ArrayList<Decision>();
         for(var d:registry.all()) output.add(assess(d,source,publication,facts));
         return List.copyOf(output);
@@ -121,13 +136,14 @@ public class MethodApplicabilityEvaluator {
     private Decision assess(MethodVariantDescriptor d,SourceKey source,
                             Publication publication,List<Fact> facts) {
         var matched=new TreeSet<String>();
+        var matchedFacts=new ArrayList<MatchedFact>();
         var missing=new TreeSet<String>();
         var conflicts=new TreeSet<String>();
         boolean unresolvedPopulation=false;
         var matchedFacts=new ArrayList<Fact>();
         if(!d.supportedDataSpaces().contains(source.dataSpace()))
             return decision(d,source,Status.NOT_APPLICABLE,
-                    List.of("R2_DATA_SPACE_NOT_SUPPORTED"),matched,missing);
+                    List.of("R2_DATA_SPACE_NOT_SUPPORTED"),matched,missing,matchedFacts);
         for(var input:d.inputs()){
             if("POPULATION".equals(input.measureKind())){
                 // A metric row is never a reviewed SKU or revenue category
@@ -154,6 +170,7 @@ public class MethodApplicabilityEvaluator {
                 else compatible.add(f);
             }
             if(!compatible.isEmpty()) matched.add(input.metricCode());
+            for(var row:compatible) matchedFacts.add(row.reference());
             matchedFacts.addAll(compatible);
             if(compatible.isEmpty()) conflicts.add("R2_INPUT_UNQUALIFIED_OR_INCOMPATIBLE");
             if(compatible.stream().map(Fact::currency).distinct().count()>1)
@@ -180,6 +197,10 @@ public class MethodApplicabilityEvaluator {
                 if(months.size()>2) conflicts.add("R2_AMBIGUOUS_REVENUE_HISTORY");
                 if(compatible.size()!=months.size())
                     conflicts.add("R2_DUPLICATE_REVENUE_PERIOD");
+                if(compatible.stream().map(Fact::sourceRevisionId).distinct().count()!=1
+                    || compatible.stream().map(Fact::formCode).distinct().count()!=1
+                    || compatible.stream().map(Fact::formVersion).distinct().count()!=1)
+                    conflicts.add("R2_INPUT_SOURCE_REVISION_CONFLICT");
                 if(months.size()==2) {
                     var ordered=months.stream().sorted().toList();
                     if(!ordered.getFirst().plusMonths(1).equals(ordered.getLast()))
@@ -190,37 +211,47 @@ public class MethodApplicabilityEvaluator {
         if("FIN-04/CURRENT_RATIO".equals(d.methodCode())
                 && missing.isEmpty() && conflicts.isEmpty()) {
             if(matchedFacts.size()!=2
-                    || matchedFacts.stream().map(Fact::currency).distinct().count()!=1
-                    || matchedFacts.stream().map(Fact::version).distinct().count()!=1
-                    || matchedFacts.stream().map(Fact::startDate).distinct().count()!=1
-                    || matchedFacts.stream().map(Fact::endDate).distinct().count()!=1)
+                    || matchedFacts.stream().map(MatchedFact::currency).distinct().count()!=1
+                    || matchedFacts.stream().map(MatchedFact::metricVersion).distinct().count()!=1
+                    || matchedFacts.stream().map(MatchedFact::fromInclusive).distinct().count()!=1
+                    || matchedFacts.stream().map(MatchedFact::untilExclusive).distinct().count()!=1
+                    || matchedFacts.stream().map(MatchedFact::sourceRevisionId).distinct().count()!=1
+                    || matchedFacts.stream().anyMatch(ref ->
+                        !"F01".equals(ref.formCode())
+                        || !"FIN-LIQUIDITY-V1".equals(ref.formVersion())))
                 conflicts.add("R2_CURRENT_RATIO_PAIR_INCOMPATIBLE");
         }
         if(!conflicts.isEmpty())
             return decision(d,source,Status.BLOCKED_CONFLICT,
-                    List.copyOf(conflicts),matched,missing);
+                    List.copyOf(conflicts),matched,missing,matchedFacts);
         if(!missing.isEmpty())
             return decision(d,source,Status.BLOCKED_MISSING,
-                    List.of("R2_REQUIRED_INPUT_MISSING"),matched,missing);
+                    List.of("R2_REQUIRED_INPUT_MISSING"),matched,missing,matchedFacts);
         if(unresolvedPopulation)
             return decision(d,source,Status.UNQUALIFIED,
-                    List.of("R2_REVIEWED_POPULATION_RESOLVER_PENDING"),matched,missing);
+                    List.of("R2_REVIEWED_POPULATION_RESOLVER_PENDING"),matched,missing,matchedFacts);
         // No registry descriptor or approved metric is an ACTUAL permit.
         if("ACTUAL".equals(source.dataSpace()))
             return decision(d,source,Status.UNQUALIFIED,
-                    List.of("R2_ACTUAL_EXECUTION_PERMIT_HOLD"),matched,missing);
+                    List.of("R2_ACTUAL_EXECUTION_PERMIT_HOLD"),matched,missing,matchedFacts);
         if(!syntheticLabEnabled)
             return decision(d,source,Status.DISABLED_POLICY,
-                    List.of("R2_SYNTHETIC_LAB_DISABLED"),matched,missing);
+                    List.of("R2_SYNTHETIC_LAB_DISABLED"),matched,missing,matchedFacts);
         if("SYS/VERIFY_PUBLISHED_FACT_SET".equals(d.methodCode()))
-            return decision(d,source,Status.ELIGIBLE,List.of(),matched,missing);
+            return decision(d,source,Status.ELIGIBLE,List.of(),matched,missing,matchedFacts);
         return decision(d,source,Status.UNQUALIFIED,
-                List.of("R2_METHOD_INPUT_PASSPORT_PENDING"),matched,missing);
+                List.of("R2_METHOD_INPUT_PASSPORT_PENDING"),matched,missing,matchedFacts);
     }
     private Decision decision(MethodVariantDescriptor d,SourceKey source,Status status,
-                              List<String> reasons,Set<String> matched,Set<String> missing){
+                              List<String> reasons,Set<String> matched,Set<String> missing,
+                              List<MatchedFact> matchedFacts) {
+        var pinned=matchedFacts.stream()
+                .sorted(Comparator.comparing(MatchedFact::metricCode)
+                        .thenComparing(MatchedFact::fromInclusive)
+                        .thenComparing(MatchedFact::assertionId))
+                .toList();
         return new Decision(d.methodCode(),d.variantVersion(),status,
-                reasons,List.copyOf(matched),List.copyOf(missing),
+                reasons,List.copyOf(matched),List.copyOf(missing),pinned,
                 source.snapshotHash(),registry.fingerprint());
     }
 }
