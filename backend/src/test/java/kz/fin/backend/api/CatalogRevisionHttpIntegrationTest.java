@@ -7,6 +7,9 @@ import kz.fin.backend.intake.CatalogXlsxRoundTripService;
 import kz.fin.backend.intake.FormDraftRevisionV5Service;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.DynamicTest;
+import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -91,6 +94,47 @@ class CatalogRevisionHttpIntegrationTest {
             book.write(out);
             return out.toByteArray();
         }
+    }
+
+    @TestFactory
+    Stream<DynamicTest> all166ExposeScopedIssuedV2TemplateAndReadOnlyPreview() {
+        return CatalogCaptureRegistry.all().stream().map(form ->
+                DynamicTest.dynamicTest("HTTP-CATALOG-" + form.code(), () -> {
+                    UUID org = UUID.randomUUID(), entity = UUID.randomUUID(),
+                            scope = UUID.randomUUID();
+                    String projectCode = "X6_" + UUID.randomUUID().toString()
+                            .replace("-", "").substring(0, 14);
+                    var project = projects.createProject(org, entity, scope,
+                            projectCode, "KZT", "fin-test-user");
+                    String base = root(org, project.id(), form.code());
+                    String request = """
+                            {"economicEntityId":"%s","businessScopeId":"%s",
+                            "projectCode":"%s","reportingBasis":"MANAGEMENT",
+                            "periodType":"MONTH","periodCode":"2026.10",
+                            "coverage":"PERIOD_ONLY","currency":"KZT",
+                            "amountScale":1,"inputLocale":"ru"}
+                            """.formatted(entity, scope, projectCode);
+                    var result = mvc.perform(post(base + "/templates")
+                            .with(user(org, "FIN_SUBMIT"))
+                            .contentType(MediaType.APPLICATION_JSON).content(request))
+                            .andExpect(status().isOk())
+                            .andExpect(header().exists("X-FIN-Issued-Template"))
+                            .andReturn().getResponse();
+                    UUID templateId = UUID.fromString(
+                            result.getHeader("X-FIN-Issued-Template"));
+                    byte[] workbook = result.getContentAsByteArray();
+                    assertTrue(workbook.length > 100);
+                    var file = new MockMultipartFile("file", "issued.xlsx",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            workbook);
+                    mvc.perform(multipart(base + "/previews").file(file)
+                            .with(user(org, "FIN_SUBMIT"))
+                            .param("templateId", templateId.toString()))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.parsed.context.formCode")
+                                    .value(form.code()))
+                            .andExpect(jsonPath("$.parsed.schemaFingerprint").isNotEmpty());
+                }));
     }
 
     @Test
