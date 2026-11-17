@@ -257,7 +257,7 @@ DB migrations must be **additive, forward-only Flyway** with fresh DB and upgrad
 1. **W0 DESIGN CONTRACT**: reconcile financial source/event classes and coverage/calendar semantics, reviewable moderator identity, exact config/S2 lineage, performance threshold owners; independent architecture S2 remains pending.
 2. **R2.2 and W1.2.A:** may be implemented in separate small backend commits, but both are necessary before making a config/source-driven runnable plan.
 3. **R2.A + F166 W1.2.B:** read-only, distinct Applicability and FormImpact previews. A draft never becomes a FactSet; neither preview grants an execution permit.
-4. **R2.B PlanPreview/PlanCommit (PLAN_ONLY):** after exact trusted source, config, contract SHA, implementation SHA, calendar and profile identity are frozen; no `analysis_task`, report or SQL computation from plan commits.
+4. **R2.B PlanPreview/PlanCommit (PLAN_ONLY):** after exact trusted **single published FactSet**, config, contract SHA, implementation SHA, calendar and profile identity are frozen; no `analysis_task`, report or SQL computation from plan commits. **Composite multi-FactSet history is explicitly BLOCKED until W1.3** supplies independently reviewed TrustedComparisonSet and source selector.
 5. **W1.3 + W2:** trusted selection and bounded admission/permit/lease/cancellation are necessary before execution.
 6. **W3 read-only SYNTHETIC SHADOW:** allowed for independent SQL/Java parity and bounded performance experiments; no trusted result promotion.
 7. **W4.1 result generation/receipt and complete report-set CAS:** before persistent trusted outputs; **W4.2** destructive cohort lifecycle has its own independent DBA/ops gate.

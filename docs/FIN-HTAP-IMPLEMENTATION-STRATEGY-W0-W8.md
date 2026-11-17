@@ -78,6 +78,8 @@ R2.0/R2.0.1/R2.1 GREEN -> W0
                        -> W5 qualified DAG -> W6 perf -> W7 ops -> W8 signoff
 ```
 
+R2.B starts with the exact, verifiable existing **single-published-FactSet** path. Composite multi-FactSet history requires W1.3 TrustedComparisonSet sealing and an independently qualified selector **before** such a plan can be committed. W1.3 may follow the initial R2.B PLAN_ONLY prototype only for this restricted single-FactSet scope.
+
 A **form-change impact preview is not a methodology PlanPreview**. A draft event cannot become a trusted `FACT_SET_PUBLISHED` event by reclassification. R2.B plan authority is a predecessor of W2, whereas W4.1 is the first production-grade receipt/report-head generation. `LEGACY_TEST` is a `src/test` fixture permission only and MUST NOT become a production `fin.execution.mode`; target modes, all default disabled, are `OFF|PLAN_ONLY|SYNTHETIC_SHADOW|WORKSPACE`. R2.0.1 deny-all legacy execution must stay effective until a separately accepted executor replaces it.
 
 ## 4. Work breakdown, with stop/go proof (do not skip predecessors)

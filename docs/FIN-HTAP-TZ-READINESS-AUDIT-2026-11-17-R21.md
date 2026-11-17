@@ -117,6 +117,8 @@ CURRENT BASELINE: R2.0 + R2.0.1 + R2.1 GREEN
             W6 perf -> W7 ops -> W8
 ```
 
+**R2.B initial source scope:** PLAN_ONLY may use an existing **single published FactSet** whose exact snapshot, selected assertions and source provenance can be verified using accepted R2.A adapters. This does **not** confer support for composite multi-FactSet history. Such history stays BLOCKED until W1.3 separately seals a TrustedComparisonSet, calendar-selection policy and associated S2. W1.3's composite-history extension may thus follow a single-FactSet R2.B PLAN_ONLY prototype, but MUST precede any composite-source plan/ACTUAL execution.
+
 This graph specifies a **hard authorization dependency**, not a requirement to finish all of W4.2 before testing independent W5 read-only logic. W1.2.A and R2.2 may be developed in small independent commits. W3.1 calculations may be performed in isolation as non-persisted tests only; W4.1 must precede any trusted result promotion. No second scheduler or new trust boundary is allowed.
 
 ## 6. Mandatory RED→GREEN acceptance suite
