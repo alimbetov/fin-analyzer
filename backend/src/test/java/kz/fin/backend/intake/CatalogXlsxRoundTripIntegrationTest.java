@@ -65,6 +65,7 @@ class CatalogXlsxRoundTripIntegrationTest {
 
     @Autowired CatalogXlsxRoundTripService xlsx;
     @Autowired CatalogXlsxRevisionService revisionService;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired CatalogIssuedTemplateService issuedService;
     @Autowired FinancialReportSnapshotService reportSnapshotService;
     @Autowired CatalogXlsxExportService xlsxExportService;
@@ -341,6 +342,18 @@ class CatalogXlsxRoundTripIntegrationTest {
                             0, "catalog-author", "");
                     assertEquals(1, confirmed.revisionNumber());
                     assertEquals(issuedSaved.id(), confirmed.draftId());
+                    // W1.F166: all 166 source codes produce one tenant-scoped
+                    // immutable DRAFT change signal, never a published FactSet.
+                    assertEquals(1L, jdbc.queryForObject("""
+                            SELECT count(*) FROM fin_exec.form_change_journal
+                            WHERE organization_id=? AND slot_id=? AND revision_id=?
+                              AND event_type='TENANT_FORM_REVISION_CONFIRMED'
+                            """, Long.class, context.organizationId(),
+                            confirmed.slotId(), confirmed.revisionId()));
+                    assertEquals(0L, jdbc.queryForObject("""
+                            SELECT count(*) FROM fin_exec.fact_publication_outbox
+                            WHERE organization_id=?
+                            """, Long.class, context.organizationId()));
                     assertEquals(confirmed.revisionId(),
                             revisionService.current(context.organizationId(),
                                     project.id(), confirmed.slotId()).revisionId());
@@ -1139,6 +1152,11 @@ class CatalogXlsxRoundTripIntegrationTest {
         assertEquals(2, history.size());
         assertEquals(2, revisionService.current(
                 context.organizationId(), project.id(), first.slotId()).revisionNumber());
+        assertEquals(2L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.form_change_journal
+                WHERE organization_id=? AND slot_id=?
+                """, Long.class, context.organizationId(), first.slotId()),
+                "The losing concurrent confirmation may not produce an event");
     }
 
     @Test void documentEvidenceSupportsSixOfflineFormatsAndRejectsMismatches() throws Exception {
@@ -1302,6 +1320,11 @@ class CatalogXlsxRoundTripIntegrationTest {
         assertEquals(1, duplicate.revisionNumber());
         assertEquals(1, revisionService.history(context.organizationId(),
                 project.id(), first.slotId()).size());
+        assertEquals(1L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.form_change_journal
+                WHERE organization_id=? AND slot_id=?
+                """, Long.class, context.organizationId(), first.slotId()),
+                "Identical data must not enqueue another HTAP event");
 
         byte[] changedWorkbook = edit(workbook, b -> b.getSheet("FIN_Data")
                 .getRow(1).getCell(0).setCellValue("NEW-ROW"));
@@ -1313,6 +1336,11 @@ class CatalogXlsxRoundTripIntegrationTest {
         assertEquals(first.revisionId(), second.parentRevisionId());
         assertEquals(2, revisionService.history(context.organizationId(),
                 project.id(), first.slotId()).size());
+        assertEquals(2L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.form_change_journal
+                WHERE organization_id=? AND slot_id=?
+                """, Long.class, context.organizationId(), first.slotId()),
+                "Changed source must create exactly one new event");
     }
 
 
@@ -1377,6 +1405,76 @@ class CatalogXlsxRoundTripIntegrationTest {
                 "Same ordered content and same evidence must remain idempotent");
         assertEquals(2, revisionService.history(context.organizationId(),
                 project.id(), second.slotId()).size());
+    }
+
+    @Test void tenantFormChangeJournalIsImmutableTenantBoundAndNotAComputePermit() {
+        var c = context("DF-AST-01");
+        var project = projectService.createProject(c.organizationId(),
+                c.entityId(), c.businessScopeId(), c.projectCode(),
+                c.currency(), "htap-author");
+        byte[] source = filled(c.formCode(), xlsx.generate(c));
+        var draft = xlsx.saveDraft(c, source, null);
+        var confirmed = revisionService.confirm(c.organizationId(), project.id(),
+                draft.id(), draft.normalizedFingerprint(), 0, "htap-author", "");
+        assertEquals(1L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.form_change_journal
+                WHERE organization_id=? AND revision_id=? AND slot_id=?
+                  AND event_type='TENANT_FORM_REVISION_CONFIRMED'
+                """, Long.class, c.organizationId(),
+                confirmed.revisionId(), confirmed.slotId()));
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                UPDATE fin_exec.form_change_journal
+                SET event_type=event_type WHERE revision_id=?
+                """, confirmed.revisionId()));
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                DELETE FROM fin_exec.form_change_journal WHERE revision_id=?
+                """, confirmed.revisionId()));
+        // Even a correct ID cannot be used to forge another tenant's
+        // notification: the composite (slot_id, organization_id) FK blocks it.
+        assertThrows(DataAccessException.class, () -> jdbc.update("""
+                INSERT INTO fin_exec.form_change_journal
+                    (event_id,organization_id,slot_id,revision_id,event_type)
+                VALUES (?,?,?,?,'TENANT_FORM_REVISION_CONFIRMED')
+                """, UUID.randomUUID(), UUID.randomUUID(), confirmed.slotId(),
+                confirmed.revisionId()));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.fact_publication_outbox
+                WHERE organization_id=?
+                """, Long.class, c.organizationId()));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.analysis_run
+                WHERE organization_id=?
+                """, Long.class, c.organizationId()));
+    }
+
+    @Test void tenantFormRevisionAndEventRollbackTogether() {
+        var c = context("DF-AST-02");
+        var project = projectService.createProject(c.organizationId(),
+                c.entityId(), c.businessScopeId(), c.projectCode(),
+                c.currency(), "htap-author");
+        var draft = xlsx.saveDraft(c, filled(c.formCode(), xlsx.generate(c)), null);
+        var rolledBack = new java.util.concurrent.atomic.AtomicReference<UUID>();
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        assertThrows(IllegalStateException.class, () -> transaction.execute(status -> {
+            var confirmed = revisionService.confirm(c.organizationId(), project.id(),
+                    draft.id(), draft.normalizedFingerprint(), 0, "htap-author", "");
+            rolledBack.set(confirmed.revisionId());
+            assertEquals(1L, jdbc.queryForObject("""
+                    SELECT count(*) FROM fin_exec.form_change_journal WHERE revision_id=?
+                    """, Long.class, confirmed.revisionId()));
+            throw new IllegalStateException("INTENTIONAL_HTAP_ROLLBACK");
+        }));
+        assertNotNull(rolledBack.get());
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_revision WHERE id=?
+                """, Long.class, rolledBack.get()));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_exec.form_change_journal WHERE revision_id=?
+                """, Long.class, rolledBack.get()));
+        assertEquals(0L, jdbc.queryForObject("""
+                SELECT count(*) FROM fin_intake.catalog_xlsx_slot
+                WHERE organization_id=? AND project_id=? AND form_code=?
+                """, Long.class, c.organizationId(), project.id(), c.formCode()));
     }
 
     @Test void originalDocumentChecksumParticipatesInDuplicateDetection() {
