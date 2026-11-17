@@ -26,7 +26,10 @@ public class FieldMetricContractAuditService {
       String captureMode,String qualificationState,String locale,
       List<FieldView> fields) {}
   private final JdbcTemplate db;
-  public FieldMetricContractAuditService(JdbcTemplate db){this.db=db;}
+  private final FieldMetricLabelCandidateLookup labelCandidates;
+  public FieldMetricContractAuditService(JdbcTemplate db,FieldMetricLabelCandidateLookup labelCandidates){
+    this.db=db;this.labelCandidates=labelCandidates;
+  }
   private static String locale(String l){
     if(!Set.of("ru","kk","en","zh-Hans").contains(l))
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"UNSUPPORTED_LOCALE");
@@ -84,6 +87,7 @@ public class FieldMetricContractAuditService {
         rs.getString("qualification_state"),l,List.of()),formCode);
     if(forms.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"FORM_NOT_FOUND");
     FormView current=forms.getFirst();
+    var localizedCandidates=labelCandidates.fields(formCode,l);
     List<FieldView> fields=db.query("""
       SELECT f.form_code,f.current_version_id,v.schema_sha256,
              ff.field_code,ff.field_type,ff.input_mode,ff.required,
@@ -110,14 +114,18 @@ public class FieldMetricContractAuditService {
           "STALE_SCHEMA_REVIEW_REQUIRED":"MATCHED_UNQUALIFIED";
         if("PENDING_TRANSLATION".equals(status)||title==null||title.isBlank()
             ||title.equals(rs.getString("field_code")))title=null;
+        if(title==null){
+          var candidate=localizedCandidates.get(rs.getString("field_code"));
+          if(candidate==null)throw new IllegalStateException("MISSING_FIELD_LABEL");
+          title=candidate.title();status=candidate.reviewStatus();
+        }
         return new FieldView(rs.getString("form_code"),
           (UUID)rs.getObject("current_version_id"),rs.getString("field_code"),
           rs.getString("metric_code"),rs.getString("semantic_role"),
           rs.getString("field_type"),rs.getString("input_mode"),
           rs.getBoolean("required"),rs.getString("unit_policy"),
           contractSha,binding,rs.getString("review_state"),l,
-          title,title==null?"PENDING_TRANSLATION":
-            status==null?"PENDING_TRANSLATION":status);
+          title,status);
       },l,formCode);
     if(fields.size()>1000)throw new IllegalStateException("TOO_MANY_FIELDS_IN_ONE_FORM");
     return new FormView(current.formCode(),current.formVersionId(),
