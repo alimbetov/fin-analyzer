@@ -215,10 +215,10 @@ public class FormDraftService {
     // New instances use the current version; each subsequent immutable
     // revision stays on its originally selected financial/schema contract.
     if(inst.getCurrentRevisionId()!=null){
-      var previous=revisions.findById(inst.getCurrentRevisionId()).orElseThrow();
-      if(!previous.getInstanceId().equals(inst.getId()))
+      var previousRevision=revisions.findById(inst.getCurrentRevisionId()).orElseThrow();
+      if(!previousRevision.getInstanceId().equals(inst.getId()))
         throw new IllegalStateException("REVISION_INSTANCE_INTEGRITY");
-      version=versions.findById(previous.getFormVersionId()).orElseThrow();
+      version=versions.findById(previousRevision.getFormVersionId()).orElseThrow();
       if(!version.getFormId().equals(form.getId()))
         throw new IllegalStateException("REVISION_FORM_VERSION_INTEGRITY");
     }
