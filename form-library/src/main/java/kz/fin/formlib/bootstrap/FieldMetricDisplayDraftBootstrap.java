@@ -118,7 +118,7 @@ public class FieldMetricDisplayDraftBootstrap implements ApplicationRunner {
       rs.getString("field_code"),rs.getString("contract_sha256")));
     if(fields.size()!=877||number("lib_metric_definition")!=840)
       throw new IllegalStateException("DISPLAY_SOURCE_COUNT_DRIFT");
-    var metricCodes=db.queryForList("""
+    var metricCodes=db.query("""
       SELECT metric_code,source_field_code FROM fin_lib.lib_metric_definition
       ORDER BY metric_code
       """,(rs,i)->new String[]{rs.getString("metric_code"),
