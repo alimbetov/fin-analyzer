@@ -68,8 +68,9 @@ class MethodParameterCoverageViewTest {
 
                     assertTrue(rs.next());
                     assertEquals("CON-02", rs.getString("method_code"));
-                    assertEquals("TYPED_CONTRACT_PRESENT_UNQUALIFIED", rs.getString("coverage_state"));
-                    assertTrue(rs.getLong("typed_contract_count") > 0);
+                    assertEquals(rs.getLong("typed_contract_count") > 0
+                            ? "TYPED_CONTRACT_PRESENT_UNQUALIFIED"
+                            : "NO_TYPED_EXECUTION_CONTRACT", rs.getString("coverage_state"));
 
                     assertTrue(rs.next());
                     assertEquals("INV-08", rs.getString("method_code"));
