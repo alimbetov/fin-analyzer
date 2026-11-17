@@ -11,6 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,7 +39,8 @@ public class HtapBlockedPlanOnlyService {
     public record Node(String methodCode, String variantVersion, String status,
                        String applicabilityStatus, List<String> reasonCodes,
                        List<String> dependencyCodes, String sourceFingerprint,
-                       String registryFingerprint, boolean executionPermitted) {
+                       String registryFingerprint, String exactSliceFingerprint,
+                       boolean executionPermitted) {
         public Node {
             reasonCodes=List.copyOf(reasonCodes);
             dependencyCodes=List.copyOf(dependencyCodes);
@@ -102,12 +107,13 @@ public class HtapBlockedPlanOnlyService {
                 throw new IllegalStateException("FIN_HTAP_DUPLICATE_METHOD_DECISION");
         }
 
+        String exactSliceFingerprint = fingerprintSlice(key);
         var ordered=new ArrayList<Node>();
         var visited=new HashSet<String>();
         var visiting=new HashSet<String>();
         for(var descriptor:registry.all())
             appendDependencyFirst(descriptor.methodCode(),byCode,visited,visiting,
-                    ordered,slice.reasonCode());
+                    ordered,slice.reasonCode(),exactSliceFingerprint);
 
         List<Long> epochs=jdbc.query("""
             SELECT catalog_epoch FROM fin_calc.htap_catalog_epoch
@@ -120,14 +126,14 @@ public class HtapBlockedPlanOnlyService {
     private void appendDependencyFirst(
             String methodCode,Map<String,MethodApplicabilityEvaluator.Decision> byCode,
             Set<String> visited, Set<String> visiting,
-            List<Node> ordered,String mappingReason) {
+            List<Node> ordered,String mappingReason,String exactSliceFingerprint) {
         if(visited.contains(methodCode))return;
         if(!visiting.add(methodCode))
             throw new IllegalStateException("FIN_HTAP_DAG_CYCLE");
         var descriptor=registry.require(methodCode);
         for(var dependency:descriptor.dependencies())
             appendDependencyFirst(dependency.methodCode(),byCode,visited,visiting,
-                    ordered,mappingReason);
+                    ordered,mappingReason,exactSliceFingerprint);
         visiting.remove(methodCode);
         visited.add(methodCode);
         var decision=byCode.get(methodCode);
@@ -141,7 +147,19 @@ public class HtapBlockedPlanOnlyService {
                 decision.status().name(),List.copyOf(reasons),
                 descriptor.dependencies().stream().map(MethodVariantDescriptor.Dependency::methodCode)
                         .toList(),
-                decision.sourceFingerprint(),decision.registryFingerprint(),false));
+                decision.sourceFingerprint(),decision.registryFingerprint(),
+                exactSliceFingerprint,false));
+    }
+
+    private String fingerprintSlice(HtapFinancialSliceKey key) {
+        try {
+            String payload=json.writeValueAsString(key);
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(("FIN:HTAP:SLICE:JSON-V1|" + payload)
+                            .getBytes(StandardCharsets.UTF_8)));
+        } catch (JsonProcessingException | NoSuchAlgorithmException e) {
+            throw new IllegalStateException("FIN_HTAP_SLICE_FINGERPRINT_FAILED",e);
+        }
     }
 
     /**
