@@ -55,6 +55,14 @@ class HtapFin01TypedConfigPostgresTest {
     }
     private UUID config(UUID contractId,String parameters,String engine,String version) {
         UUID id=UUID.randomUUID();
+        record Parent(UUID id,int version) {}
+        var prior=jdbc.query("""
+            SELECT config_id,version_no FROM fin_calc.method_config_version
+            WHERE method_code='FIN-01' AND variant_code='REV_NET_MOM'
+            ORDER BY version_no DESC LIMIT 1
+            """,(rs,i)->new Parent(rs.getObject(1,UUID.class),rs.getInt(2)));
+        UUID parentId=prior.isEmpty()?null:prior.getFirst().id();
+        int nextVersion=prior.isEmpty()?1:prior.getFirst().version()+1;
         String classSha=HtapRuntimeClassDigest.inspect(Fin01RevenueMomSqlModule.class)
                 .classSha256();
         jdbc.update("""
@@ -62,9 +70,9 @@ class HtapFin01TypedConfigPostgresTest {
                 config_id,method_code,variant_code,version_no,parent_config_id,
                 contract_id,engine,algorithm_id,algorithm_version,algorithm_sha256,
                 parameters,params_sha256,effective_sha256,created_by)
-            VALUES (?,'FIN-01','REV_NET_MOM',1,NULL,?,?,
+            VALUES (?,'FIN-01','REV_NET_MOM',?,?,?,?,
                 'FIN-01/REV_NET_MOM',?,?,?::jsonb,?,?,'config-author')
-            """,id,contractId,engine,version,classSha,parameters,
+            """,id,nextVersion,parentId,contractId,engine,version,classSha,parameters,
                 "0".repeat(64),"0".repeat(64));
         return id;
     }
@@ -143,17 +151,14 @@ class HtapFin01TypedConfigPostgresTest {
                 'FIN01_MONTHLY_MOM_TYPED_V1',?::jsonb,?,'forger')
             """,candidate,"wrong-"+candidate,canonicalSchema(),"0".repeat(64)));
         UUID valid=contract(canonicalSchema());
-        UUID config=config(valid,VALID,"SQL","R2_SQL_PILOT_1");
         assertEquals(0L,jdbc.queryForObject("""
-            SELECT count(*) FROM fin_calc.method_config_review WHERE config_id=?
-            """,Long.class,config));
+            SELECT count(*) FROM fin_calc.method_config_version WHERE contract_id=?
+            """,Long.class,valid));
+        // The contract never creates a review, active pointer, task or permit.
         assertEquals(0L,jdbc.queryForObject("""
-            SELECT count(*) FROM fin_calc.method_active_config WHERE config_id=?
-            """,Long.class,config));
-        assertThrows(DataAccessException.class,()->jdbc.update("""
-            INSERT INTO fin_calc.method_active_config(
-                method_code,variant_code,config_id,pointer_version,activated_by)
-            VALUES ('FIN-01','REV_NET_MOM',?,1,'forger')
-            """,config));
+            SELECT count(*) FROM fin_calc.method_config_review r
+            JOIN fin_calc.method_config_version v ON v.config_id=r.config_id
+            WHERE v.contract_id=?
+            """,Long.class,valid));
     }
 }
