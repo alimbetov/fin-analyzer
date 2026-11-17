@@ -3,6 +3,7 @@ package kz.fin.backend.api;
 import kz.fin.backend.intake.CatalogIssuedTemplateService;
 import kz.fin.backend.intake.CatalogXlsxRevisionService;
 import kz.fin.backend.intake.CatalogXlsxRoundTripService;
+import kz.fin.backend.intake.FinancialReportSnapshotService;
 import kz.fin.backend.intake.ReportingPeriodV5;
 import kz.fin.backend.security.FinanceAccessPolicy;
 import kz.fin.backend.security.FinanceAccessPolicy.Permission;
@@ -38,13 +39,16 @@ public class CatalogRevisionHttpController {
     private final FinanceAccessPolicy access;
     private final CatalogIssuedTemplateService issued;
     private final CatalogXlsxRevisionService revisions;
+    private final FinancialReportSnapshotService snapshots;
 
     public CatalogRevisionHttpController(FinanceAccessPolicy access,
                                          CatalogIssuedTemplateService issued,
-                                         CatalogXlsxRevisionService revisions) {
+                                         CatalogXlsxRevisionService revisions,
+                                         FinancialReportSnapshotService snapshots) {
         this.access = access;
         this.issued = issued;
         this.revisions = revisions;
+        this.snapshots = snapshots;
     }
 
     public record TemplateRequest(UUID economicEntityId, UUID businessScopeId,
@@ -169,4 +173,24 @@ public class CatalogRevisionHttpController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(revisions.history(organizationId, projectId, slotId));
     }
+    /** Immutable historical values, pinned by revision ID and complete period context. */
+    @GetMapping("/revisions/{revisionId}")
+    public ResponseEntity<FinancialReportSnapshotService.Snapshot> revision(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID organizationId,
+            @PathVariable UUID projectId, @PathVariable String formCode,
+            @PathVariable UUID revisionId,
+            @RequestParam ReportingPeriodV5.Type periodType,
+            @RequestParam String periodCode,
+            @RequestParam(required = false) String reportingBasis,
+            @RequestParam(required = false) ReportingPeriodV5.Coverage coverage,
+            @RequestParam(required = false) String currency,
+            @RequestParam(required = false) Integer amountScale) {
+        access.require(jwt, organizationId, Permission.FIN_READ);
+        var query = new FinancialReportSnapshotService.Query(organizationId, projectId,
+                formCode, periodType, periodCode, reportingBasis, coverage, currency,
+                amountScale, revisionId, null);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(snapshots.load(query));
+    }
+
 }
