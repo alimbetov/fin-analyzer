@@ -4,7 +4,6 @@ import kz.fin.backend.domain.EconomicKernel;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
-import java.util.EnumMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -128,7 +127,7 @@ class HtapCalculationPeriodPolicyTest {
                         EconomicKernel.TimeKind.INTERVAL));
         assertThrows(IllegalArgumentException.class,
                 () -> HtapCalculationPeriodPolicy.classify(
-                        ReportingPeriodV5.Type.WEEK, "2026-W53",
+                        ReportingPeriodV5.Type.WEEK, "2025-W53",
                         ReportingPeriodV5.Coverage.PERIOD_ONLY,
                         EconomicKernel.TimeKind.INTERVAL));
     }
