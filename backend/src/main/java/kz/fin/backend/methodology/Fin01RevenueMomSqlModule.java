@@ -23,7 +23,7 @@ public final class Fin01RevenueMomSqlModule implements MethodModule {
     public static final String CODE = "FIN-01/REV_NET_MOM";
     public static final String VERSION = "R2_SQL_PILOT_1";
     private final JdbcTemplate jdbc;
-    private static final String ZERO_HASH = "0".repeat(64);
+    private static final String EMPTY_PARAMETERS_HASH = hash("FIN01_SQL_NO_PARAMETERS_V1");
 
     public Fin01RevenueMomSqlModule(JdbcTemplate jdbc) {
         this.jdbc = Objects.requireNonNull(jdbc);
@@ -111,6 +111,7 @@ public final class Fin01RevenueMomSqlModule implements MethodModule {
         """;
 
     @Transactional(readOnly=true, isolation=Isolation.REPEATABLE_READ)
+    @Override
     public MethodResultEnvelope calculate(MethodTaskAdapter.TrustedRevision source) {
         Objects.requireNonNull(source);
         if (!"SYNTHETIC".equals(source.dataSpace()))
@@ -173,7 +174,7 @@ public final class Fin01RevenueMomSqlModule implements MethodModule {
                 "|"+f.endExclusive()+"|"+f.metricVersion()+"|"+f.currency()+
                 "|"+f.valueState()+"|"+f.amount().stripTrailingZeros().toPlainString())
                 .reduce("",(a,b)->a+"|"+b));
-        var input=new MethodInput(source,CODE,VERSION,fingerprint,ZERO_HASH,facts);
+        var input=new MethodInput(source,CODE,VERSION,fingerprint,EMPTY_PARAMETERS_HASH,facts);
         String status,reason;
         BigDecimal percent;
         if (previous.value().signum()<=0) {
