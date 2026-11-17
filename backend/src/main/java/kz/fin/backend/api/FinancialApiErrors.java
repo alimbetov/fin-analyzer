@@ -22,10 +22,16 @@ public class FinancialApiErrors {
         String message=e.getMessage()==null?"INVALID_FINANCIAL_REQUEST":e.getMessage();
         if(message.equals("FIN_EXPORT_AMBIGUOUS_CONTEXT") ||
            message.equals("FIN_EXPORT_REVISION_CHANGED") ||
-           message.equals("FIN_EXPORT_SCHEMA_INCOMPATIBLE"))
+           message.equals("FIN_EXPORT_SCHEMA_INCOMPATIBLE") ||
+           message.equals("FIN_CATALOG_REVISION_CONFLICT"))
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("code",message));
-        if(message.equals("FIN_EXPORT_REVISION_NOT_FOUND"))
+        if(message.equals("FIN_CATALOG_DRAFT_PROJECT_MISMATCH") ||
+           message.equals("FIN_CATALOG_SLOT_NOT_FOUND") ||
+           message.equals("FIN_CATALOG_CURRENT_NOT_FOUND") ||
+           message.equals("FIN_CATALOG_ISSUED_NOT_FOUND") ||
+           message.equals("FIN_CATALOG_ISSUED_PROJECT_MISMATCH") ||
+           message.equals("FIN_EXPORT_REVISION_NOT_FOUND"))
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("code","NOT_FOUND_OR_FORBIDDEN"));
         if(message.equals("INTAKE_NOT_FOUND_OR_FORBIDDEN") ||
