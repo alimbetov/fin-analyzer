@@ -106,9 +106,9 @@ BEGIN
       IF NEW.engine<>'JAVA' OR NEW.algorithm_version<>'CON02_ABC_BOUNDARY_V1' THEN
         RAISE EXCEPTION 'FIN_METHOD_TYPED_ALGORITHM_INCOMPATIBLE';
       END IF;
-      IF jsonb_typeof(NEW.parameters->'boundaryCrossingPolicy')<>'string'
+      IF jsonb_typeof(NEW.parameters->'boundaryCrossingPolicy') IS DISTINCT FROM 'string'
         OR NEW.parameters->>'boundaryCrossingPolicy'
-            <> 'CROSSING_ITEM_PREVIOUS_CLASS_UNROUNDED' THEN
+            IS DISTINCT FROM 'CROSSING_ITEM_PREVIOUS_CLASS_UNROUNDED' THEN
         RAISE EXCEPTION 'FIN_METHOD_ABC_BOUNDARY_POLICY_UNSUPPORTED';
       END IF;
       NEW.parameters := jsonb_build_object(
@@ -120,17 +120,17 @@ BEGIN
     END IF;
   ELSIF c.validation_profile='CON01_PARETO_FIXED_V1' THEN
     IF (SELECT count(*) FROM jsonb_object_keys(NEW.parameters))<>3
-       OR jsonb_typeof(NEW.parameters->'tieSortPolicy')<>'string'
-       OR jsonb_typeof(NEW.parameters->'populationMetric')<>'string'
-       OR jsonb_typeof(NEW.parameters->'returnsPolicy')<>'string' THEN
+       OR jsonb_typeof(NEW.parameters->'tieSortPolicy') IS DISTINCT FROM 'string'
+       OR jsonb_typeof(NEW.parameters->'populationMetric') IS DISTINCT FROM 'string'
+       OR jsonb_typeof(NEW.parameters->'returnsPolicy') IS DISTINCT FROM 'string' THEN
       RAISE EXCEPTION 'FIN_METHOD_PARETO_PARAMETERS_INVALID';
     END IF;
     IF NEW.engine<>'JAVA' OR NEW.algorithm_version<>'CON01_PARETO_V1' THEN
       RAISE EXCEPTION 'FIN_METHOD_TYPED_ALGORITHM_INCOMPATIBLE';
     END IF;
-    IF NEW.parameters->>'tieSortPolicy'<>'AMOUNT_DESC_SKU_CODE_ASC'
-       OR NEW.parameters->>'populationMetric'<>'NET_SALES'
-       OR NEW.parameters->>'returnsPolicy'<>'REVIEWED_NET_RECONCILED' THEN
+    IF NEW.parameters->>'tieSortPolicy' IS DISTINCT FROM 'AMOUNT_DESC_SKU_CODE_ASC'
+       OR NEW.parameters->>'populationMetric' IS DISTINCT FROM 'NET_SALES'
+       OR NEW.parameters->>'returnsPolicy' IS DISTINCT FROM 'REVIEWED_NET_RECONCILED' THEN
       RAISE EXCEPTION 'FIN_METHOD_PARETO_UNSUPPORTED_POLICY';
     END IF;
     NEW.parameters := jsonb_build_object(
