@@ -476,8 +476,27 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
         var evidence=new HtapFin01EvidenceBindingService.Evidence(
                 plan.id(),config,review,artifact,lock,manifest,
                 "test-untrusted-key","A".repeat(88));
-        var bound=evidenceBindings.bindUnverified(f.org(),evidence,planner);
+        // Two independent transactions competing for the same immutable plan
+        // must converge on one binding, never create two execution records.
+        var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        HtapFin01EvidenceBindingService.Binding bound;
+        try {
+            var latch=new java.util.concurrent.CountDownLatch(1);
+            var first=pool.submit(()->{latch.await();return evidenceBindings.bindUnverified(
+                    f.org(),evidence,planner);});
+            var second=pool.submit(()->{latch.await();return evidenceBindings.bindUnverified(
+                    f.org(),evidence,planner);});
+            latch.countDown();
+            bound=first.get(60,java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(bound,second.get(60,java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            pool.shutdownNow();
+        }
         assertEquals(bound,evidenceBindings.bindUnverified(f.org(),evidence,planner));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.htap_fin01_evidence_binding
+            WHERE organization_id=? AND blocked_pair_id=?
+            """,Long.class,f.org(),plan.id()));
         assertEquals("EVIDENCE_BOUND_HOLD",bound.state());
         assertFalse(bound.executionPermitted());
         assertEquals(64,bound.bindingSha256().length());
