@@ -15,6 +15,7 @@ public class LibReportDefinition {
 @Column(name="period_type",nullable=false) private String periodType;
 @Column(name="time_axis",nullable=false) private String timeAxis;
 @Column(name="layout_version",nullable=false) private Integer layoutVersion;
+@Column(name="format_version",nullable=false) private Integer formatVersion;
 @Column(name="latest_revision_no",nullable=false) private Integer latestRevisionNo;
 @Column(name="current_revision_id") private UUID currentRevisionId;
 @Version
@@ -35,6 +36,8 @@ public String getPeriodType(){return periodType;}
 public void setPeriodType(String v){periodType=v;}
 public String getTimeAxis(){return timeAxis;}
 public void setTimeAxis(String v){timeAxis=v;}
+public Integer getFormatVersion(){return formatVersion;}
+public void setFormatVersion(Integer v){formatVersion=v;}
 public Integer getLayoutVersion(){return layoutVersion;}
 public void setLayoutVersion(Integer v){layoutVersion=v;}
 public Integer getLatestRevisionNo(){return latestRevisionNo;}
