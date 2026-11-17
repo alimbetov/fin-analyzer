@@ -1,6 +1,7 @@
 package kz.fin.formlib.api;
 import kz.fin.formlib.service.ReportGridService;
 import kz.fin.formlib.service.ReportFormatService;
+import kz.fin.formlib.service.ReportInputValidationService;
 import java.util.List;
 import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
@@ -10,8 +11,10 @@ import java.util.UUID;
 public class ReportGridController {
   private final ReportGridService service;
   private final ReportFormatService formats;
-  public ReportGridController(ReportGridService service,ReportFormatService formats){
-    this.service=service;this.formats=formats;
+  private final ReportInputValidationService validation;
+  public ReportGridController(ReportGridService service,ReportFormatService formats,
+      ReportInputValidationService validation){
+    this.service=service;this.formats=formats;this.validation=validation;
   }
   @PostMapping
   public ReportGridService.CreateReceipt create(@RequestBody ReportGridService.CreateReport req){
@@ -57,5 +60,24 @@ public class ReportGridController {
   public ReportFormatService.UpdateFormatReceipt updateFormats(@PathVariable UUID id,
       @RequestBody ReportFormatService.UpdateFormatRequest request){
     return formats.update(id,request);
+  }
+
+  @GetMapping("/{id}/validation")
+  public List<ReportInputValidationService.RuleView> rules(@PathVariable UUID id,
+      @RequestParam UUID organizationId,@RequestParam(required=false) Integer validationVersion) {
+    return validation.getRules(id,organizationId,validationVersion);
+  }
+
+  @PutMapping("/{id}/validation")
+  public ReportInputValidationService.UpdateReceipt updateRules(@PathVariable UUID id,
+      @RequestBody ReportInputValidationService.UpdateRequest request) {
+    return validation.update(id,request);
+  }
+
+  public record PreviewRequest(UUID organizationId,List<ReportGridService.CellInput> cells) {}
+  @PostMapping("/{id}/validate")
+  public ReportInputValidationService.ValidationResult previewValidation(@PathVariable UUID id,
+      @RequestBody PreviewRequest request) {
+    return validation.validateSnapshot(id,request.organizationId(),request.cells());
   }
 }

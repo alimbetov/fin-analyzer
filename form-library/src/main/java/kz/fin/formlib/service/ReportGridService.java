@@ -60,6 +60,7 @@ public class ReportGridService {
   private final LibCurrencyRepository currencies;
   private final ObjectMapper json;
   private final ReportFormatService formatService;
+  private final ReportInputValidationService inputValidator;
 
   public ReportGridService(LibReportDefinitionRepository reports,
        LibReportMetricRepository reportMetrics,LibReportPeriodRepository reportPeriods,
@@ -68,12 +69,12 @@ public class ReportGridService {
        LibMetricTranslationRepository metricTranslations,FormDefinitionRepository forms,
        FormVersionRepository versions,FormFieldRepository fields,
        LibCurrencyRepository currencies,ObjectMapper json,
-       ReportFormatService formatService) {
+       ReportFormatService formatService,ReportInputValidationService inputValidator) {
     this.reports=reports;this.reportMetrics=reportMetrics;this.reportPeriods=reportPeriods;
     this.revisions=revisions;this.revisionCells=revisionCells;this.receipts=receipts;
     this.metrics=metrics;this.metricTranslations=metricTranslations;this.forms=forms;
     this.versions=versions;this.fields=fields;this.currencies=currencies;this.json=json;
-    this.formatService=formatService;
+    this.formatService=formatService;this.inputValidator=inputValidator;
   }
   private static ResponseStatusException invalid(String error) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,error);
@@ -201,6 +202,7 @@ public class ReportGridService {
     report.setReportCode(code);report.setTitle(title);report.setCurrencyCode(currency.getCode());
     report.setPeriodType(periodType);report.setTimeAxis(timeAxis);
     report.setLayoutVersion(1);report.setFormatVersion(1);
+    report.setValidationVersion(1);
     report.setLatestRevisionNo(0);
     report.setCreatedAt(Instant.now());
     reports.saveAndFlush(report);
@@ -223,6 +225,7 @@ public class ReportGridService {
     }
     reportMetrics.flush();reportPeriods.flush();
     formatService.initialize(report);
+    inputValidator.initialize(report);
     return new CreateReceipt(report.getId(),code,selectedMetrics.size(),
        selectedPeriods.size(),timeAxis);
   }
@@ -265,6 +268,16 @@ public class ReportGridService {
       if(normalized.containsKey(identity))throw invalid("DUPLICATE_METRIC_PERIOD_CELL");
       normalized.put(identity,new Value(state,canonical));pairs.put(identity,pair);
     }
+    List<CellInput> normalizedInputs=new ArrayList<>();
+    normalized.forEach((key,value)->{
+      var p=pairs.get(key);
+      normalizedInputs.add(new CellInput(p.metric(),p.period(),value.state(),value.value()));
+    });
+    var validation=inputValidator.validateSnapshot(reportId,req.organizationId(),normalizedInputs);
+    if(!validation.valid()){
+      var error=validation.issues().getFirst();
+      throw invalid("VALIDATION_FAILED:"+error.code()+":"+error.metricCode()+":"+error.periodCode());
+    }
     List<List<String>> canon=new ArrayList<>();
     normalized.forEach((k,v)->{var p=pairs.get(k);
       canon.add(Arrays.asList(p.metric(),p.period(),v.state(),v.value()));});
@@ -289,6 +302,8 @@ public class ReportGridService {
     rev.setRevisionNo(req.expectedRevision()+1);rev.setCanonicalContentSha256(dataSha);
     rev.setCreatedAt(Instant.now());rev.setCreatedBy(actor);rev.setChangeReason(reason);
     rev.setSourceKind(req.sourceKind());rev.setQualificationState("UNQUALIFIED_DRAFT");
+    rev.setValidationVersion(validation.validationVersion());
+    rev.setValidationSha256(validation.rulesSha256());
     revisions.saveAndFlush(rev);
     for(var kv:normalized.entrySet()){
       var pair=pairs.get(kv.getKey());var val=kv.getValue();
