@@ -156,16 +156,23 @@ public class HtapFin01AdmissionPreflight {
             """,(rs,i)->new ActiveConfig(rs.getString(1),rs.getString(2),
                 rs.getString(3),rs.getString(4),rs.getString(5),
                 rs.getString(6)));
-        if(configs.size()!=1
-                || !"APPROVED".equals(configs.getFirst().reviewDecision())
-                || !"QUALIFIED".equals(configs.getFirst().qualification())
-                || !"R2_SQL_PILOT_1".equals(configs.getFirst().algorithmVersion())
-                || !"FIN01_MOM_V1".equals(configs.getFirst().profile())) {
+        boolean typedConfigValidated=configs.size()==1
+                && "APPROVED".equals(configs.getFirst().reviewDecision())
+                && "QUALIFIED".equals(configs.getFirst().qualification())
+                && "R2_SQL_PILOT_1".equals(configs.getFirst().algorithmVersion())
+                && "FIN01_MONTHLY_MOM_TYPED_V1".equals(configs.getFirst().profile())
+                && liveClass.equals(configs.getFirst().algorithmSha())
+                && configs.getFirst().effectiveSha()!=null
+                && configs.getFirst().effectiveSha().matches("[0-9a-f]{64}");
+        if(!typedConfigValidated) {
             reasons.add("FIN_HTAP_V13_APPROVED_EXECUTABLE_CONFIG_MISSING");
+            reasons.add("FIN_HTAP_V13_METHOD_CONFIGURATION_FINANCIAL_QUALIFICATION_PENDING");
+        } else {
+            // Existing V1.2 plan does not yet contain configId/effectiveSha
+            // or a reviewed build manifest. The active pointer may change.
+            // Do not turn config moderation into a runnable plan binding.
+            reasons.add("FIN_HTAP_V13_EFFECTIVE_CONFIG_NOT_PINNED_TO_PLAN");
         }
-        // There is currently NO qualified FIN-01 parameter validation profile;
-        // an "approved" editorial config cannot bypass it.
-        reasons.add("FIN_HTAP_V13_METHOD_CONFIGURATION_FINANCIAL_QUALIFICATION_PENDING");
 
         var s2=reviews.lookup(new CatA31MethodReviewRegistry.Key(
                 "FIN-01/REV_NET_MOM",Fin01RevenueMomSqlModule.VERSION,
