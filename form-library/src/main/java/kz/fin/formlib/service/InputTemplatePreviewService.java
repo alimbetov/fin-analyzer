@@ -220,12 +220,16 @@ public class InputTemplatePreviewService {
     var warnings=new ArrayList<String>();
     if(!"QUALIFIED".equals(version.getQualificationState()))
       warnings.add("UNQUALIFIED_TEMPLATE");
-    // F02 has a real FIN-FORM-V2 pilot structure and an existing local draft writer,
-    // but its legacy catalog capture tag is SCHEMA_NOT_APPROVED. Allow editing in
-    // the unqualified preview ONLY for this exact versioned pilot.
+    // F02 has a populated, locally writable pilot despite the legacy
+    // SCHEMA_NOT_APPROVED tag. Match its exact structure, not versionLabel:
+    // presentation-only catalog revisions change the label but not field semantics.
     boolean f02Pilot="F02".equals(definition.getFormCode())
-      &&"FIN-FORM-V2".equals(version.getVersionLabel())
-      &&"SINGLE_RECORD".equals(contentMode);
+      &&"SINGLE_RECORD".equals(contentMode)
+      &&orderedFields.size()==3
+      &&orderedFields.stream().map(FormField::getFieldCode).collect(java.util.stream.Collectors.toSet())
+          .equals(Set.of("netRevenue","cogs","operatingExpenses"))
+      &&orderedFields.stream().allMatch(f->"MONEY".equals(f.getFieldType())
+          &&"MANUAL".equals(f.getInputMode()));
     boolean inputAllowed=("TYPED_DRAFT".equals(definition.getLegacyCaptureMode())
       &&!"EVIDENCE".equals(contentMode))||f02Pilot;
     if(f02Pilot)warnings.add("F02_PILOT_UNQUALIFIED");
