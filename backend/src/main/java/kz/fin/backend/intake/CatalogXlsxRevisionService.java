@@ -83,8 +83,7 @@ public class CatalogXlsxRevisionService {
         if (expectedFingerprint == null || !expectedFingerprint.matches("[a-f0-9]{64}") ||
                 expectedRevision < 0 || confirmedBy == null || confirmedBy.isBlank() ||
                 confirmedBy.length() > 200 || changeReason == null ||
-                changeReason.length() > 1000 ||
-                (expectedRevision > 0 && changeReason.isBlank())) {
+                changeReason.length() > 1000) {
             throw new IllegalArgumentException("FIN_CATALOG_CONFIRM_INVALID_INPUT");
         }
 
@@ -181,6 +180,9 @@ public class CatalogXlsxRevisionService {
             }
             previous = prior.id();
         }
+
+        if (slot.current() > 0 && changeReason.isBlank())
+            throw new IllegalArgumentException("FIN_CATALOG_CHANGE_REASON_REQUIRED");
 
         UUID revisionId = UUID.randomUUID();
         int next = slot.current() + 1;
