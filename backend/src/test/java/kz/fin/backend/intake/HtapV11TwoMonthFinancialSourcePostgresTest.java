@@ -4,6 +4,9 @@ import kz.fin.backend.analytics.AnalysisContext;
 import kz.fin.backend.domain.EconomicKernel;
 import kz.fin.backend.persistence.FactSetPublicationService;
 import kz.fin.backend.execution.HtapV12Fin01BlockedPlanService;
+import kz.fin.backend.execution.MethodTaskAdapter;
+import kz.fin.backend.methodology.Fin01RevenueMomSqlModule;
+import java.math.RoundingMode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,6 +50,7 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
     @Autowired HtapMappingGovernanceService governance;
     @Autowired HtapV11MonthlyRevenueSourceService sources;
     @Autowired HtapV12Fin01BlockedPlanService fin01Plans;
+    @Autowired Fin01RevenueMomSqlModule fin01Sql;
 
     private record Fixture(UUID org, UUID entity, UUID scope, UUID source,
                            UUID factSet, UUID mapping, String snapshotSha) {}
@@ -247,6 +251,61 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
                     YearMonth.of(2026,1),YearMonth.of(2026,2)),reader));
         assertThrows(AccessDeniedException.class,()->fin01Plans.preview(req,
                 token(UUID.randomUUID(),"foreign","FIN_READ","FIN_ANALYZE")));
+    }
+
+    @Test void v13SyntheticResearchSqlMatchesIndependentJavaGoldenWithoutPublishing() {
+        Fixture f=publishedTwoMonths("KZT",false,false);
+        Jwt reader=token(f.org(),"researcher","FIN_READ","FIN_ANALYZE");
+        var verified=resolve(f,reader);
+        var planRequest=new HtapV12Fin01BlockedPlanService.Request(
+                f.org(),f.entity(),f.scope(),f.factSet(),f.snapshotSha(),
+                f.source(),f.mapping(),1,YearMonth.of(2026,1),YearMonth.of(2026,2));
+        var committed=fin01Plans.commitBlocked(planRequest,reader);
+        assertFalse(committed.executionPermitted());
+
+        // Independent plain-Java golden. This is intentionally TEST-ONLY and
+        // cannot issue a runtime ExecutionPermit, task or immutable result.
+        BigDecimal expected=verified.current().netRevenue()
+                .subtract(verified.previous().netRevenue())
+                .multiply(new BigDecimal("100"))
+                .divide(verified.previous().netRevenue(),12,RoundingMode.HALF_EVEN);
+        assertEquals(0,expected.compareTo(new BigDecimal("20")));
+
+        var actual=fin01Sql.calculate(new MethodTaskAdapter.TrustedRevision(
+                f.org(),f.entity(),f.scope(),f.factSet(),f.snapshotSha(),"SYNTHETIC"));
+        assertEquals("CALCULATED",actual.computationStatus());
+        assertEquals("PCT",actual.unitCode());
+        assertEquals(0,expected.compareTo(actual.value()));
+        assertEquals(2,actual.provenance().size());
+        assertEquals(
+                java.util.Set.of(verified.previous().factId(),verified.current().factId()),
+                actual.provenance().stream().map(p->p.assertionId())
+                        .collect(java.util.stream.Collectors.toSet()));
+        assertFalse(actual.executionQualified());
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run WHERE organization_id=?
+            """,Long.class,f.org()));
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_calc.report_run WHERE organization_id=?
+            """,Long.class,f.org()));
+        assertEquals(1L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.htap_fin01_two_month_blocked_plan
+            WHERE organization_id=? AND NOT execution_permitted
+            """,Long.class,f.org()));
+        assertThrows(IllegalStateException.class,()->fin01Sql.calculate(
+                new MethodTaskAdapter.TrustedRevision(f.org(),f.entity(),
+                    f.scope(),f.factSet(),f.snapshotSha(),"ACTUAL")));
+    }
+
+    @Test void v13SyntheticResearchDoesNotMisclassifyMissingMonthOrCurrency() {
+        Fixture missing=publishedTwoMonths("KZT",true,false);
+        assertThrows(IllegalStateException.class,()->fin01Sql.calculate(
+                new MethodTaskAdapter.TrustedRevision(missing.org(),missing.entity(),
+                        missing.scope(),missing.factSet(),missing.snapshotSha(),"SYNTHETIC")));
+        Fixture mixed=publishedTwoMonths("USD",false,false);
+        assertThrows(IllegalStateException.class,()->fin01Sql.calculate(
+                new MethodTaskAdapter.TrustedRevision(mixed.org(),mixed.entity(),
+                        mixed.scope(),mixed.factSet(),mixed.snapshotSha(),"SYNTHETIC")));
     }
 
 }
