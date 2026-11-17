@@ -23,7 +23,12 @@ public class CatalogManagementService {
   public record EditReceipt(UUID editSessionId,String formCode,UUID baseVersionId,
                             UUID draftVersionId,int editRevision,String status) {}
   public record TranslationUpdate(int expectedRevision,String subjectType,String subjectCode,
-                                  String title,String description,String actor) {}
+                                  String title,String description,String actor,String purpose) {
+    public TranslationUpdate(int expectedRevision,String subjectType,String subjectCode,
+        String title,String description,String actor){
+      this(expectedRevision,subjectType,subjectCode,title,description,actor,null);
+    }
+  }
   public record FieldPosition(String fieldCode,int displayOrder) {}
   public record FieldOrderUpdate(int expectedRevision,String sectionCode,
                                  List<FieldPosition> positions,String actor) {}
@@ -31,7 +36,14 @@ public class CatalogManagementService {
   public record SectionOrderUpdate(int expectedRevision,List<SectionPosition> positions,String actor) {}
   public record FinishRequest(int expectedRevision,UUID expectedActiveVersionId,String actor) {}
   public record TranslationView(String subjectType,String subjectCode,String locale,
-                                String title,String description,String reviewStatus) {}
+                                String title,String description,String reviewStatus,
+                                String purpose,String purposeReviewStatus) {
+    public TranslationView(String subjectType,String subjectCode,String locale,
+        String title,String description,String reviewStatus){
+      this(subjectType,subjectCode,locale,title,description,reviewStatus,
+        null,"PENDING_TRANSLATION");
+    }
+  }
   public record SectionView(String sectionCode,int sectionOrder,String parentSectionCode) {}
   public record FieldView(String sectionCode,String fieldCode,String fieldType,
                           String inputMode,int displayOrder,boolean required) {}
@@ -180,6 +192,8 @@ public class CatalogManagementService {
       var copy=new LibFormTranslation();copy.setId(UUID.randomUUID());copy.setFormVersionId(newId);
       copy.setLocale(source.getLocale());copy.setTitle(source.getTitle());
       copy.setDescription(source.getDescription());copy.setReviewStatus(source.getReviewStatus());
+      copy.setPurpose(source.getPurpose());
+      copy.setPurposeReviewStatus(source.getPurposeReviewStatus());
       formTranslations.save(copy);
     }
     for(var source:fieldTranslations.findByFormVersionId(active.getId())){
@@ -233,7 +247,8 @@ public class CatalogManagementService {
     var tr=new ArrayList<TranslationView>();
     formTranslations.findByFormVersionId(v.getId()).forEach(t->
       tr.add(new TranslationView("FORM",f.getFormCode(),t.getLocale(),
-        t.getTitle(),t.getDescription(),t.getReviewStatus())));
+        t.getTitle(),t.getDescription(),t.getReviewStatus(),
+        t.getPurpose(),t.getPurposeReviewStatus())));
     fieldTranslations.findByFormVersionId(v.getId()).forEach(t->
       tr.add(new TranslationView(t.getSubjectType(),t.getSubjectCode(),t.getLocale(),
         t.getTitle(),t.getDescription(),t.getReviewStatus())));
@@ -255,6 +270,11 @@ public class CatalogManagementService {
       var t=formTranslations.findByFormVersionId(versionId).stream()
         .filter(x->x.getLocale().equals(locale)).findFirst().orElseThrow();
       t.setTitle(title);t.setDescription(description(req.description(),1500));
+      if(req.purpose()!=null){
+        t.setPurpose(description(req.purpose(),1000));
+        t.setPurposeReviewStatus(req.purpose().isBlank()
+          ?"PENDING_TRANSLATION":"DRAFT_UNREVIEWED");
+      }
       t.setReviewStatus("DRAFT_UNREVIEWED");formTranslations.save(t);
     }else{
       String subject=text(req.subjectCode(),128,"SUBJECT_CODE_REQUIRED");
@@ -382,7 +402,9 @@ public class CatalogManagementService {
     formTranslations.findByFormVersionId(versionId).stream()
       .sorted(Comparator.comparing(LibFormTranslation::getLocale)).forEach(x->
       sb.append("|T|FORM|").append(x.getLocale()).append('|').append(x.getTitle())
-        .append('|').append(x.getDescription()).append('|').append(x.getReviewStatus()));
+        .append('|').append(x.getDescription()).append('|').append(x.getReviewStatus())
+        .append('|').append(x.getPurpose()).append('|')
+        .append(x.getPurposeReviewStatus()));
     fieldTranslations.findByFormVersionId(versionId).stream()
       .sorted(Comparator.comparing(FormFieldTranslation::getSubjectType)
         .thenComparing(FormFieldTranslation::getSubjectCode)

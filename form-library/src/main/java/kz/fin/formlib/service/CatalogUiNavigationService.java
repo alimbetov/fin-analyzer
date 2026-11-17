@@ -220,8 +220,8 @@ public class CatalogUiNavigationService {
       var def=definitions.get(link.formCode());
       if(f==null||def==null)throw new IllegalStateException("MISSING_LIVE_FORM");
       cards.add(new FormCard(f.formCode(),def.getCurrentVersionId(),f.version(),
-        locale,f.title(),null,f.description(),
-        fieldStatus(f.title(),f.translationStatus()),"PENDING_TRANSLATION",
+        locale,f.title(),f.purpose(),f.description(),
+        fieldStatus(f.title(),f.translationStatus()),f.purposeTranslationStatus(),
         fieldStatus(f.description(),f.translationStatus()),
         f.captureMode(),f.contentMode(),f.qualificationState(),
         link.role(),nextScreen(f.contentMode()),"NOT_REVIEWED"));
@@ -241,11 +241,11 @@ public class CatalogUiNavigationService {
       default -> throw new IllegalStateException("UNSUPPORTED_CONTENT_MODE");
     };
     return new LaunchView(formCode,definition.getCurrentVersionId(),f.version(),
-      locale,f.title(),null,f.description(),f.contentMode(),f.captureMode(),
+      locale,f.title(),f.purpose(),f.description(),f.contentMode(),f.captureMode(),
       f.qualificationState(),nextScreen(f.contentMode()),styles,
       "NOT_REVIEWED",List.of(),"/api/v1/templates/{formCode}/preview",
       List.of("PER_FORM_PERIOD_POLICY_NOT_QUALIFIED",
-        "FORM_PURPOSE_TRANSLATION_NOT_POPULATED",
+        "FORM_PURPOSE_REQUIRES_EDITORIAL_REVIEW",
         "FORM_VERSION_MUST_BE_PINNED_BEFORE_SUBMIT"));
   }
 }

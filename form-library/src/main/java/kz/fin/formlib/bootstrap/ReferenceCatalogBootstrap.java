@@ -54,6 +54,23 @@ public class ReferenceCatalogBootstrap implements ApplicationRunner {
   }
   public record Labels(String[] titles,String[] descriptions) {}
   private static final Map<String,Labels> CURATED=curatedTranslations();
+  // Editorial draft purposes. Not verified S2. All other form purposes remain
+  // explicitly PENDING_TRANSLATION until a catalog moderator supplies them.
+  private static final Map<String,String[]> CURATED_PURPOSES=Map.ofEntries(
+    Map.entry("F01",new String[]{"Оценить активы, обязательства и капитал","Активтерді, міндеттемелерді және капиталды бағалау","Assess assets, liabilities and equity","评估资产、负债和权益"}),
+    Map.entry("F02",new String[]{"Оценить доходность и финансовый результат","Табыстылық пен қаржылық нәтижені бағалау","Assess profitability and financial results","评估盈利能力与财务业绩"}),
+    Map.entry("F03",new String[]{"Проанализировать движение денежных средств","Ақша қаражатының қозғалысын талдау","Analyze cash movements","分析现金流动"}),
+    Map.entry("C01",new String[]{"Изучить дебиторскую задолженность","Дебиторлық берешекті талдау","Analyze receivables","分析应收账款"}),
+    Map.entry("C02",new String[]{"Изучить кредиторскую задолженность","Кредиторлық берешекті талдау","Analyze payables","分析应付账款"}),
+    Map.entry("C03",new String[]{"Оценить запасы и их стоимость","Қорлар мен олардың құнын бағалау","Assess inventory and its value","评估库存及其价值"}),
+    Map.entry("DF-AST-01",new String[]{"Учитывать основные средства и их состояние","Негізгі құралдар мен олардың жай-күйін есепке алу","Track fixed assets and their condition","跟踪固定资产及其状况"}),
+    Map.entry("DF-CSH-01",new String[]{"Учитывать денежные операции","Ақша операцияларын есепке алу","Record cash transactions","记录现金交易"}),
+    Map.entry("DF-CSH-03",new String[]{"Контролировать остатки денежных средств","Ақша қаражатының қалдығын бақылау","Monitor cash balances","监控现金余额"}),
+    Map.entry("DF-CST-01",new String[]{"Детализировать затраты по категориям","Шығындарды санаттар бойынша нақтылау","Detail costs by category","按类别细分成本"}),
+    Map.entry("SF-C01",new String[]{"Оценить производственные операции","Өндірістік операцияларды бағалау","Assess manufacturing operations","评估制造运营"}),
+    Map.entry("SF-F01",new String[]{"Контролировать выполнение строительных работ","Құрылыс жұмыстарының орындалуын бақылау","Monitor construction progress","监控施工进度"})
+  );
+
   private static Map<String,Labels> curatedTranslations() {
     Map<String,Labels> m=new HashMap<>();
     m.put("F01",new Labels(new String[]{"Бухгалтерский баланс","Бухгалтерлік баланс","Balance sheet","资产负债表"},new String[]{"Активы, обязательства и капитал на отчётную дату","Есепті күндегі активтер, міндеттемелер және капитал","Assets, liabilities and equity at the reporting date","报告日的资产、负债和权益"}));
@@ -115,6 +132,9 @@ public class ReferenceCatalogBootstrap implements ApplicationRunner {
         if(c!=null){
           t.setTitle(c.titles()[i]);t.setDescription(c.descriptions()[i]);
           t.setReviewStatus("DRAFT_UNREVIEWED");
+          String[] purpose=CURATED_PURPOSES.get(f.getFormCode());
+          if(purpose!=null){t.setPurpose(purpose[i]);
+            t.setPurposeReviewStatus("DRAFT_UNREVIEWED");}
         }else if(i==0 && "CATALOG_SUMMARY".equals(d[6])){
           t.setDescription(d[5]);t.setReviewStatus("PROVISIONAL_SOURCE_TEXT");
         }else{

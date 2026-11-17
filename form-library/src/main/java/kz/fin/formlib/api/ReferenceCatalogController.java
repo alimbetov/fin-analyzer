@@ -57,7 +57,7 @@ public class ReferenceCatalogController {
                            String title,String description,String translationStatus) {}
   public record FormView(String formCode,String version,String captureMode,String contentMode,
                          String qualificationState,String locale,String title,String description,
-                         String translationStatus) {}
+                         String translationStatus,String purpose,String purposeTranslationStatus) {}
   public record FieldView(String fieldCode,String fieldType,String inputMode,boolean required,
                           int displayOrder,String sectionCode,String title,String translationStatus,
                           String unitPolicy) {}
@@ -147,7 +147,10 @@ public class ReferenceCatalogController {
     return new FormView(f.getFormCode(),v.getVersionLabel(),f.getLegacyCaptureMode(),
       v.getContentMode(),v.getQualificationState(),locale,
       t==null?null:t.getTitle(),t==null?null:t.getDescription(),
-      t==null?"PENDING_TRANSLATION":t.getReviewStatus());
+      t==null?"PENDING_TRANSLATION":t.getReviewStatus(),
+      t==null?null:t.getPurpose(),
+      t==null||t.getPurpose()==null||t.getPurpose().isBlank()?"PENDING_TRANSLATION":
+        t.getPurposeReviewStatus());
   }
 
   @GetMapping("/forms")

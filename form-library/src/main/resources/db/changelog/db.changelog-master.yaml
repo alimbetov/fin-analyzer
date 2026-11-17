@@ -15,3 +15,5 @@ databaseChangeLog:
       file: db/changelog/007-lib-catalog-management.sql
   - include:
       file: db/changelog/008-lib-intake-report-status.sql
+  - include:
+      file: db/changelog/009-lib-form-purpose.sql

@@ -8,6 +8,8 @@ public class LibFormTranslation {
 @Column(name="locale",nullable=false) private String locale;
 @Column(name="title") private String title;
 @Column(name="description") private String description;
+@Column(name="purpose") private String purpose;
+@Column(name="purpose_review_status",nullable=false) private String purposeReviewStatus="PENDING_TRANSLATION";
 @Column(name="review_status",nullable=false) private String reviewStatus;
 public UUID getId(){return id;}
 public void setId(UUID v){id=v;}
@@ -19,6 +21,10 @@ public String getTitle(){return title;}
 public void setTitle(String v){title=v;}
 public String getDescription(){return description;}
 public void setDescription(String v){description=v;}
+public String getPurpose(){return purpose;}
+public void setPurpose(String v){purpose=v;}
+public String getPurposeReviewStatus(){return purposeReviewStatus;}
+public void setPurposeReviewStatus(String v){purposeReviewStatus=v;}
 public String getReviewStatus(){return reviewStatus;}
 public void setReviewStatus(String v){reviewStatus=v;}
 }
