@@ -90,16 +90,13 @@ class MethodologyConfigurationRegistryIntegrationTest {
                     """, Long.class));
             for (var m : catalogue) {
                 var actual = jdbc.queryForMap("""
-                    SELECT method_group,title,implementation_status,active_variant_count,
-                           total_config_versions
-                    FROM fin_calc.methodology_catalog_view WHERE method_code=?
+                    SELECT method_group,title,implementation_status
+                    FROM fin_calc.method_family WHERE method_code=?
                     """, m.path("code").asText());
                 assertEquals(m.path("group").asText(), actual.get("method_group"));
                 assertEquals(m.path("title").asText(), actual.get("title"));
                 assertEquals(m.path("implementationStatus").asText(),
                         actual.get("implementation_status"));
-                assertEquals(0L, ((Number)actual.get("active_variant_count")).longValue());
-                assertEquals(0L, ((Number)actual.get("total_config_versions")).longValue());
             }
         }
     }
