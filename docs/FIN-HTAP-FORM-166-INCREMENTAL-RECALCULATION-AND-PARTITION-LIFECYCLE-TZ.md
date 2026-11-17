@@ -33,6 +33,12 @@ A form is represented by **distinct, versioned** `schema_hash_v2` (fields/requir
 
 **New mandatory RED matrix:** `F166-HASH-01..14` in ADR-R2-10 (order-preserving canonicalization, same values across tenants/currencies, schema-vs-mapping-vs-presentation, changed XLSX bytes but unchanged normalized data, SHA/lineage consistency, race/rollback, ABA, Java/PostgreSQL reference vectors and migration coexistence). P0 acceptance of first v2 hash manifest requires real PostgreSQL 16 Testcontainers and independent S2.
 
+## 0.B. Delivery baseline — W1.1 starts; other capabilities remain gated
+
+[FIN-HTAP-IMPLEMENTATION-STRATEGY-W0-W8.md](FIN-HTAP-IMPLEMENTATION-STRATEGY-W0-W8.md) is the approved delivery order. Additive migration `V20261117_01__htap_form_change_journal.sql` and existing `CatalogXlsxRevisionService.confirm()` now implement the **draft-revision event WRITE** in one transaction. A successful new revision creates one immutable tenant-scoped event, a no-op does not. The **existing** `fact_publication_outbox` is untouched. Source-draft status remains `CONFIRMED_UNQUALIFIED_DRAFT`; no computation/ACTUAL or new SQL routine starts from this event.
+
+W1.1 real PostgreSQL integration regression extends `CatalogXlsxRoundTripIntegrationTest` for 166 codes, revision and journal rollback, FK/immutability and competing confirmations. **Only CI at exact HEAD can qualify W1.1**. The new event has **no registered consumer yet**, so automatic impact planning and recalculation are NOT implemented. Dedicated partition utility stays read-only, and DROP is intentionally disabled.
+
 ## 1. Verified source-system behavior (implementation baseline, not target behavior)
 
 | Existing component | Observed behavior | Design implication |
