@@ -40,6 +40,39 @@ public class CatalogXlsxRevisionService {
 
     private record Slot(UUID id, int current) {}
 
+    /** Verify the URL form identity against the immutable draft before confirmation. */
+    @Transactional(readOnly = true)
+    public void requireDraftForm(UUID organizationId, UUID projectId, UUID draftId,
+                                 String formCode) {
+        CatalogCaptureRegistry.require(formCode);
+        Long count = jdbc.queryForObject("""
+            SELECT count(*) FROM fin_intake.catalog_xlsx_draft d
+              JOIN fin_intake.project_v5 p
+                ON p.organization_id=d.organization_id
+               AND p.economic_entity_id=d.economic_entity_id
+               AND p.business_scope_id=d.business_scope_id
+               AND p.project_code=d.project_code
+               AND p.accounting_currency=d.currency
+             WHERE d.id=? AND d.organization_id=? AND p.id=?
+               AND p.organization_id=? AND d.form_code=?
+            """, Long.class, draftId, organizationId, projectId, organizationId, formCode);
+        if (!Long.valueOf(1).equals(count))
+            throw new IllegalArgumentException("FIN_CATALOG_DRAFT_PROJECT_MISMATCH");
+    }
+
+    /** Verify the URL form identity before returning slot-scoped history. */
+    @Transactional(readOnly = true)
+    public void requireSlotForm(UUID organizationId, UUID projectId, UUID slotId,
+                                String formCode) {
+        CatalogCaptureRegistry.require(formCode);
+        Long count = jdbc.queryForObject("""
+            SELECT count(*) FROM fin_intake.catalog_xlsx_slot
+             WHERE id=? AND organization_id=? AND project_id=? AND form_code=?
+            """, Long.class, slotId, organizationId, projectId, formCode);
+        if (!Long.valueOf(1).equals(count))
+            throw new IllegalArgumentException("FIN_CATALOG_SLOT_NOT_FOUND");
+    }
+
     @Transactional
     public Confirmed confirm(UUID organizationId, UUID projectId, UUID draftId,
                              String expectedFingerprint, int expectedRevision,
