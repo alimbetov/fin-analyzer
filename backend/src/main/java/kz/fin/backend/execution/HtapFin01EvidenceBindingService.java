@@ -118,7 +118,7 @@ public final class HtapFin01EvidenceBindingService {
                 artifact_sha256,dependency_lock_sha256,build_manifest,
                 manifest_sha256,signer_key_id,signature_base64,binding_sha256,created_by)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,
-                    'FIN-01/REV_NET_MOM','R2_SQL_PILOT_1',?,?,?,?,?,?,?::jsonb,
+                    'FIN-01/REV_NET_MOM','R2_SQL_PILOT_1',?,?,?,?,?,?::jsonb,
                     ?,?,?,?,?)
             ON CONFLICT (organization_id,blocked_pair_id) DO NOTHING
             RETURNING id,binding_sha256,binding_state,execution_permitted
