@@ -237,4 +237,50 @@ class MethodologyConfigurationRegistryIntegrationTest {
                 SELECT fin_calc.method_params_sha_v1(?::jsonb)
                 """,String.class,"{\"aLimitPercent\":75,\"bLimitPercent\":95}"));
     }
+
+    @Test void pendingAndRejectedProposalsAreVisibleWithoutRemovingAnyFamily() {
+        UUID schema = contract("FIN-06","INDEX_ANALYSIS","NOT_EXECUTABLE");
+        UUID config = version("FIN-06","INDEX_ANALYSIS",schema,null,1,"{}");
+        assertEquals("PENDING", jdbc.queryForObject("""
+                SELECT latest_variant_configs->0->>'moderation'
+                FROM fin_calc.methodology_catalog_view WHERE method_code='FIN-06'
+                """, String.class));
+        review(config,"config-author","moderator","REJECTED");
+        assertEquals("REJECTED", jdbc.queryForObject("""
+                SELECT latest_variant_configs->0->>'moderation'
+                FROM fin_calc.methodology_catalog_view WHERE method_code='FIN-06'
+                """, String.class));
+        assertEquals(0L,jdbc.queryForObject("""
+                SELECT active_variant_count FROM fin_calc.methodology_catalog_view
+                WHERE method_code='FIN-06'
+                """,Long.class));
+        assertEquals(60L,jdbc.queryForObject("""
+                SELECT count(*) FROM fin_calc.methodology_catalog_view
+                """,Long.class));
+    }
+
+    @Test void engineeringEvidenceCanProgressWithoutPromotingFinancialQualification() {
+        assertEquals("CODE_CANDIDATE_NOT_QUALIFIED",jdbc.queryForObject("""
+                SELECT implementation_status FROM fin_calc.methodology_catalog_view
+                WHERE method_code='FIN-03'
+                """,String.class));
+        jdbc.update("""
+                INSERT INTO fin_calc.method_implementation_evidence
+                  (method_code,implementation_status,evidence_sha256,recorded_by,reason)
+                VALUES ('FIN-03','INTEGRATION_TESTED_UNQUALIFIED',?,
+                        'engineering-reviewer','Synthetic code integration test evidence')
+                """,ZERO_SHA);
+        assertEquals("INTEGRATION_TESTED_UNQUALIFIED",jdbc.queryForObject("""
+                SELECT implementation_status FROM fin_calc.methodology_catalog_view
+                WHERE method_code='FIN-03'
+                """,String.class));
+        assertEquals(0L,jdbc.queryForObject("""
+                SELECT count(*) FROM fin_calc.methodology_catalog_view
+                WHERE release_qualified OR auto_run_allowed OR method_execution_permitted
+                """,Long.class));
+        assertThrows(DataAccessException.class,() -> jdbc.update("""
+                DELETE FROM fin_calc.method_implementation_evidence
+                WHERE method_code='FIN-03'
+                """));
+    }
 }
