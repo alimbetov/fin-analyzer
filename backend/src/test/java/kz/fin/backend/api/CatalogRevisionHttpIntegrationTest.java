@@ -68,7 +68,9 @@ class CatalogRevisionHttpIntegrationTest {
                 + "/projects/" + project + "/forms/" + form;
     }
 
-    private static String sample(CatalogCaptureRegistry.FieldType type) {
+    private static String sample(CatalogCaptureRegistry.Field field) {
+        if ("attachmentRef".equals(field.code())) return "evidence.pdf";
+        var type = field.type();
         return switch (type) {
             case REF -> "REF001";
             case CODE -> "CATEGORY_A";
@@ -89,7 +91,7 @@ class CatalogRevisionHttpIntegrationTest {
             row.getCell(0).setCellValue("ROW001");
             var fields = CatalogXlsxRoundTripService.fields(form);
             for (int i = 0; i < fields.size(); i++) {
-                row.createCell(i + 1).setCellValue(sample(fields.get(i).type()));
+                row.createCell(i + 1).setCellValue(sample(fields.get(i)));
             }
             book.write(out);
             return out.toByteArray();
