@@ -211,6 +211,18 @@ public class FormDraftService {
     if(!inst.getLatestRevisionNo().equals(req.expectedRevision()))
       throw new ResponseStatusException(HttpStatus.CONFLICT,"STALE_EXPECTED_REVISION");
 
+    // Never rebind an existing report to a newly published catalog version.
+    // New instances use the current version; each subsequent immutable
+    // revision stays on its originally selected financial/schema contract.
+    if(inst.getCurrentRevisionId()!=null){
+      var previous=revisions.findById(inst.getCurrentRevisionId()).orElseThrow();
+      if(!previous.getInstanceId().equals(inst.getId()))
+        throw new IllegalStateException("REVISION_INSTANCE_INTEGRITY");
+      version=versions.findById(previous.getFormVersionId()).orElseThrow();
+      if(!version.getFormId().equals(form.getId()))
+        throw new IllegalStateException("REVISION_FORM_VERSION_INTEGRITY");
+    }
+
     boolean single="SINGLE_RECORD".equals(version.getContentMode());
     Map<String,String> normalized=canonical(version.getId(),req.values(),single,
       currency.getMinorUnits());
