@@ -66,8 +66,9 @@ class CatalogCategoryDatabaseIntegrityTest {
        where locale=?
        """,locale));
      assertEquals(166,number("""
-       select count(*) from fin_lib.lib_form_translation
-       where locale=?
+       select count(*) from fin_lib.lib_form_translation t
+       join fin_lib.lib_form_definition f on f.current_version_id=t.form_version_id
+       where t.locale=?
        """,locale));
    }
    assertEquals(0,number("""

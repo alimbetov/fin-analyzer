@@ -147,9 +147,8 @@ class FinIntakeDatabasePersistenceAuditTest {
 
  @Test void nonApprovedFormCannotWriteSyntheticFactsDespiteBeingInCatalog()throws Exception{
    UUID org=UUID.randomUUID();
-   var request=req(null,org,UUID.randomUUID(),"SF-U03",0,Map.of(),
-     List.of(new FormDraftService.RowInput(UUID.randomUUID(),1,Map.of())));
-   // SF-U03 has catalog identity but not necessarily approved capture schema.
+   var request=req(null,org,UUID.randomUUID(),"F01",0,Map.of(),List.of());
+   // F01 has a valid catalog identity but no approved typed capture schema.
    // The denial is based on captureMode, not the locale or UI category.
    http.perform(post("/api/v1/drafts").header("Idempotency-Key","unapproved-"+org)
       .contentType(MediaType.APPLICATION_JSON).content(json(request)))
