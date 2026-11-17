@@ -156,10 +156,28 @@ class CatalogRevisionHttpIntegrationTest {
                         uploaded.file(new MockMultipartFile("original", "evidence.pdf",
                                 "application/pdf", document));
                     }
-                    mvc.perform(uploaded)
+                    var receiptResponse = mvc.perform(uploaded)
                             .andExpect(status().isOk())
                             .andExpect(jsonPath("$.formCode").value(form.code()))
-                            .andExpect(jsonPath("$.normalizedFingerprint").isNotEmpty());
+                            .andExpect(jsonPath("$.normalizedFingerprint").isNotEmpty())
+                            .andReturn().getResponse();
+                    JsonNode receipt = json.readTree(receiptResponse.getContentAsString());
+                    String body = """
+                            {"normalizedFingerprint":"%s","expectedRevision":0,"changeReason":""}
+                            """.formatted(receipt.path("normalizedFingerprint").asText());
+                    var confirmed = mvc.perform(post(base + "/drafts/"
+                            + receipt.path("id").asText() + "/confirm")
+                            .with(user(org, "FIN_SUBMIT"))
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.revisionNumber").value(1))
+                            .andReturn().getResponse();
+                    String slotId = json.readTree(confirmed.getContentAsString())
+                            .path("slotId").asText();
+                    mvc.perform(get(base + "/slots/" + slotId + "/current")
+                            .with(user(org, "FIN_READ")))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.revisionNumber").value(1));
                 }));
     }
 
