@@ -123,6 +123,9 @@ class MethodologyConfigurationRegistryIntegrationTest {
         // JSONB key order cannot impersonate a "new" parameter version.
         assertThrows(DataAccessException.class, () -> version("CON-02","ABC_SALES",
                 schema,revised,3,"{\"bLimitPercent\":95,\"aLimitPercent\":80}"));
+        assertThrows(DataAccessException.class, () -> version("CON-02","ABC_SALES",
+                schema,revised,4,"{\"aLimitPercent\":80.00,\"bLimitPercent\":95.0}"),
+                "Numeric display scale must not create a different financial config SHA");
 
         // New version is initially pending moderation. It cannot become active.
         assertThrows(DataAccessException.class,() -> jdbc.update("""
