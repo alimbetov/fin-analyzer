@@ -91,6 +91,12 @@ class MethodVariantRegistryTest {
         assertThrows(IllegalArgumentException.class,()->new MethodVariantDescriptor.InputRequirement(
                 "REV_NET","WRONG","MONEY",MethodVariantDescriptor.Role.REQUIRED));
         assertThrows(IllegalArgumentException.class,()->new MethodVariantDescriptor(
+                "REV_NET",d.variantVersion(),d.descriptorVersion(),
+                d.implementationVersion(),d.resultSchemaVersion(),d.supportedDataSpaces(),
+                d.inputs(),d.dependencies(),60,false));
+        assertThrows(IllegalArgumentException.class,()->new MethodVariantDescriptor.Dependency(
+                "REV_NET",MethodVariantDescriptor.Role.REQUIRED));
+        assertThrows(IllegalArgumentException.class,()->new MethodVariantDescriptor(
                 d.methodCode(), "",d.descriptorVersion(),d.implementationVersion(),
                 d.resultSchemaVersion(),d.supportedDataSpaces(),d.inputs(),d.dependencies(),60,false));
         assertThrows(IllegalArgumentException.class,()->new MethodVariantDescriptor(

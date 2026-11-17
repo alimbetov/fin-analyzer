@@ -16,7 +16,7 @@ import java.util.*;
  * Callers at the API boundary MUST enforce tenant/ABAC before invocation.
  */
 @Service
-public final class MethodApplicabilityEvaluator {
+public class MethodApplicabilityEvaluator {
     public enum Status { ELIGIBLE, NOT_APPLICABLE, BLOCKED_MISSING,
                          BLOCKED_CONFLICT, DISABLED_POLICY, UNQUALIFIED }
 
@@ -29,7 +29,7 @@ public final class MethodApplicabilityEvaluator {
             Objects.requireNonNull(businessScopeId);
             Objects.requireNonNull(factSetRevisionId);
             if (snapshotHash == null || !snapshotHash.matches("[0-9a-f]{64}")
-                    || !Set.of("SYNTHETIC", "ACTUAL").contains(dataSpace))
+                    || dataSpace == null || !Set.of("SYNTHETIC", "ACTUAL").contains(dataSpace))
                 throw new IllegalArgumentException("R2_APPLICABILITY_SOURCE_KEY_INVALID");
         }
     }
@@ -124,6 +124,7 @@ public final class MethodApplicabilityEvaluator {
         var missing=new TreeSet<String>();
         var conflicts=new TreeSet<String>();
         boolean unresolvedPopulation=false;
+        var matchedFacts=new ArrayList<Fact>();
         if(!d.supportedDataSpaces().contains(source.dataSpace()))
             return decision(d,source,Status.NOT_APPLICABLE,
                     List.of("R2_DATA_SPACE_NOT_SUPPORTED"),matched,missing);
@@ -153,6 +154,7 @@ public final class MethodApplicabilityEvaluator {
                 else compatible.add(f);
             }
             if(!compatible.isEmpty()) matched.add(input.metricCode());
+            matchedFacts.addAll(compatible);
             if(compatible.isEmpty()) conflicts.add("R2_INPUT_UNQUALIFIED_OR_INCOMPATIBLE");
             if(compatible.stream().map(Fact::currency).distinct().count()>1)
                 conflicts.add("R2_CURRENCY_CONFLICT");
@@ -176,7 +178,23 @@ public final class MethodApplicabilityEvaluator {
                 }
                 if(months.size()<2) missing.add("REV_NET_PREVIOUS_COMPARABLE_MONTH");
                 if(months.size()>2) conflicts.add("R2_AMBIGUOUS_REVENUE_HISTORY");
+                if(compatible.size()!=months.size())
+                    conflicts.add("R2_DUPLICATE_REVENUE_PERIOD");
+                if(months.size()==2) {
+                    var ordered=months.stream().sorted().toList();
+                    if(!ordered.getFirst().plusMonths(1).equals(ordered.getLast()))
+                        conflicts.add("R2_NONCONSECUTIVE_REVENUE_MONTHS");
+                }
             }
+        }
+        if("FIN-04/CURRENT_RATIO".equals(d.methodCode())
+                && missing.isEmpty() && conflicts.isEmpty()) {
+            if(matchedFacts.size()!=2
+                    || matchedFacts.stream().map(Fact::currency).distinct().count()!=1
+                    || matchedFacts.stream().map(Fact::version).distinct().count()!=1
+                    || matchedFacts.stream().map(Fact::startDate).distinct().count()!=1
+                    || matchedFacts.stream().map(Fact::endDate).distinct().count()!=1)
+                conflicts.add("R2_CURRENT_RATIO_PAIR_INCOMPATIBLE");
         }
         if(!conflicts.isEmpty())
             return decision(d,source,Status.BLOCKED_CONFLICT,

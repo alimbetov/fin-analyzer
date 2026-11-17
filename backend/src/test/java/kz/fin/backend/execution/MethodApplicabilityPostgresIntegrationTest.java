@@ -42,6 +42,10 @@ class MethodApplicabilityPostgresIntegrationTest {
 
     private MethodApplicabilityEvaluator.SourceKey published(
             String qualification,int months,AnalysisContext.DataSpace space) {
+        return published(qualification,months,space,false);
+    }
+    private MethodApplicabilityEvaluator.SourceKey published(
+            String qualification,int months,AnalysisContext.DataSpace space,boolean gap) {
         UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),
                 scope=UUID.randomUUID(),revision=UUID.randomUUID(),source=UUID.randomUUID();
         String version="R2A2"+qualification;
@@ -62,7 +66,7 @@ class MethodApplicabilityPostgresIntegrationTest {
             VALUES (?,?,'APPROVED',now())
             """,revision,org);
         for(int i=0;i<months;i++) {
-            YearMonth ym=YearMonth.of(2026,i+1);
+            YearMonth ym=YearMonth.of(2026,i+1+(gap && i>0 ? 1 : 0));
             var period=EconomicKernel.TemporalReference.interval(
                     ym.atDay(1),ym.plusMonths(1).atDay(1));
             var key=new EconomicKernel.FactKey(org,entity,scope,
@@ -146,6 +150,15 @@ class MethodApplicabilityPostgresIntegrationTest {
         var row=find(evaluator.evaluate(src),"FIN-01/REV_NET_MOM");
         assertEquals(MethodApplicabilityEvaluator.Status.BLOCKED_CONFLICT,row.status());
         assertTrue(row.reasonCodes().contains("R2_INPUT_UNQUALIFIED_OR_INCOMPATIBLE"));
+    }
+
+    @Test void nonconsecutiveRevenueMonthsCannotPassInputValidation() {
+        var src=published("QUALIFIED",2,AnalysisContext.DataSpace.SYNTHETIC,true);
+        var decision=find(evaluator.evaluate(src),"FIN-01/REV_NET_MOM");
+        assertEquals(MethodApplicabilityEvaluator.Status.BLOCKED_CONFLICT,
+                decision.status());
+        assertTrue(decision.reasonCodes().contains("R2_NONCONSECUTIVE_REVENUE_MONTHS"));
+        assertFalse(decision.executionPermitted());
     }
 
     @Test void foreignTenantWrongSourceHashAndDisabledLabFailClosed() {

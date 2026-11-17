@@ -25,7 +25,7 @@ public record MethodVariantDescriptor(
     public record InputRequirement(String metricCode, String measureKind,
                                    String unitCode, Role role) {
         public InputRequirement {
-            requireCode(metricCode, "R2_INPUT_METRIC");
+            requireInputSymbol(metricCode, "R2_INPUT_METRIC");
             Objects.requireNonNull(role, "R2_INPUT_ROLE_REQUIRED");
             if (!Set.of("FLOW", "STOCK", "POPULATION", "PUBLICATION").contains(measureKind)
                     || !Set.of("MONEY", "COUNT", "MANIFEST", "NONE").contains(unitCode))
@@ -34,13 +34,13 @@ public record MethodVariantDescriptor(
     }
     public record Dependency(String methodCode, Role kind) {
         public Dependency {
-            requireCode(methodCode, "R2_DEPENDENCY_CODE");
+            requireMethodCode(methodCode, "R2_DEPENDENCY_CODE");
             Objects.requireNonNull(kind, "R2_DEPENDENCY_KIND_REQUIRED");
         }
     }
 
     public MethodVariantDescriptor {
-        requireCode(methodCode, "R2_METHOD_CODE");
+        requireMethodCode(methodCode, "R2_METHOD_CODE");
         requireVersion(variantVersion, "R2_VARIANT_VERSION");
         requireVersion(descriptorVersion, "R2_DESCRIPTOR_VERSION");
         requireVersion(implementationVersion, "R2_IMPLEMENTATION_VERSION");
@@ -66,13 +66,13 @@ public record MethodVariantDescriptor(
         if (methodS2Qualified)
             throw new IllegalArgumentException("R2_METHOD_S2_PROMOTION_FORBIDDEN");
     }
-    static void requireCode(String value, String error) {
-        if (value == null || !value.matches("[A-Z][A-Z0-9-]{1,30}/[A-Z][A-Z0-9_]{1,100}")
-                && !isInputSymbol(value))
+    static void requireMethodCode(String value, String error) {
+        if (value == null || !value.matches("[A-Z][A-Z0-9-]{1,30}/[A-Z][A-Z0-9_]{1,100}"))
             throw new IllegalArgumentException(error);
     }
-    private static boolean isInputSymbol(String value) {
-        return value != null && value.matches("[A-Z][A-Z0-9_]{1,80}");
+    static void requireInputSymbol(String value, String error) {
+        if (value == null || !value.matches("[A-Z][A-Z0-9_]{1,80}"))
+            throw new IllegalArgumentException(error);
     }
     static void requireVersion(String value, String error) {
         if (value == null || !value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))
