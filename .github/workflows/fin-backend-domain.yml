@@ -37,6 +37,15 @@ jobs:
           test -r /usr/share/fonts/truetype/arphic-gbsn00lp/gbsn00lp.ttf
       - name: Build and run JUnit + PostgreSQL Testcontainers
         run: mvn -B -ntp -f backend/pom.xml verify
+      - name: Require FIN-BE-R2.A1/A2 registry and PostgreSQL applicability evidence
+        run: python3 backend/scripts/verify_fin_be_r2_a1_a2_evidence.py
+      - name: Archive FIN-BE-R2.A1/A2 executable contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-be-r2-a1-a2-evidence-${{ github.job }}
+          path: backend/target/fin-evidence/fin-be-r2-a1-a2-evidence.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Require 166 real Java XLSX PostgreSQL and revision case proofs
         run: python3 backend/scripts/verify_fin_be_r1_evidence.py
       - name: Require FIN-BE-R1-X0 four-language catalog runtime proofs
