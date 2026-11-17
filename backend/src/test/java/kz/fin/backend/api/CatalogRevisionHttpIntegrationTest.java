@@ -133,7 +133,7 @@ class CatalogRevisionHttpIntegrationTest {
                 .with(user(UUID.randomUUID(), "FIN_SUBMIT"))
                 .param("templateId", templateId.toString()))
                 .andExpect(status().isForbidden());
-        mvc.perform(multipart(root(org, project.id(), "DF-LIA-01") + "/uploads")
+        mvc.perform(multipart(root(org, project.id(), "C01") + "/uploads")
                 .file(attachment).with(user(org, "FIN_SUBMIT"))
                 .param("templateId", templateId.toString()))
                 .andExpect(status().isBadRequest())
@@ -167,7 +167,7 @@ class CatalogRevisionHttpIntegrationTest {
                 .with(user(org, "FIN_READ")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
-        mvc.perform(get(root(org, project.id(), "DF-LIA-01")
+        mvc.perform(get(root(org, project.id(), "C01")
                 + "/slots/" + slotId + "/revisions").with(user(org, "FIN_READ")))
                 .andExpect(status().isNotFound());
         mvc.perform(get(base + "/slots/" + slotId + "/current")
