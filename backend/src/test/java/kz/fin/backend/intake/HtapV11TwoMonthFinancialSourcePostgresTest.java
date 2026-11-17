@@ -67,6 +67,12 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
 
     private Fixture publishedTwoMonths(String febCurrency,boolean missingFebruary,
                                        boolean wrongFebruaryEntity) {
+        return publishedTwoMonths(febCurrency,missingFebruary,wrongFebruaryEntity,
+                new BigDecimal("100.00"),new BigDecimal("120.00"));
+    }
+    private Fixture publishedTwoMonths(String febCurrency,boolean missingFebruary,
+                                       boolean wrongFebruaryEntity,
+                                       BigDecimal january,BigDecimal february) {
         UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),scope=UUID.randomUUID(),
                 source=UUID.randomUUID(),factSet=UUID.randomUUID();
         jdbc.update("""
@@ -84,7 +90,7 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
             if(month==2 && missingFebruary)continue;
             LocalDate start=LocalDate.of(2026,month,1),end=start.plusMonths(1);
             UUID fact=UUID.randomUUID();
-            BigDecimal amount=month==1?new BigDecimal("100.00"):new BigDecimal("120.00");
+            BigDecimal amount=month==1?january:february;
             jdbc.update("""
                 INSERT INTO fin_fact.fact_assertion(
                     id,organization_id,economic_entity_id,business_scope_id,
@@ -306,6 +312,44 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
         assertThrows(IllegalStateException.class,()->fin01Sql.calculate(
                 new MethodTaskAdapter.TrustedRevision(mixed.org(),mixed.entity(),
                         mixed.scope(),mixed.factSet(),mixed.snapshotSha(),"SYNTHETIC")));
+    }
+
+    @Test void v13GoldenZeroBaselineIsNotComputableAndNeverReportedAsZeroPercent() {
+        Fixture f=publishedTwoMonths("KZT",false,false,
+                BigDecimal.ZERO,new BigDecimal("120.00"));
+        var result=fin01Sql.calculate(new MethodTaskAdapter.TrustedRevision(
+                f.org(),f.entity(),f.scope(),f.factSet(),f.snapshotSha(),"SYNTHETIC"));
+        assertEquals("NOT_COMPUTABLE",result.computationStatus());
+        assertEquals("ZERO_BASELINE",result.reasonCode());
+        assertNull(result.value());
+        assertFalse(result.executionQualified());
+        assertEquals(0L,jdbc.queryForObject("""
+            SELECT count(*) FROM fin_exec.analysis_run WHERE organization_id=?
+            """,Long.class,f.org()));
+    }
+
+    @Test void v13GoldenNegativeBaselineDoesNotInventComparableGrowthRate() {
+        Fixture f=publishedTwoMonths("KZT",false,false,
+                new BigDecimal("-100.00"),new BigDecimal("120.00"));
+        var result=fin01Sql.calculate(new MethodTaskAdapter.TrustedRevision(
+                f.org(),f.entity(),f.scope(),f.factSet(),f.snapshotSha(),"SYNTHETIC"));
+        assertEquals("NOT_COMPUTABLE",result.computationStatus());
+        assertEquals("NEGATIVE_BASELINE_PERCENT_UNDEFINED",result.reasonCode());
+        assertNull(result.value());
+        assertFalse(result.executionQualified());
+    }
+
+    @Test void v13RepeatingDecimalMatchesIndependentHalfEvenJavaAtTwelvePlaces() {
+        Fixture f=publishedTwoMonths("KZT",false,false,
+                new BigDecimal("3.00"),new BigDecimal("4.00"));
+        var result=fin01Sql.calculate(new MethodTaskAdapter.TrustedRevision(
+                f.org(),f.entity(),f.scope(),f.factSet(),f.snapshotSha(),"SYNTHETIC"));
+        BigDecimal expected=new BigDecimal("1.00").multiply(new BigDecimal("100"))
+                .divide(new BigDecimal("3.00"),12,RoundingMode.HALF_EVEN);
+        assertEquals("CALCULATED",result.computationStatus());
+        assertEquals(0,expected.compareTo(result.value()));
+        assertEquals(new BigDecimal("33.333333333333"),expected);
+        assertFalse(result.executionQualified());
     }
 
 }
