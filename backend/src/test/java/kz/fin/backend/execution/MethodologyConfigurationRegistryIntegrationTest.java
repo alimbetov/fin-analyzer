@@ -102,7 +102,9 @@ class MethodologyConfigurationRegistryIntegrationTest {
         assertFalse(abc.autoRunAllowed());
 
         assertEquals(60, methodRepository.count());
-        var persisted = methodRepository.findById("FIN-01").orElseThrow();
+        var persisted = methodRepository.findAllWithParameterCandidates().stream()
+                .filter(m -> m.getMethodCode().equals("FIN-01"))
+                .findFirst().orElseThrow();
         assertEquals("Horizontal Analysis", persisted.getTitle());
         assertEquals(5, persisted.getParameters().size());
         assertThrows(DataAccessException.class, () -> jdbc.update("""
