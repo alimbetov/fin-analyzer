@@ -26,6 +26,45 @@ Recommended first candidate:
 
 **Cohort readiness limitation:** a single live reader, legal hold or late task can block dropping the entire cohort. This is deliberate: retention cannot override safety. Long-lived/pinned exceptions should be placed in a separately sized retention class **at admission**; never silently reassign or move sealed data across cohorts mid-query. If an unexpected hold arises, defer dropping the cohort and account its retained bytes; do not fall back to deleting other active rows. Operations should alert on blocked cohorts.
 
+## 2.A. Financial segmentation: tenant + form + accounting period + period type + currency
+
+**Clarification of the owner's requested partition layer:** `tenant / form_code / period / period_type / currency` is a **logical financial slice** and a primary routing/filter/index dimension, **not automatically one PostgreSQL child table per tuple**. A logical slice maps through a server-owned catalog to a physical lifecycle cohort / generation. This preserves fast retrieval by finance dimensions **and** fast whole-cohort DETACH/DROP when every member is reclaimable.
+
+A minimum versioned logical slice key is:
+
+```text
+organization_id                (tenant authority)
+economic_entity_id
+business_scope_id
+fact_set_revision_id + snapshot_hash
+data_space + reporting_basis
+form_code + form_version        (source provenance)
+time_kind                       (INTERVAL or AS_OF)
+period_grain                    (MONTH / QUARTER / YEAR / AS_OF_DATE / qualified fiscal period)
+period_start + period_end_exclusive + calendar_policy_version
+currency_code + unit_code       (currency NULL only for nonmoney)
+metric_code + metric_version + dimension_hash / population_policy_version
+aggregation_policy_version
+```
+
+The **five dimensions are a routing prefix, not a complete source identity**. `form_code` is obtained from a trusted `approved_source_revision` join to `fact_assertion.source_revision_id`; do not invent a direct `form_code` field on `fact_assertion`. One FactSet can contain multiple approved forms and a method may need cross-form values: the canonical computation relation MUST preserve `metric_code`, source revision, dimensionality and approved population controls. Similarly, `time_kind` (INTERVAL/AS_OF) differs from `period_grain` (month/quarter/year). Financial STOCK and FLOW have different rollup semantics.
+
+Proposed durable, server-owned `financial_slice_manifest` / `workspace_partition_membership` ties:
+
+```text
+logical_slice_key + source_revision + current_generation
+  -> sealed dataset_id, physical_parent, reclaim_epoch,
+     partition_catalog_id, cohort_id, rows/count/hash, life_state, readers
+```
+
+For a query by tenant/form/period/grain/currency, first resolve valid SEALED generations and their physical cohort IDs from this small indexed metadata relation; **then bind `reclaim_epoch` and `workspace_id`** to data queries so PostgreSQL can prune RANGE lifecycle partitions. Suggested secondary covering index inside cohort: `(organization_id, form_code, period_grain, period_start, currency_code, metric_code, workspace_id)`, adjusted from `EXPLAIN` and including economic entity/scope and revision predicates as needed. Do not assume a universal index is optimal. Complete source and tenant predicates remain mandatory on each data access.
+
+**Physical layout:** `RANGE(reclaim_epoch)` for large reproducible stage payload, time-bucket size chosen by retention/volume and a strict partition-count cap; optionally fixed HASH(organization_id) subpartitions only if measured query/tenant skew gains exceed their DDL count and maintenance overhead. The combination `tenant × form × reporting period × period kind × currency` may have millions of logical keys, so creating one physical partition per combination is prohibited except narrowly approved dedicated heavy-cohort cases. Aggregate cache `fin_agg` can retain separately reviewed tenant/metric indexes and longer reference-pinned retention; never drop an aggregate needed by a different run.
+
+**DROP condition:** a retired logical slice does *not* permit dropping its shared physical partition. The maintenance ledger must prove that every member slice/generation in that cohort is reclaimable, none has an active/fenced-but-running worker or legal hold and no new slice can attach to a DRAINING cohort. If the business requires immediate independent DROP of one very large form-period slice, admit that slice to a **dedicated physical cohort at creation**, under an explicit partition-budget and volume threshold; do not split an active shared cohort retrospectively.
+
+**Required negative tests:** different forms within the same tenant but same currency/month cannot mix; same form/month across tenant A/B cannot mix; monthly FLOW cannot be merged with AS_OF STOCK or quarterly data; same slice key but changed `fact_set_revision_id`, form_version, metric version or currency creates a distinct SEALED generation/source key; cross-form methods can still assemble independently authorized metric inputs; dropping one shared cohort is blocked by any surviving slice.
+
 ## 3. Atomic generation switch; fast recalculation without unsafe DROP
 
 1. User/server requests new calculation on a specific already-published FactSet; the **new plan and method implementation version** is pinned. Never mutate existing source or canonical results.
