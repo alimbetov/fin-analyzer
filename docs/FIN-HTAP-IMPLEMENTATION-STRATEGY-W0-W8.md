@@ -42,6 +42,10 @@ R2.0 fixed JPA/Flyway CHAR(64); R2.0.1 installed a production deny-all guard for
 
 **Source update coverage:** `CatalogXlsxRevisionService.confirm()` emits W1.1 events; separate `FormDraftRevisionV5Service.confirm()` (F02/V5) does not emit this event and is not automatically included in “all 166 catalog changes.” An explicit typed adapter/scope decision and tests are required before advertising universal form-update event capture.
 
+## Current W1.2.A incremental code and next gates
+
+The [W0/W1.2.A implementation and W2/W3/W6 audit](FIN-HTAP-W0-W12A-IMPLEMENTATION-REVIEW-W2-W3-W6.md) defines actual code paths, persisted mapping **proposals**, calendar and source negatives and the stop/go matrix. First source resolver is **read-only and mapping-unqualified by design**. To reach W1.2.A completion, add authenticated mapping approval and catalog epoch, source/form/calendar selection, generated revision compatibility, populated PG16 migration and same-SHA CI. Only after immutable PLAN_ONLY and trusted calendar/source qualification may W2 scheduling and then W3 synthetic experiments begin. W6 comparisons remain benchmark designs until owner-defined budgets and measured data. Do not retroactively qualify an existing adapter or activate ACTUAL because a new resolver finds a published assertion.
+
 ## W0 Physical Design Freeze — performance and data correctness
 
 The normative initial storage-layout choice is [ADR-R2-13](ADR-R2-13-HTAP-PHYSICAL-LAYOUT-PERFORMANCE-FIRST.md), linked from the consolidated FIN HTAP specification. **Do not implement `RANGE(period)` across all domains or multiply child tables by tenant×form×currency×revision**. Keep `fin_fact` unchanged; unpartitioned durable control and optional `fin_agg` baseline; bounded retention-class `RANGE(reclaim_epoch)` only for qualifying large disposable `fin_workspace` stage payload. Directory resolution and exact scoped predicates are mandatory for pruning. Retention class, no-DEFAULT, privilege separation, safe cohort GC and physical resource caps are W0/W4.2 contracts.
