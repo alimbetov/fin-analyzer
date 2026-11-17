@@ -21,6 +21,18 @@ The physical partition is **not** that 5-axis key. The full trusted row/series i
 
 **Support all 166** means *each form can enter change detection, lineage, impact classification and freshness status*. It does **not** mean that all 166 form codes are numeric, approved or executable. The current `CatalogCaptureRegistry` contains **122 TYPED_DRAFT, 12 EVIDENCE_ONLY and 32 SCHEMA_NOT_APPROVED**. A document/evidence-only or unqualified form may invalidate a preview or be reported `WAITING_QUALIFICATION`, but it must **not** generate authorized ACTUAL financial results.
 
+## 0.A. SHA-256 form fingerprint as a first-class recalculation contract
+
+**Normative extension:** [ADR-R2-10 — Versioned SHA-256 Form Fingerprints](ADR-R2-10-FORM-FINGERPRINTS-AND-INCREMENTAL-RECALCULATION.md). **MD5 is not permitted** for authoritative content, schema, source or result identity. Existing `schema_fingerprint`, `normalized_sha`, `original_sha`, `document_sha`, `fact_set_publication.snapshot_hash` already use SHA-256 and retain original historical semantics.
+
+A form is represented by **distinct, versioned** `schema_hash_v2` (fields/requiredness/cardinality/validation/type/period rules), `mapping_hash_v2` (field→metric/version and financial transformation policy), `presentation_hash_v2` (only display/language), `canonical_content_hash_v2` (ordered, typed normalized form rows + explicit value states and evidence descriptor), `original_file_sha256` (raw bytes) and a tenant- and period-bound `context_form_hash_v2`. The complete source/result hashes additionally include published FactSet and exact calculation policy. Never use a bare form digest as a security token, approval or permission to run ACTUAL.
+
+**P0 migration compatibility:** `CatalogXlsxRevisionService.confirm` currently compares legacy `normalized_sha` PLUS ordered `normalized_rows` PLUS optional `document_sha`; the legacy `normalized_sha` sorts row IDs, and row permutations may leave it unchanged. **Do not replace or silently reinterpret legacy columns**. Add a versioned canonical v2 manifest alongside them, with explicit schema/algorithm/canonicalization versions, tenant/slot/revision FKs and same-transaction journal. `content_hash_v2` must account for order whenever order affects semantics. No-op detection must retain the existing complete comparison; new hash equality is a fast prefilter, not independent proof.
+
+**Recalculation:** unchanged structural+mapping+semantic content hashes with same source context -> `NO_OP`; changed `presentation_hash` only -> presentation refresh, **no numeric recompute**; changed `mapping_hash` -> impacted method bindings review and requalification; changed semantic content -> tenant form change journal and draft impact; **only a separate approved `FACT_SET_PUBLISHED`** can activate qualified financial calculations. Hashes are not physical partition identifiers: lifecycle cohorts are server-owned and `DROP` remains barrier-protected.
+
+**New mandatory RED matrix:** `F166-HASH-01..14` in ADR-R2-10 (order-preserving canonicalization, same values across tenants/currencies, schema-vs-mapping-vs-presentation, changed XLSX bytes but unchanged normalized data, SHA/lineage consistency, race/rollback, ABA, Java/PostgreSQL reference vectors and migration coexistence). P0 acceptance of first v2 hash manifest requires real PostgreSQL 16 Testcontainers and independent S2.
+
 ## 1. Verified source-system behavior (implementation baseline, not target behavior)
 
 | Existing component | Observed behavior | Design implication |
