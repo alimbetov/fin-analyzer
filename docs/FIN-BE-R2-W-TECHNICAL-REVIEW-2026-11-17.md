@@ -36,7 +36,7 @@
 
 ## Entry gate verdict
 
-**W0 DESIGN HARDENING DRAFT READY, INDEPENDENT S2 PENDING. W1 implementation BLOCKED** until the owner confirms server-side tenant-to-organization mapping, data volume/hardware envelope, DB role/privilege approach and concrete plan identity/migration strategy. These are **design decisions**, not a request to weaken tests or a reason to enable ACTUAL. The hardened TZ below provides conservative defaults and asks implementers to prove the remaining choices before changing schema.
+**W0 DESIGN HARDENING RECORDED, INDEPENDENT S2 PENDING. W1 implementation BLOCKED** until v1 `tenant_id=organization_id` is verified against real signed `fin_access` and source scoping, a representative data-volume/hardware envelope is recorded, the DB role/privilege approach is independently reviewed, and the plan identity/migration strategy has an executable proof. These are **design decisions**, not a request to weaken tests or a reason to enable ACTUAL. The hardened TZ below provides conservative defaults and asks implementers to prove the remaining choices before changing schema.
 
 ## Follow-up verification and release
 
