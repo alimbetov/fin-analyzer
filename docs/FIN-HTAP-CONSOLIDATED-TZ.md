@@ -202,6 +202,10 @@ For STDDEV/sqrt, PostgreSQL `stddev` and Java `BigDecimal` may differ in interme
 
 Result must include `status` CALCULATED/ESTIMATED/INCOMPLETE/NOT_COMPUTABLE, reason code if blocked, exact input observation/period IDs, schema/method/SQL checksum, source currency and unit, sample N, window bounds, calendar and policy versions, organization/source hashes, workspace generation and tenant. Never fill absent period with zero, silently resample or publish a status as causal/risk conclusion.
 
+## International standards and typed semantic W1.2.A pilot (2026-11-17)
+
+[Normative implementation notes — IFRS/XBRL, ISO 8601/4217, typed mapping](FIN-HTAP-W12A-INTERNATIONAL-STANDARDS-SEMANTIC-PILOT-2026-11-17.md). Only independently reviewed `fin_fact.pilot_field_mapping` + `fin_calc.metric_contract(QUALIFIED)` combinations can produce technical `VALIDATED_PILOT_NOT_S2` evidence, backed by immutable source field/version and `ISO_MONTH_FLOW_PERIOD_ONLY_V1`. The runtime uses a verified ISO 4217 currency code. No IFRS taxonomy tags are auto-assigned; commercial licensing needs separate evaluation. `HtapRuntimeClassDigest` provides only un-attested class-byte SHA, NOT a trusted shipped algorithm manifest. The blocked PLAN_ONLY snapshots do not become executable. **Full financial/calendar S2, ACTUAL and runnable PlanCommit remain HOLD** pending signed build/source and production security review.
+
 ## W1.2.A mapping editorial moderation and R2.B BLOCKED PLAN_ONLY implementation
 
 [Implementation evidence + open P0 gates](FIN-HTAP-W12A-MAPPING-GOVERNANCE-R2B-BLOCKED-PLAN-IMPLEMENTATION.md) records the new append-only mapping review/authorship, signed-subject backend service, monotonic tenant `catalog_epoch`, and read-only R2.A2-derived, dependency-ordered blocked PlanPreview with immutable, idempotent `BLOCKED_PLAN_ONLY` snapshot. **Not a runnable PlanCommit**: no qualified source-field mapping, fiscal policy, pinned algorithm artifact/S2, production executor or ACTUAL. All previous release/permission holds remain mandatory. Same-HEAD CI and independent S2 are separate required gates.
