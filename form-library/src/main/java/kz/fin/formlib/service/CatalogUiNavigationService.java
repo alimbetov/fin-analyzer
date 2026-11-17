@@ -342,6 +342,10 @@ public class CatalogUiNavigationService {
   @Transactional(readOnly=true)
   public TranslationCoverage coverage(String locale){
     validateLocale(locale);
+    Integer categoriesLocalized=jdbc.queryForObject("""
+      SELECT COUNT(*) FROM fin_lib.lib_catalog_category_translation
+      WHERE locale=?
+      """,Integer.class,locale);
     return jdbc.queryForObject("""
       SELECT COUNT(*) AS forms,
         SUM(CASE WHEN t.title IS NOT NULL AND trim(t.title)<>'' THEN 1 ELSE 0 END) AS named,
@@ -360,10 +364,7 @@ public class CatalogUiNavigationService {
         ON t.form_version_id=f.current_version_id AND t.locale=?
       """,(rs,n)->new TranslationCoverage(locale,
          rs.getInt("forms"),47,
-         jdbc.queryForObject("""
-           SELECT COUNT(*) FROM fin_lib.lib_catalog_category_translation
-           WHERE locale=?
-           """,Integer.class,locale),
+         Objects.requireNonNull(categoriesLocalized),
          389,rs.getInt("named"),rs.getInt("described"),rs.getInt("purposeful"),
          rs.getInt("documented"),rs.getInt("typed"),rs.getInt("evidence"),
          rs.getInt("schema_missing"),rs.getInt("unqualified")),locale);
