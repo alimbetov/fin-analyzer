@@ -6,6 +6,10 @@
 **Normative parent:** [FIN-HTAP-CONSOLIDATED-TZ](FIN-HTAP-CONSOLIDATED-TZ.md), §4 and W0–W8. This ADR **clarifies the concrete default physical strategy**; it does not supersede the strict source-trust, tenant authority, immutable history, CAS, Method S2, or release HOLD requirements of the parent. Historic ADR-R2-07/R2-08 remain architecture rationale; any conflicting physical recommendation must defer to this ADR for the *initial* HTAP implementation.  
 **Evidence type:** code/spec review + PostgreSQL 16 documented behavior; **no measured application latency, real data cardinality, cache benefit or benchmark PASS is claimed**.
 
+## Delivery timing (ADR-R2-14)
+
+[ADR-R2-14](ADR-R2-14-FIRST-VERTICAL-SLICE-DELIVERY-FREEZE.md) freezes the immediate product delivery priority: complete the SYNTHETIC FIN-01 vertical with trusted source, PLAN_ONLY, controlled execution, immutable result and report **before** optimizing physical layouts. This ADR-R2-13 **remains** the default partition/index policy and W6 experiment contract; it does not itself make additional partitions, caches or large-scale benchmarks prerequisites to the first financial end-to-end acceptance. Genuine measured P0 regressions remain exceptions.
+
 ## 1. Decision in one page
 
 **A. Immutable published finance source — preserve existing `fin_fact`.** No repartition, bulk rebuild, new aggregate child or index proliferation on existing production tables as a prerequisite to W1. Their isolation, temporal semantics and immutable revision/publication model are authoritative. Any later `fin_fact` partitioning is a separately benchmarked populated-database migration.
