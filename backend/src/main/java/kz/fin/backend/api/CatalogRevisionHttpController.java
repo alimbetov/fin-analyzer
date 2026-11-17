@@ -141,6 +141,7 @@ public class CatalogRevisionHttpController {
         if (body == null) throw new IllegalArgumentException("FIN_CATALOG_CONFIRM_INVALID_INPUT");
         // The service locks the slot and checks the entire project identity.
         // Form route mismatch is validated against the persisted draft before mutation.
+        revisions.requireDraftForm(organizationId, projectId, draftId, formCode);
         var result = revisions.confirm(organizationId, projectId, draftId,
                 body.normalizedFingerprint(), body.expectedRevision(),
                 access.subject(jwt), body.changeReason());
@@ -153,6 +154,7 @@ public class CatalogRevisionHttpController {
             @PathVariable UUID projectId, @PathVariable String formCode,
             @PathVariable UUID slotId) {
         access.require(jwt, organizationId, Permission.FIN_READ);
+        revisions.requireSlotForm(organizationId, projectId, slotId, formCode);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(revisions.current(organizationId, projectId, slotId));
     }
@@ -163,6 +165,7 @@ public class CatalogRevisionHttpController {
             @PathVariable UUID projectId, @PathVariable String formCode,
             @PathVariable UUID slotId) {
         access.require(jwt, organizationId, Permission.FIN_READ);
+        revisions.requireSlotForm(organizationId, projectId, slotId, formCode);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(revisions.history(organizationId, projectId, slotId));
     }
