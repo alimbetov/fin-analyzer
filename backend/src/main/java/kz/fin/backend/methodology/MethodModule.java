@@ -12,6 +12,12 @@ import java.util.Objects;
 public interface MethodModule {
     Definition definition();
 
+    /** Guarded SPI: legacy metadata bridges are never executable by default. */
+    default MethodResultEnvelope calculate(
+            kz.fin.backend.execution.MethodTaskAdapter.TrustedRevision source) {
+        throw new IllegalStateException("R2_METHOD_MODULE_EXECUTION_NOT_BOUND");
+    }
+
     record Definition(
             String methodCode, String variantVersion,
             String descriptorVersion, String implementationVersion,
