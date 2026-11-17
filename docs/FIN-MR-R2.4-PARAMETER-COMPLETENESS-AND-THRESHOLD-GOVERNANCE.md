@@ -127,6 +127,10 @@ Use current `fin_calc.method_family`, `method_parameter_contract`, `method_confi
 
 **Explicit non-goals:** 60 new SQL procedures, default 10 presets for every family, generic unrestricted formula DSL, unreviewed numeric norms, release of ACTUAL/production execution, frontend changes.
 
+## R2.4-A seed-to-slot reconciliation
+
+[Machine-computed 259-candidate reconciliation](FIN-MR-R2.4-A-259-PARAMETER-RECONCILIATION.md) compares 60 families and the immutable 259 proposal-name keys with 299 candidate semantic slots in this specification. **29 literal key matches; 270 slots require semantic alias/new-candidate/implementation-owned/rejected review.** Lexical mismatch does not prove absent functionality. No original candidate row or approved configuration has been mutated.
+
 ## 8. Implementation evidence (2026-11-17)
 
 **R2.4-A first backend increment — IMPLEMENTED / CI NOT VERIFIED:** forward-only migration `backend/src/main/resources/db/migration/V20261117_11__method_parameter_coverage_read_model.sql` defines `fin_calc.method_parameter_coverage_view`, one method-family row with candidate and unreviewed counts, contract counts, typed-profile instance counts and two deliberately **false** authorization fields. Its migration-time assertion aborts if 60 family records, 259 unreviewed candidate records, or full family distribution drift. This is read-only observability, not a typed parameter validator or ACTUAL permit.
