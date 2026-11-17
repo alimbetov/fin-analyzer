@@ -119,6 +119,14 @@ class MethodologyConfigurationRegistryIntegrationTest {
                 SELECT count(*) FROM fin_calc.methodology_catalog_view
                 WHERE method_execution_permitted OR release_qualified OR auto_run_allowed
                 """, Long.class));
+        assertEquals(259L, jdbc.queryForObject("""
+                SELECT sum(jsonb_array_length(parameter_candidates))
+                FROM fin_calc.methodology_catalog_view
+                """, Long.class));
+        assertEquals(4, jdbc.queryForObject("""
+                SELECT jsonb_array_length(parameter_candidates)
+                FROM fin_calc.methodology_catalog_view WHERE method_code='CON-02'
+                """, Integer.class));
     }
 
     @Test void allSixtyFamiliesAppearExactlyOnceInOneQueryableTable() throws Exception {
