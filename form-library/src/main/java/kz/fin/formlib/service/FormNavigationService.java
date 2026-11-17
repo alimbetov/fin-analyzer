@@ -29,7 +29,8 @@ public class FormNavigationService {
       int withoutModelReferences,int totalModelDescriptors,String locale,
       List<String> selectedSectors,String selectedAnalysisPack,
       List<Section> sections,List<Sector> sectors,List<String> analysisPacks,
-      List<FormItem> recommended,List<FormItem> allForms){}
+      List<FormItem> recommended,List<FormItem> allForms,
+      String selectedUseCase,List<FormUseCaseCatalogService.UseCaseSummary> useCases){}
   private record Meta(String group,String domain,String sector){}
   private static final Map<String,String[]> GROUPS=new LinkedHashMap<>();
   static {
@@ -42,6 +43,7 @@ public class FormNavigationService {
   }
   private static final List<String> STARTER_CODES=List.of("F01","F02","F03","F04");
   private final ReferenceCatalogController catalog;
+  private final FormUseCaseCatalogService useCases;
   private final Map<String,Meta> meta;
   private final List<Sector> sectors;
   private final Map<String,Set<String>> modelFormCodes;
@@ -49,8 +51,10 @@ public class FormNavigationService {
   private final int modelDescriptors;
   private final int modelReferencedForms;
 
-  public FormNavigationService(ReferenceCatalogController catalog){
+  public FormNavigationService(ReferenceCatalogController catalog,
+      FormUseCaseCatalogService useCases){
     this.catalog=catalog;
+    this.useCases=useCases;
     Map<String,Meta> navigation=new HashMap<>();
     for(var r:read("catalog/form-navigation-r10.tsv",4)){
       if(!GROUPS.containsKey(r[1]))throw new IllegalStateException("NAV_GROUP_UNKNOWN");
@@ -112,6 +116,11 @@ public class FormNavigationService {
   }
 
   public NavigationView navigation(String locale,List<String> requestedSectors,String requestedPack){
+    return navigation(locale,requestedSectors,requestedPack,null);
+  }
+
+  public NavigationView navigation(String locale,List<String> requestedSectors,
+      String requestedPack,String requestedUseCase){
     if(!Set.of("ru","kk","en","zh-Hans").contains(locale))
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"UNSUPPORTED_LOCALE");
     var activeSectors=new TreeSet<String>();
@@ -128,13 +137,18 @@ public class FormNavigationService {
     if(pack!=null&&!packFormCodes.containsKey(pack))
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,"UNKNOWN_ANALYSIS_PACK");
     var inputs=pack==null?Set.<String>of():packFormCodes.get(pack);
+    String selectedUseCase=requestedUseCase==null||requestedUseCase.isBlank()
+      ?null:requestedUseCase.trim().toUpperCase(Locale.ROOT);
+    var useCaseInputs=selectedUseCase==null?Set.<String>of():useCases.formCodes(selectedUseCase);
     var current=catalog.forms(locale);
     Set<String> seen=new HashSet<>();
     var all=new ArrayList<FormItem>();
     for(var form:current){
       var m=meta.get(form.formCode());
       if(m==null||!seen.add(form.formCode()))throw new IllegalStateException("NAV_CATALOG_DRIFT");
-      String reason= !m.sector().isBlank()&&activeSectors.contains(m.sector())
+      String reason=useCaseInputs.contains(form.formCode())
+        ?"SELECTED_USE_CASE"
+        :!m.sector().isBlank()&&activeSectors.contains(m.sector())
         ?"SELECTED_SECTOR"
         :inputs.contains(form.formCode())
         ?"ANALYSIS_MODEL_INPUT"
@@ -155,14 +169,23 @@ public class FormNavigationService {
     var recommended=all.stream()
       .filter(x->!"CATALOG_ONLY".equals(x.recommendationReason()))
       .sorted(Comparator.comparingInt((FormItem x)->switch(x.recommendationReason()){
-        case "SELECTED_SECTOR"->0;
-        case "ANALYSIS_MODEL_INPUT"->1;
-        default->2;
+        case "SELECTED_USE_CASE"->0;
+        case "SELECTED_SECTOR"->1;
+        case "ANALYSIS_MODEL_INPUT"->2;
+        default->3;
+      }).thenComparingInt(x->{
+        if(selectedUseCase==null)return 0;
+        return switch(String.valueOf(useCases.role(selectedUseCase,x.formCode()))){
+          case "CORE" -> 0;
+          case "SUPPORTING" -> 1;
+          case "EVIDENCE" -> 2;
+          default -> 3;
+        };
       }).thenComparing(FormItem::formCode)).toList();
     return new NavigationView(166,modelReferencedForms,
       166-modelReferencedForms,modelDescriptors,locale,List.copyOf(activeSectors),
       pack,List.copyOf(sections),sectors,
       packFormCodes.keySet().stream().sorted().toList(),
-      recommended,List.copyOf(all));
+      recommended,List.copyOf(all),selectedUseCase,useCases.all());
   }
 }

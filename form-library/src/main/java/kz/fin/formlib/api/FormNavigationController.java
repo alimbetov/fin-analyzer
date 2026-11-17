@@ -18,7 +18,8 @@ public class FormNavigationController {
   public FormNavigationService.NavigationView navigation(
       @RequestParam(defaultValue="ru") String locale,
       @RequestParam(required=false) List<String> sectorCodes,
-      @RequestParam(required=false) String analysisPack){
-    return service.navigation(locale,sectorCodes,analysisPack);
+      @RequestParam(required=false) String analysisPack,
+      @RequestParam(required=false) String useCaseCode){
+    return service.navigation(locale,sectorCodes,analysisPack,useCaseCode);
   }
 }
