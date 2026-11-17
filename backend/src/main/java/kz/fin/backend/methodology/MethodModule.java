@@ -1,7 +1,5 @@
 package kz.fin.backend.methodology;
 
-import kz.fin.backend.execution.MethodTaskAdapter;
-import kz.fin.backend.execution.MethodVariantDescriptor;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,11 +19,11 @@ public interface MethodModule {
             List<String> dependencies, boolean implementationPinned,
             boolean methodS2Qualified) {
         public Definition {
-            MethodVariantDescriptor.requireMethodCode(methodCode, "R2_MODULE_INVALID_CODE");
-            MethodVariantDescriptor.requireVersion(variantVersion, "R2_MODULE_INVALID_VARIANT");
-            MethodVariantDescriptor.requireVersion(descriptorVersion, "R2_MODULE_INVALID_DESCRIPTOR");
-            MethodVariantDescriptor.requireVersion(implementationVersion, "R2_MODULE_INVALID_IMPLEMENTATION");
-            MethodVariantDescriptor.requireVersion(resultSchemaVersion, "R2_MODULE_INVALID_RESULT_SCHEMA");
+            checkCode(methodCode, "R2_MODULE_INVALID_CODE");
+            checkVersion(variantVersion, "R2_MODULE_INVALID_VARIANT");
+            checkVersion(descriptorVersion, "R2_MODULE_INVALID_DESCRIPTOR");
+            checkVersion(implementationVersion, "R2_MODULE_INVALID_IMPLEMENTATION");
+            checkVersion(resultSchemaVersion, "R2_MODULE_INVALID_RESULT_SCHEMA");
             Objects.requireNonNull(engine, "R2_MODULE_ENGINE_REQUIRED");
             dependencies = List.copyOf(Objects.requireNonNull(dependencies));
             if (dependencies.stream().anyMatch(Objects::isNull)
@@ -33,9 +31,18 @@ public interface MethodModule {
                     || dependencies.contains(methodCode))
                 throw new IllegalArgumentException("R2_MODULE_INVALID_DEPENDENCIES");
             for (String code : dependencies)
-                MethodVariantDescriptor.requireMethodCode(code, "R2_MODULE_INVALID_DEPENDENCY");
+                checkCode(code, "R2_MODULE_INVALID_DEPENDENCY");
             if (methodS2Qualified && !implementationPinned)
                 throw new IllegalArgumentException("R2_MODULE_UNPINNED_QUALIFICATION");
         }
+    }
+
+    private static void checkCode(String code, String reason) {
+        if (code == null || !code.matches("[A-Z][A-Z0-9-]{1,30}/[A-Z][A-Z0-9_]{1,100}"))
+            throw new IllegalArgumentException(reason);
+    }
+    private static void checkVersion(String value, String reason) {
+        if (value == null || !value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}"))
+            throw new IllegalArgumentException(reason);
     }
 }
