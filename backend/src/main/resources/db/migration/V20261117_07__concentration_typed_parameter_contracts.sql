@@ -70,6 +70,7 @@ DECLARE c fin_calc.method_parameter_contract%ROWTYPE;
 DECLARE prior fin_calc.method_config_version%ROWTYPE;
 DECLARE a NUMERIC;
 DECLARE b NUMERIC;
+DECLARE required_key_count INTEGER;
 BEGIN
   SELECT * INTO c FROM fin_calc.method_parameter_contract
    WHERE contract_id=NEW.contract_id AND method_code=NEW.method_code
@@ -84,9 +85,14 @@ BEGIN
     END IF;
   END IF;
   IF c.validation_profile IN ('CON02_ABC_BOUNDARIES_V1','CON02_ABC_TYPED_V2') THEN
+    -- A SQL CASE inside a PL/pgSQL IF condition conflicts with its THEN parser.
+    -- Resolve the versioned arity before parsing the remaining boolean check.
+    required_key_count := 2;
+    IF c.validation_profile='CON02_ABC_TYPED_V2' THEN
+      required_key_count := 3;
+    END IF;
     IF NOT (NEW.parameters ? 'aLimitPercent' AND NEW.parameters ? 'bLimitPercent')
-       OR (SELECT count(*) FROM jsonb_object_keys(NEW.parameters)) <>
-         CASE WHEN c.validation_profile='CON02_ABC_TYPED_V2' THEN 3 ELSE 2 END
+       OR (SELECT count(*) FROM jsonb_object_keys(NEW.parameters)) <> required_key_count
        OR jsonb_typeof(NEW.parameters->'aLimitPercent') <> 'number'
        OR jsonb_typeof(NEW.parameters->'bLimitPercent') <> 'number' THEN
       RAISE EXCEPTION 'FIN_METHOD_ABC_PARAMETERS_INVALID';
