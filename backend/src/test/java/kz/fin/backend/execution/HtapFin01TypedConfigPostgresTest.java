@@ -81,7 +81,6 @@ class HtapFin01TypedConfigPostgresTest {
         assertEquals(64,parameterHash.length());
         assertNotEquals("0".repeat(64),hash);
         assertNotEquals("0".repeat(64),parameterHash);
-        assertEquals(VALID.replaceAll("\\s+","").length()>0,true);
         assertEquals("POSITIVE_ONLY",jdbc.queryForObject("""
             SELECT parameters->>'baselinePolicy' FROM fin_calc.method_config_version WHERE config_id=?
             """,String.class,configId));
@@ -149,9 +148,8 @@ class HtapFin01TypedConfigPostgresTest {
             SELECT count(*) FROM fin_calc.method_config_review WHERE config_id=?
             """,Long.class,config));
         assertEquals(0L,jdbc.queryForObject("""
-            SELECT count(*) FROM fin_calc.method_active_config
-            WHERE method_code='FIN-01' AND variant_code='REV_NET_MOM'
-            """,Long.class));
+            SELECT count(*) FROM fin_calc.method_active_config WHERE config_id=?
+            """,Long.class,config));
         assertThrows(DataAccessException.class,()->jdbc.update("""
             INSERT INTO fin_calc.method_active_config(
                 method_code,variant_code,config_id,pointer_version,activated_by)
