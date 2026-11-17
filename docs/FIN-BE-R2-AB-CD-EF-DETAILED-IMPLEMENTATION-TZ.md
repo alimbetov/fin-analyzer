@@ -8,6 +8,8 @@
 **Исполнители:** Principal Architect, Senior Java/Spring/PostgreSQL Engineer, Financial Methodologist, QA Automation Architect, Security Engineer; независимый S2 reviewer — другой участник.  
 **Главный результат:** инженерно доказать Published FactSet → объяснимый и детерминированный plan → единственный разрешённый расчёт → immutable CORE → авторизованное чтение → evidence/CI. Это не автоматическое финансовое утверждение методик.
 
+**Пред-R2.B аудит:** [FIN-BE-R2-PRE-B-TECHNICAL-AUDIT-2026-11-17.md](FIN-BE-R2-PRE-B-TECHNICAL-AUDIT-2026-11-17.md). Зафиксированы code-backed дефекты R2.A1/A2, исправления, негативные PostgreSQL-тесты, ограничения legacy executor и обязательные gates перед неизменяемым PlanPreview/PlanCommit. Технический GREEN не заменяет независимую приёмку или ACTUAL-полномочие.
+
 ## 0. Контракт приоритетов, критерии завершения и определения
 
 Этот документ — более детальный **реализационный контракт** для этапов A–F базового ТЗ; при противоречии не расширять полномочия автоматически, а исправлять документацию отдельным ADR до кода. Входной R2.0 Entry Gate с четырьмя ADR остаётся обязательным.
