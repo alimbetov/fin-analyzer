@@ -202,6 +202,10 @@ For STDDEV/sqrt, PostgreSQL `stddev` and Java `BigDecimal` may differ in interme
 
 Result must include `status` CALCULATED/ESTIMATED/INCOMPLETE/NOT_COMPUTABLE, reason code if blocked, exact input observation/period IDs, schema/method/SQL checksum, source currency and unit, sample N, window bounds, calendar and policy versions, organization/source hashes, workspace generation and tenant. Never fill absent period with zero, silently resample or publish a status as causal/risk conclusion.
 
+## W1.2.A mapping editorial moderation and R2.B BLOCKED PLAN_ONLY implementation
+
+[Implementation evidence + open P0 gates](FIN-HTAP-W12A-MAPPING-GOVERNANCE-R2B-BLOCKED-PLAN-IMPLEMENTATION.md) records the new append-only mapping review/authorship, signed-subject backend service, monotonic tenant `catalog_epoch`, and read-only R2.A2-derived, dependency-ordered blocked PlanPreview with immutable, idempotent `BLOCKED_PLAN_ONLY` snapshot. **Not a runnable PlanCommit**: no qualified source-field mapping, fiscal policy, pinned algorithm artifact/S2, production executor or ACTUAL. All previous release/permission holds remain mandatory. Same-HEAD CI and independent S2 are separate required gates.
+
 ## W0/W1.2.A incremental code and W2/W3/W6 readiness (2026-11-17)
 
 [Implementation + technical gap audit](FIN-HTAP-W0-W12A-IMPLEMENTATION-REVIEW-W2-W3-W6.md) records actual new `HtapFinancialSliceKey`, `HtapIsoFinancialCalendar`, the immutable mapping **candidate** version/mapping SHA, read-only PostgreSQL publication view, scoped candidate resolver and tests. These are strictly W1.2.A **foundations**: mapping review/activation `catalog_epoch`, fiscal calendar, multi-source financial series, source+algorithm S2 and permit are NOT implemented. No new `fin_agg` storage, partitioned workspace, W2 scheduling, W3 controlled method execution or W6 performance results are claimed. The audit lists executable W2/W3 gates and a reproducible W6 workload/EXPLAIN benchmark. **Do not equate mapping SHA validity with approved mapping authority; ACTUAL and RELEASE_HOLD persist.**
