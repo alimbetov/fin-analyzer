@@ -214,3 +214,17 @@ interface SpecializedExecutionAdapter {
 `SINGLE-R4` — 10 synthetic golden E2E, S2 review, единый SHA CI.
 
 **Критерий:** без ML пользователь всегда может получить полноценный CORE-отчёт из доступных квалифицированных расчётов; при наличии ML — расширенную версию с явно маркированными ML-выводами и неизменными базовыми цифрами. Вся логика маршрутизации расчётов проходит через SingleExecutor.
+
+
+## Нормативное дополнение R2 (2026-11-17): MethodModule / SQL + JAVA / Immutable Results
+
+**Принятое целевое решение:** [ADR-R2-05 — One MethodModule / Dual Engine / Immutable Results](ADR-R2-05-METHOD-MODULE-DUAL-ENGINE-IMMUTABLE-RESULTS.md).
+
+1. Один самостоятельно версионируемый MethodModule для каждого исполняемого варианта бизнес-методики; свои входы, алгоритм, результат, финансовые golden-тесты.
+2. Один orchestrator поверх существующих MethodVariantRegistry, MethodApplicabilityEvaluator, MethodTaskAdapter, SingleExecutorScheduler, outbox, ExecutionPermit и CORE; отдельный scheduler/outbox запрещён.
+3. Два строго закреплённых в descriptor механизма вычислений: SQL (версионированный параметризованный PostgreSQL 16) и JAVA (BigDecimal, инвестиционные и сценарные модели). Никакого клиентского исполняемого SQL.
+4. Единое append-only immutable result store: уникальный логический ключ, исходная ревизия, tenant, версия реализации, fingerprint входов и правил, статус расчёта отдельно от методической квалификации.
+5. Разработка через M0 ADR и RED, M1 Module SPI/bridges, M2 SQL pilots, M3 Java pilots, M4 immutable store, M5 orchestrator integration, M6 PostgreSQL Testcontainers и независимая S2; существующие M1/M2/M3 safety gates R2 сохраняются.
+6. Источники из X6 — CONFIRMED_UNQUALIFIED_DRAFT — не становятся approved FactSet; ACTUAL запрещён без отдельного permit. Release HOLD сохраняется.
+
+При противоречии более строгие ограничения безопасности из исходного R2 и ADR-R2-05 сохраняются; целевые интерфейсы и таблицы не являются утверждением о реализации.
