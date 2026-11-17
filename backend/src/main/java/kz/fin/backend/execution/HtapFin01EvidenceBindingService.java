@@ -65,7 +65,10 @@ public class HtapFin01EvidenceBindingService {
         this.registry=Objects.requireNonNull(registry);
     }
 
-    @Transactional(isolation=Isolation.REPEATABLE_READ)
+    // One immutable binding per plan is serialized by the PostgreSQL unique
+    // constraint. READ_COMMITTED lets concurrent losing writers observe
+    // the winner after ON CONFLICT DO NOTHING without a 40001 snapshot error.
+    @Transactional(isolation=Isolation.READ_COMMITTED)
     public Binding bindUnverified(UUID organizationId, Evidence evidence, Jwt authenticated) {
         access.require(authenticated,organizationId,FinanceAccessPolicy.Permission.FIN_READ);
         access.require(authenticated,organizationId,FinanceAccessPolicy.Permission.FIN_ANALYZE);
