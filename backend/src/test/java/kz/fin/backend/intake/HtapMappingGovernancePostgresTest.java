@@ -100,6 +100,22 @@ class HtapMappingGovernancePostgresTest {
              WHERE organization_id=?
             """,Long.class,org));
         assertThrows(DataAccessException.class,()->jdbc.update("""
+            DELETE FROM fin_calc.htap_mapping_active WHERE organization_id=?
+            """,org));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_calc.htap_mapping_active SET form_version='2.0'
+             WHERE organization_id=?
+            """,org));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            UPDATE fin_calc.htap_catalog_epoch
+               SET catalog_epoch=catalog_epoch+2 WHERE organization_id=?
+            """,org));
+        assertThrows(DataAccessException.class,()->jdbc.update("""
+            INSERT INTO fin_calc.htap_catalog_epoch(organization_id,catalog_epoch)
+            VALUES (?,1)
+            """,UUID.randomUUID()),
+            "A stand-alone epoch without an activation journal must fail at COMMIT");
+        assertThrows(DataAccessException.class,()->jdbc.update("""
             DELETE FROM fin_calc.htap_mapping_review WHERE review_id=?
             """,reviewId));
         assertThrows(DataAccessException.class,()->jdbc.update("""
