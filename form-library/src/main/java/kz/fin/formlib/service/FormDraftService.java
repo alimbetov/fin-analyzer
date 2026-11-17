@@ -43,7 +43,8 @@ public class FormDraftService {
                           String formCode, String formVersion, String contentMode,
                           Map<String,String> values, List<RowView> rows, String sha256,
                           String periodType, String periodCode, java.time.LocalDate periodStart,
-                          java.time.LocalDate periodEndExclusive, String currency) {}
+                          java.time.LocalDate periodEndExclusive, String currency,
+                          String workflowStatus,long statusVersion) {}
 
   public FormDraftService(FormDefinitionRepository forms,FormVersionRepository versions,
          FormFieldRepository fields,FormInstanceRepository instances,
@@ -194,8 +195,10 @@ public class FormDraftService {
       inst.setDataSpace(req.dataSpace());inst.setLatestRevisionNo(0);
       instances.saveAndFlush(inst);
     } else {
-      inst=instances.findByIdAndOrganizationId(req.instanceId(),req.organizationId())
+      inst=instances.lockByIdAndOrganizationId(req.instanceId(),req.organizationId())
           .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"INSTANCE_NOT_FOUND"));
+      if(!"DRAFT".equals(inst.getWorkflowStatus()))
+        throw new ResponseStatusException(HttpStatus.CONFLICT,"REPORT_NOT_EDITABLE_IN_CURRENT_STATUS");
       if(!Objects.equals(inst.getFormId(),form.getId())
         ||!Objects.equals(inst.getEconomicEntityId(),req.economicEntityId())
         ||!Objects.equals(inst.getBusinessScopeId(),req.businessScopeId())
@@ -303,6 +306,7 @@ public class FormDraftService {
         form.getFormCode(),version.getVersionLabel(),version.getContentMode(),
         parseValues(rev.getValuesJson()),lineItems,rev.getCanonicalContentSha256(),
         inst.getPeriodType(),inst.getPeriodCode(),inst.getPeriodStart(),
-        inst.getPeriodEndExclusive(),inst.getCurrency());
+        inst.getPeriodEndExclusive(),inst.getCurrency(),
+        inst.getWorkflowStatus(),inst.getStatusVersion());
   }
 }

@@ -22,6 +22,8 @@ public class FormInstance {
 @Column(name="latest_revision_no",nullable=false) private Integer latestRevisionNo;
 @Version
 @Column(name="row_version") private Long rowVersion;
+@Column(name="workflow_status",nullable=false) private String workflowStatus="DRAFT";
+@Column(name="status_version",nullable=false) private Long statusVersion=0L;
 @Column(name="period_start") private java.time.LocalDate periodStart;
 @Column(name="period_end_exclusive") private java.time.LocalDate periodEndExclusive;
 public FormInstance(){}
@@ -54,6 +56,10 @@ public void setCurrentRevisionId(UUID value){this.currentRevisionId=value;}
 public Integer getLatestRevisionNo(){return latestRevisionNo;}
 public void setLatestRevisionNo(Integer value){this.latestRevisionNo=value;}
 public Long getRowVersion(){return rowVersion;}
+public String getWorkflowStatus(){return workflowStatus;}
+public void setWorkflowStatus(String value){this.workflowStatus=value;}
+public Long getStatusVersion(){return statusVersion;}
+public void setStatusVersion(Long value){this.statusVersion=value;}
 public void setRowVersion(Long value){this.rowVersion=value;}
 public java.time.LocalDate getPeriodStart(){return periodStart;}
 public void setPeriodStart(java.time.LocalDate v){periodStart=v;}
