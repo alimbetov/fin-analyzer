@@ -142,8 +142,8 @@ class HtapV11TwoMonthFinancialSourcePostgresTest {
         Jwt reader=token(f.org(),"reader","FIN_READ","FIN_ANALYZE");
         var result=resolve(f,reader);
         assertEquals(result,resolve(f,reader),"Read-only source selection must be deterministic");
-        assertEquals(new BigDecimal("100.00"),result.previous().netRevenue());
-        assertEquals(new BigDecimal("120.00"),result.current().netRevenue());
+        assertEquals(0,result.previous().netRevenue().compareTo(new BigDecimal("100.00")));
+        assertEquals(0,result.current().netRevenue().compareTo(new BigDecimal("120.00")));
         assertEquals("KZT",result.previous().currency());
         assertNotEquals(result.previous().factId(),result.current().factId());
         assertEquals("ISO_MONTH_FLOW_PERIOD_ONLY_V1",result.periodPolicyCode());
