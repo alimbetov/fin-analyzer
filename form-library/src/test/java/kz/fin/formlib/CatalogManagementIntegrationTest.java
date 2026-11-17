@@ -29,16 +29,16 @@ class CatalogManagementIntegrationTest {
 
   private String json(Object x)throws Exception{return mapper.writeValueAsString(x);}
   private JsonNode get(String path)throws Exception{
-    return mapper.readTree(http.perform(get(path)).andExpect(status().isOk())
+    return mapper.readTree(http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)).andExpect(status().isOk())
       .andReturn().getResponse().getContentAsString());
   }
   private JsonNode post(String path,Object body)throws Exception{
-    return mapper.readTree(http.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+    return mapper.readTree(http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path).contentType(MediaType.APPLICATION_JSON)
       .content(json(body))).andExpect(status().isOk())
       .andReturn().getResponse().getContentAsString());
   }
   private JsonNode put(String path,Object body)throws Exception{
-    return mapper.readTree(http.perform(put(path).contentType(MediaType.APPLICATION_JSON)
+    return mapper.readTree(http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path).contentType(MediaType.APPLICATION_JSON)
       .content(json(body))).andExpect(status().isOk())
       .andReturn().getResponse().getContentAsString());
   }
@@ -123,7 +123,7 @@ class CatalogManagementIntegrationTest {
     assertEquals(5,history.size());
     assertEquals("CREATED",history.get(0).get("type").asText());
     assertEquals("CATALOG_PUBLISHED",history.get(4).get("type").asText());
-    http.perform(post(base(id)+"/publish").contentType(MediaType.APPLICATION_JSON)
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(base(id)+"/publish").contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.FinishRequest(4,baseVersionId,"retry"))))
       .andExpect(status().isConflict());
   }
@@ -134,35 +134,35 @@ class CatalogManagementIntegrationTest {
     JsonNode draft=post("/api/v1/catalog-admin/forms/"+code+"/drafts",
       new CatalogManagementService.BeginRequest(current,"test"));
     UUID id=UUID.fromString(draft.get("editSessionId").asText());
-    http.perform(post("/api/v1/catalog-admin/forms/"+code+"/drafts")
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/catalog-admin/forms/"+code+"/drafts")
       .contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.BeginRequest(current,"duplicate"))))
       .andExpect(status().isConflict());
-    http.perform(put(base(id)+"/translations/ru").contentType(MediaType.APPLICATION_JSON)
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(base(id)+"/translations/ru").contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.TranslationUpdate(0,"FIELD",
         "UNKNOWN_FIELD","Test","Test","test"))))
       .andExpect(status().isUnprocessableEntity());
-    http.perform(put(base(id)+"/translations/de").contentType(MediaType.APPLICATION_JSON)
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(base(id)+"/translations/de").contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.TranslationUpdate(0,"FORM",
         null,"Test","Test","test"))))
       .andExpect(status().isUnprocessableEntity());
     put(base(id)+"/translations/ru",
       new CatalogManagementService.TranslationUpdate(0,"FORM",
         null,"Изменение для теста","Описание","tester"));
-    http.perform(put(base(id)+"/translations/ru").contentType(MediaType.APPLICATION_JSON)
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(base(id)+"/translations/ru").contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.TranslationUpdate(0,"FORM",
         null,"Устаревшая редакция","Описание","stale"))))
       .andExpect(status().isConflict());
     JsonNode detail=get(base(id));
     var positions=List.of(new CatalogManagementService.FieldPosition("UNKNOWN_FIELD",10));
-    http.perform(put(base(id)+"/fields/order").contentType(MediaType.APPLICATION_JSON)
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(base(id)+"/fields/order").contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.FieldOrderUpdate(1,"MAIN",positions,"tester"))))
       .andExpect(status().isUnprocessableEntity());
     JsonNode discarded=post(base(id)+"/discard",
       new CatalogManagementService.FinishRequest(1,current,"tester"));
     assertEquals("DISCARDED",discarded.get("status").asText());
     assertEquals(current,definitions.findByFormCode(code).orElseThrow().getCurrentVersionId());
-    http.perform(put(base(id)+"/translations/ru").contentType(MediaType.APPLICATION_JSON)
+    http.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(base(id)+"/translations/ru").contentType(MediaType.APPLICATION_JSON)
       .content(json(new CatalogManagementService.TranslationUpdate(2,"FORM",null,
         "После закрытия","Описание","tester"))))
       .andExpect(status().isConflict());
