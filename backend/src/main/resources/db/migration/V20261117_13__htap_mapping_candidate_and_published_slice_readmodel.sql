@@ -52,12 +52,12 @@ CREATE INDEX idx_htap_mapping_candidate_form
     ON fin_calc.htap_mapping_candidate_version
     (organization_id,form_code,form_version,mapping_version);
 
--- Exact SELECT paths should filter tenant+published revision+metric+period.
--- This is a narrow candidate lookup index, not a forced index on every metric
--- or a physical partition by tenant/form/period/currency.
-CREATE INDEX idx_htap_selection_revision_tenant
-    ON fin_fact.fact_selection
-    (organization_id,fact_set_revision_id,fact_assertion_id);
+-- Existing fact_selection primary key (fact_set_revision_id,fact_key_hash)
+-- and assertion PK remain available for the exact published-source lookup.
+-- Do NOT build an unmeasured, write-blocking ordinary index on a populated
+-- source table in an ordinary transactional Flyway migration.
+-- Any new large-table lookup index requires EXPLAIN evidence plus separate
+-- zero/low-downtime rollout (CONCURRENTLY outside a transaction), W6 gate.
 
 -- SECURITY INVOKER avoids privilege escalation through a view owner.
 -- A trusted internal resolver must additionally enforce an authorized
