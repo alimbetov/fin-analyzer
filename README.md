@@ -20,6 +20,8 @@
 
 ## Документы
 
+- **[FIN HTAP — единое нормативное ТЗ вычислительного Backend](docs/FIN-HTAP-CONSOLIDATED-TZ.md)** — проектируемый tenant-aware OLTP/OLAP-контур: строгий ключ `Tenant + FormCode + PeriodType + Period + Currency`, расчётные индикаторы, SQL/Java, агрегаты, квоты и безопасное `DETACH/DROP` временных поколений. **DESIGN ONLY / реализация и независимый S2 HOLD.**
+- **[FIN HTAP — технический аудит консолидации](docs/FIN-HTAP-CONSOLIDATION-TECHNICAL-AUDIT-2026-11-17.md)** — 18 находок (13 P0, 5 P1), разграничение исправлений ТЗ и будущих обязательных тестов/кода.
 - [Мастер-ТЗ](docs/FIN-SPEC.md) — продуктовые требования, бизнес-правила, функциональные сценарии и ограничения.
 - [Архитектура](docs/ARCHITECTURE.md) — модель данных, модули, безопасность, расчёты и схемы обмена.
 - [План и приёмка](docs/DELIVERY-AND-ACCEPTANCE.md) — этапы разработки, тесты и Definition of Done.
