@@ -189,5 +189,50 @@ class CatalogRevisionHttpIntegrationTest {
         mvc.perform(get(base + "/slots/" + slotId + "/revisions")
                 .with(user(org, "FIN_READ")))
                 .andExpect(jsonPath("$.length()").value(1));
+
+        // A change must require a reason, append v2 and leave historical v1 intact.
+        byte[] corrected;
+        try (var book = new XSSFWorkbook(new ByteArrayInputStream(filled));
+             var output = new ByteArrayOutputStream()) {
+            book.getSheet("FIN_Data").getRow(1).getCell(4).setCellValue("125.5000");
+            book.write(output);
+            corrected = output.toByteArray();
+        }
+        var correctedFile = new MockMultipartFile("file", "revised.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", corrected);
+        var correctedUpload = mvc.perform(multipart(base + "/uploads").file(correctedFile)
+                .with(user(org, "FIN_SUBMIT")).param("templateId", templateId.toString()))
+                .andExpect(status().isOk()).andReturn().getResponse();
+        JsonNode next = json.readTree(correctedUpload.getContentAsString());
+        String nextDraft = next.path("id").asText();
+        String nextHash = next.path("normalizedFingerprint").asText();
+        String missingReason = "{\\"normalizedFingerprint\\":\\"" + nextHash
+                + "\\",\\"expectedRevision\\":1,\\"changeReason\\":\\"\\"}";
+        mvc.perform(post(base + "/drafts/" + nextDraft + "/confirm")
+                .with(user(org, "FIN_SUBMIT")).contentType(MediaType.APPLICATION_JSON)
+                .content(missingReason))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("FIN_CATALOG_CHANGE_REASON_REQUIRED"));
+        String correctedConfirm = "{\\"normalizedFingerprint\\":\\"" + nextHash
+                + "\\",\\"expectedRevision\\":1,\\"changeReason\\":\\"Source correction\\"}";
+        mvc.perform(post(base + "/drafts/" + nextDraft + "/confirm")
+                .with(user(org, "FIN_SUBMIT")).contentType(MediaType.APPLICATION_JSON)
+                .content(correctedConfirm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revisionNumber").value(2));
+        mvc.perform(get(base + "/slots/" + slotId + "/revisions")
+                .with(user(org, "FIN_READ")))
+                .andExpect(jsonPath("$.length()").value(2));
+
+        mvc.perform(get(base + "/revisions/" + revisionId)
+                .with(user(org, "FIN_READ"))
+                .param("periodType", "MONTH").param("periodCode", "2026.10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revisionNumber").value(1))
+                .andExpect(jsonPath("$.rows[0].cells.cost").value("100"));
+        mvc.perform(get(base + "/revisions/" + revisionId)
+                .with(user(UUID.randomUUID(), "FIN_READ"))
+                .param("periodType", "MONTH").param("periodCode", "2026.10"))
+                .andExpect(status().isForbidden());
     }
 }
