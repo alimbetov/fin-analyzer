@@ -107,3 +107,7 @@ Cleanup is for ephemeral **derived** workspace payload only; small control-plane
 
 - PostgreSQL 16, [5.11 Partitioning](https://www.postgresql.org/docs/16/ddl-partitioning.html) — dropping/detaching partitions for fast bulk removal, locks and partition-count tradeoffs.
 - PostgreSQL 16, [ALTER TABLE](https://www.postgresql.org/docs/16/sql-altertable.html) — `DETACH PARTITION CONCURRENTLY` restrictions, intermediate pending detach and `FINALIZE`.
+
+## 9. Implementation note — first safe diagnostic utility
+
+A non-destructive first W1D step is implemented: [Workspace Partition Maintenance Utility](FIN-BE-R2-W-PARTITION-MAINTENANCE-UTILITY.md). `WorkspacePartitionMaintenanceUtility` inspects only allowlisted stage parents in `pg_catalog`, validates child naming and returns `BLOCKED_UNTIL_LIFECYCLE_BARRIER` for any attached candidate. PostgreSQL 16 Testcontainers cover read-only preview and untrusted identifiers. **This does not implement physical lifecycle partitioning, retention ledger, DDL execution, DETACH/DROP or benchmark proof.** Separate W1D schema + W4D reaper are still required and feature-off.
