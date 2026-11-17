@@ -23,7 +23,8 @@ public class HtapPublishedSliceCandidateResolver {
         SOURCE_NOT_FOUND,
         SOURCE_AMBIGUOUS,
         MAPPING_CANDIDATE_NOT_FOUND,
-        MAPPING_NOT_QUALIFIED
+        MAPPING_NOT_QUALIFIED,
+        MAPPING_EDITORIALLY_ACTIVE_UNQUALIFIED
     }
 
     public record Resolution(Status status, UUID assertionId, String reasonCode) {
@@ -122,8 +123,31 @@ public class HtapPublishedSliceCandidateResolver {
         if(mappingCount==null || mappingCount==0)
             return new Resolution(Status.MAPPING_CANDIDATE_NOT_FOUND,null,
                     "FIN_HTAP_MAPPING_VERSION_NOT_FOUND");
-        // All W1.2.A mapping revisions are PROPOSED_UNREVIEWED, not ACTUAL.
+        // Editorial activation is a useful source/mapping provenance signal,
+        // but not the audited semantic field-to-metric contract or Method S2.
+        var editorial=jdbc.query("""
+            SELECT a.catalog_epoch
+            FROM fin_calc.htap_mapping_active a
+            JOIN fin_calc.htap_mapping_candidate_version c
+              ON c.organization_id=a.organization_id
+             AND c.mapping_id=a.mapping_id
+            WHERE a.organization_id=:organization
+              AND a.form_code=:formCode AND a.form_version=:formVersion
+              AND c.mapping_version=:mappingVersion
+              AND a.mapping_sha256=:mappingSha
+            """,new MapSqlParameterSource()
+                    .addValue("organization",key.organizationId())
+                    .addValue("formCode",key.formCode())
+                    .addValue("formVersion",key.formVersion())
+                    .addValue("mappingVersion",key.mappingVersion())
+                    .addValue("mappingSha",key.mappingSha256()),
+                (rs,i)->rs.getLong(1));
+        if(editorial.size()==1)
+            return new Resolution(Status.MAPPING_EDITORIALLY_ACTIVE_UNQUALIFIED,
+                    ids.getFirst(),"FIN_HTAP_MAPPING_SEMANTIC_AND_METHOD_S2_HOLD");
+        // A candidate or non-active historical mapping never acquires current
+        // status merely by having a syntactically correct SHA.
         return new Resolution(Status.MAPPING_NOT_QUALIFIED,ids.getFirst(),
-                "FIN_HTAP_MAPPING_APPROVAL_AND_EPOCH_NOT_IMPLEMENTED");
+                "FIN_HTAP_MAPPING_NOT_CURRENTLY_APPROVED");
     }
 }
