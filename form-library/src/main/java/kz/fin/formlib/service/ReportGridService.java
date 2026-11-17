@@ -22,7 +22,7 @@ public class ReportGridService {
       List<String> metricCodes,String timeAxis) {}
   public record CreateReceipt(UUID reportId,String reportCode,int metricCount,
                               int periodCount,String timeAxis) {}
-  public record CellInput(String metricCode,String periodCode,String state,String value,String formattedValue) {}
+  public record CellInput(String metricCode,String periodCode,String state,String value) {}
   public record SaveReport(UUID organizationId,int expectedRevision,
       List<CellInput> cells,String createdBy,String changeReason,String sourceKind) {}
   public record SaveReceipt(UUID reportId,UUID revisionId,int revisionNo,
