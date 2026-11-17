@@ -88,10 +88,10 @@ class MethodologyCatalogContractTest {
             }
             assertEquals(Set.of("FIN-01", "FIN-02", "FIN-04", "CON-01", "CON-02"),
                     wired);
-            assertEquals(5, counts.get("ONE_VARIANT_WIRED_UNQUALIFIED"));
-            assertEquals(11, counts.get("CODE_CANDIDATE_NOT_QUALIFIED"));
-            assertEquals(2, counts.get("PURE_ENGINE_GOLDENS_AUTHORED_NO_TRUSTED_ADAPTER"));
-            assertEquals(42, counts.get("NOT_YET_AUDITED"));
+            assertEquals(5, counts.getOrDefault("ONE_VARIANT_WIRED_UNQUALIFIED", 0).intValue());
+            assertEquals(11, counts.getOrDefault("CODE_CANDIDATE_NOT_QUALIFIED", 0).intValue());
+            assertEquals(2, counts.getOrDefault("PURE_ENGINE_GOLDENS_AUTHORED_NO_TRUSTED_ADAPTER", 0).intValue());
+            assertEquals(42, counts.getOrDefault("NOT_YET_AUDITED", 0).intValue());
             assertEquals(60, counts.values().stream().mapToInt(Integer::intValue).sum());
 
             // These five financial families correspond to seven read-only
