@@ -144,7 +144,11 @@ public class VersionedImportProfileService {
     if(profile==null)throw new ResponseStatusException(HttpStatus.NOT_FOUND,
       "IMPORT_PROFILE_NOT_FOUND");
     String current=digest(descriptor(profile.formVersionId()));
-    if(!current.equals(profile.bindingSha256()))
+    String persistedDescriptor=db.queryForObject("""
+      SELECT binding_json FROM fin_lib.lib_import_profile_version WHERE id=?
+      """,String.class,profileId);
+    if(!current.equals(profile.bindingSha256())||
+       !digest(persistedDescriptor).equals(profile.bindingSha256()))
       throw conflict("IMPORT_PROFILE_SCHEMA_STALE");
     if(!PROFILE_CODE.equals(profile.profileCode())||
        !"LOCAL_TEST_ONLY".equals(profile.lifecycleState()))
