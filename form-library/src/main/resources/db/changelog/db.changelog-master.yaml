@@ -27,3 +27,5 @@ databaseChangeLog:
       file: db/changelog/013-lib-field-metric-display-drafts.sql
   - include:
       file: db/changelog/014-lib-versioned-field-contracts.sql
+  - include:
+      file: db/changelog/015-lib-contract-append-only-postgresql.sql
