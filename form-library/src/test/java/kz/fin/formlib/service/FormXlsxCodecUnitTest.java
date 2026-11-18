@@ -151,6 +151,11 @@ class FormXlsxCodecUnitTest {
         assertTrue(report.getRow(1).getCell(1).getStringCellValue().contains("KZT"));
         assertTrue(report.getRow(2).getCell(0).getStringCellValue().contains("2026-11-30"));
         assertTrue(report.getRow(2).getCell(1).getStringCellValue().contains("MANAGEMENT"));
+        assertTrue(report.getRow(2).getCell(1).getStringCellValue().contains("F02-V1"));
+        if(style==FormXlsxCodec.Style.EXCEL){
+          assertEquals("Көрсеткіш",report.getRow(3).getCell(0).getStringCellValue());
+          assertEquals("Мәні",report.getRow(3).getCell(1).getStringCellValue());
+        }
         var params=book.getSheet("PARAMETERS");
         assertEquals("periodType",params.getRow(11).getCell(0).getStringCellValue());
         assertEquals("M",params.getRow(11).getCell(1).getStringCellValue());
