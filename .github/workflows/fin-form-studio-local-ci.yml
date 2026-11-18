@@ -8,12 +8,14 @@ on:
       - frontend/**
       - form-library/**
       - compose.local.yml
+      - scripts/**
       - .github/workflows/fin-form-studio-local-ci.yml
   pull_request:
     paths:
       - frontend/**
       - form-library/**
       - compose.local.yml
+      - scripts/**
       - .github/workflows/fin-form-studio-local-ci.yml
   workflow_dispatch:
 
@@ -74,3 +76,25 @@ jobs:
           -Dtest=ReactLocalPostgresIntegrationTest
           -Dfin.postgres.uat.enabled=true
           test
+
+  powershell-smoke-syntax:
+    name: PowerShell 7 smoke script parser
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate local smoke script syntax without running financial writes
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path './scripts/smoke-local.ps1').Path,
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            $errors | Format-List -Force
+            exit 1
+          }
+          Write-Host 'PowerShell smoke script syntax PASS'
