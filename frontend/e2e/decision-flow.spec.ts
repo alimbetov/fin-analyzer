@@ -151,3 +151,49 @@ test('FIN UX-R1.1: mobile viewport, no horizontal overflow, accessible branch an
   expect(animation).toBe('none');
   await page.screenshot({path:testInfo.outputPath('decision-tree-mobile-390.png'),fullPage:true});
 });
+
+test('FIN Atlas: same KPI graph, exact model → F02 input, editor context and return',async({page},testInfo)=>{
+  await selectBankFlow(page);
+  const atlas=page.getByRole('button',{name:/Atlas 2.5D/});
+  await atlas.click();
+  await expect(atlas).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.fin-atlas')).toBeVisible();
+  await expect(page.locator('.atlas-metric-node.active')).toContainText('NET_PROFIT');
+  await expect(page.locator('.atlas-source-title')).toContainText('CFO-01');
+
+  const f02=page.getByRole('button',{name:'Atlas: открыть форму F02 из модели CFO-01'});
+  await expect(f02).toBeVisible();
+  await f02.click();
+  await expect(page.locator('.decision-context')).toContainText('BANK_FINANCING');
+  await expect(page.locator('.decision-context')).toContainText('NET_PROFIT');
+  await expect(page.locator('.decision-context')).toContainText('CFO-01');
+  await expect(page.locator('#field-netRevenue')).toBeVisible();
+
+  await page.getByRole('button',{name:'К дереву задачи'}).click();
+  await expect(page.locator('.fin-atlas')).toBeVisible();
+  await expect(atlas).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.atlas-metric-node.active')).toContainText('NET_PROFIT');
+  await page.screenshot({path:testInfo.outputPath('atlas-source-graph-desktop.png'),fullPage:true});
+});
+
+test('FIN Atlas: keyboard access, mobile layout and no animation when reduced motion is requested',async({page},testInfo)=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await selectBankFlow(page);
+  const atlas=page.getByRole('button',{name:/Atlas 2.5D/});
+  await atlas.focus();
+  await page.keyboard.press('Enter');
+  await expect(atlas).toHaveAttribute('aria-pressed','true');
+  const selected=page.locator('.atlas-metric-node.active');
+  await expect(selected).toContainText('NET_PROFIT');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+  expect(await selected.evaluate(el=>getComputedStyle(el).transitionDuration)).toBe('0s');
+
+  const f02=page.getByRole('button',{name:'Atlas: открыть форму F02 из модели CFO-01'});
+  await f02.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.decision-context')).toContainText('CFO-01');
+  await page.getByRole('button',{name:'К дереву задачи'}).click();
+  await expect(page.locator('.fin-atlas')).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath('atlas-mobile-390.png'),fullPage:true});
+});
