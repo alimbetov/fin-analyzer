@@ -393,3 +393,18 @@
  .editor-options-body label{width:100%}
  .editor-options-body button,.editor-options-body select{width:100%}
 }
+
+
+/* FIN R17.A — saved report discovery and period navigation */
+.saved-filters{display:flex;flex-wrap:wrap;align-items:end;gap:11px;padding:15px 0;border-bottom:1px solid #e7edf5;margin-bottom:15px}
+.saved-search{display:flex;align-items:center;gap:9px;flex:1 1 235px;min-width:180px;background:white;border:1px solid #d6e0ed;border-radius:9px;padding:0 11px;color:#71839e}
+.saved-search:focus-within{outline:2px solid #b9cef4;outline-offset:1px}
+.saved-search input{border:0;background:transparent;width:100%;min-height:41px;outline:none;font-size:13px;color:#243a57}
+.saved-select{display:flex;flex-direction:column;gap:4px;color:#61738d;font-size:11px;font-weight:650}
+.saved-select select{min-height:41px;border:1px solid #d6e0ed;background:white;border-radius:9px;padding:0 11px;color:#263d58;font-size:12px}
+.saved-clear{display:flex;align-items:center;gap:5px;min-height:41px;padding:0 12px;background:#f6f8fc;border:1px solid #d9e3ef;border-radius:9px;color:#3a5982;cursor:pointer}
+.saved-result-count{flex-basis:100%;color:#74849d;font-size:11px;margin:0}
+.saved-no-results{padding:25px 15px;text-align:center;color:#657793;font-size:13px}
+.saved-no-results button{padding:10px 15px;background:white;border:1px solid #cbd9ed;border-radius:8px;color:#315c9d;cursor:pointer}
+.saved-report:focus-visible,.saved-clear:focus-visible,.saved-select select:focus-visible{outline:3px solid #95b9f7;outline-offset:2px}
+@media(max-width:680px){.saved-filters{align-items:stretch}.saved-search{flex-basis:100%}.saved-select{flex:1 1 135px}.saved-select select{width:100%}.saved-clear{justify-content:center}}
