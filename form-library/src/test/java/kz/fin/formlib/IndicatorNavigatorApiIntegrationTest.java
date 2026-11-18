@@ -52,9 +52,12 @@ class IndicatorNavigatorApiIntegrationTest {
       assertTrue(metric.path("explanation").path("meaning").asText().length()>12);
     }
     var kkIndicators=fetch("/api/v1/indicator-catalog/indicators?locale=kk");
-    assertTrue(kkIndicators.stream().allMatch(metric->
-      metric.path("explanation").path("meaning").isNull() &&
-      "PENDING_TRANSLATION".equals(metric.path("explanation").path("reviewStatus").asText())));
+    assertEquals(46,kkIndicators.size());
+    for(JsonNode metric:kkIndicators){
+      assertTrue(metric.path("explanation").path("meaning").isNull());
+      assertEquals("PENDING_TRANSLATION",
+        metric.path("explanation").path("reviewStatus").asText());
+    }
     assertEquals(before,jdbc.queryForObject(
       "SELECT count(*) FROM fin_intake.lib_form_revision",Integer.class));
   }
