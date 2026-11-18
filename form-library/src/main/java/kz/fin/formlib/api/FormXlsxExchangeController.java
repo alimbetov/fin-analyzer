@@ -32,8 +32,9 @@ public class FormXlsxExchangeController {
   public ResponseEntity<byte[]> export(@PathVariable UUID instanceId,
       @RequestParam UUID organizationId,
       @RequestParam(required=false) String styleCode,
-      @RequestParam(required=false) UUID userId){
-    byte[] file=exchange.export(instanceId,organizationId,styleCode,userId);
+      @RequestParam(required=false) UUID userId,
+      @RequestParam(defaultValue="ru") String locale){
+    byte[] file=exchange.export(instanceId,organizationId,styleCode,userId,locale);
     return ResponseEntity.ok().contentType(XLSX)
       .header(HttpHeaders.CONTENT_DISPOSITION,
           "attachment; filename=\"fin-report-"+instanceId+".xlsx\"")
