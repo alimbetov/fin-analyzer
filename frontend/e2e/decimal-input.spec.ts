@@ -5,6 +5,7 @@ test('ROWSET accepts an unambiguous localized decimal at full precision',async({
   await page.getByRole('button',{name:/Библиотека форм/}).click();
   await page.getByPlaceholder('Код или название...').fill('DF-AST-01');
   await page.locator('.form-list-item').filter({hasText:'DF-AST-01 ·'}).click();
+  await page.getByRole('button',{name:'Создать отчёт'}).click();
   await page.getByRole('button',{name:/Добавить строку/}).click();
   const capacity = page.getByRole('table',{name:'Табличная форма'}).locator('tbody input').last();
   await capacity.fill('9\u202f007\u202f199\u202f254\u202f740\u202f993,123456789123');

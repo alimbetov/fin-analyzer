@@ -30,6 +30,7 @@ public class FormDraftService {
   private final LibCurrencyRepository currencies;
   private final ObjectMapper mapper;
   private final FieldMetricContractGuard contractGuard;
+  private final FormAttachmentStore attachments;
 
   public record RowInput(UUID rowId, int rowPosition, Map<String,String> values) {}
   public record DraftRequest(UUID instanceId, UUID organizationId, UUID economicEntityId,
@@ -47,16 +48,17 @@ public class FormDraftService {
                           java.time.LocalDate periodEndExclusive, String currency,
                           String workflowStatus,long statusVersion,
                           UUID economicEntityId,UUID businessScopeId,UUID projectId,
-                          String coverage,String reportingBasis,String dataSpace) {}
+                          String coverage,String reportingBasis,String dataSpace,
+                          FormAttachmentStore.Attachment attachment) {}
 
   public FormDraftService(FormDefinitionRepository forms,FormVersionRepository versions,
          FormFieldRepository fields,FormInstanceRepository instances,
          FormRevisionRepository revisions,FormRevisionRowRepository rows,
          FormCommandReceiptRepository receipts,LibCurrencyRepository currencies,
-         ObjectMapper mapper,FieldMetricContractGuard contractGuard) {
+         ObjectMapper mapper,FieldMetricContractGuard contractGuard,FormAttachmentStore attachments) {
     this.forms=forms;this.versions=versions;this.fields=fields;this.instances=instances;
     this.revisions=revisions;this.rows=rows;this.receipts=receipts;
-    this.currencies=currencies;this.mapper=mapper;this.contractGuard=contractGuard;
+    this.currencies=currencies;this.mapper=mapper;this.contractGuard=contractGuard;this.attachments=attachments;
   }
   private static ResponseStatusException bad(String code) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,code);
@@ -163,8 +165,6 @@ public class FormDraftService {
       .orElseThrow(()->bad("FORM_VERSION_NOT_FOUND"));
     if(!version.getFormId().equals(form.getId()))
       throw bad("FORM_VERSION_CONTEXT_MISMATCH");
-    if(!"TYPED_DRAFT".equals(form.getLegacyCaptureMode())&&
-        !"F02".equals(form.getFormCode()))throw bad("CAPTURE_SCHEMA_NOT_APPROVED");
     if(!contractGuard.matches(req.formCode(),pinnedFormVersionId))
       throw bad("FIELD_METRIC_CONTRACT_STALE");
     boolean single="SINGLE_RECORD".equals(version.getContentMode());
@@ -194,6 +194,15 @@ public class FormDraftService {
 
   @Transactional
   public DraftReceipt save(DraftRequest req,String idempotencyKey) {
+    return saveCommand(req,idempotencyKey,null);
+  }
+
+  @Transactional
+  public DraftReceipt saveWithAttachment(DraftRequest req,String idempotencyKey,FormAttachmentStore.Upload upload) {
+    return saveCommand(req,idempotencyKey,Objects.requireNonNull(upload));
+  }
+
+  private DraftReceipt saveCommand(DraftRequest req,String idempotencyKey,FormAttachmentStore.Upload upload) {
     if(req==null) throw bad("REQUEST_REQUIRED");
     required(req.organizationId(),"ORGANIZATION");required(req.economicEntityId(),"ENTITY");
     required(req.businessScopeId(),"SCOPE");required(req.projectId(),"PROJECT");
@@ -215,12 +224,6 @@ public class FormDraftService {
       throw bad("IDEMPOTENCY_KEY_REQUIRED");
     var form=forms.findByFormCode(req.formCode()).orElseThrow(()->bad("FORM_NOT_FOUND"));
     var version=versions.findById(form.getCurrentVersionId()).orElseThrow();
-    if("EVIDENCE".equals(version.getContentMode())) throw bad("EVIDENCE_UPLOAD_NOT_IMPLEMENTED");
-    // A catalog identity alone is not an approved writable schema.
-    // F02 is the single explicit pilot with a typed input contract.
-    if(!"TYPED_DRAFT".equals(form.getLegacyCaptureMode())
-        &&!"F02".equals(form.getFormCode()))
-      throw bad("CAPTURE_SCHEMA_NOT_APPROVED");
 
     // Reject malformed rows before generating any database writes or hashes.
     if(req.rows()!=null&&req.rows().stream().anyMatch(Objects::isNull))
@@ -236,6 +239,7 @@ public class FormDraftService {
       json(req.rows()==null?List.of():req.rows().stream()
         .map(r->List.of(String.valueOf(r.rowId()),r.rowPosition(),
             json(r.values()==null?Map.of():new TreeMap<>(r.values())))).toList())));
+    if(upload!=null)canonicalRequest=json(List.of(canonicalRequest,upload.fileName(),upload.mediaType(),upload.sha256()));
     String requestSha=sha("FIN-LIB-COMMAND-V1|"+canonicalRequest);
     var previous=receipts.findByOrganizationIdAndIdempotencyKey(req.organizationId(),idempotencyKey);
     if(previous.isPresent()) {
@@ -303,7 +307,12 @@ public class FormDraftService {
 
     if(!contractGuard.matches(req.formCode(),version.getId()))
       throw bad("FIELD_METRIC_CONTRACT_STALE");
-    boolean single="SINGLE_RECORD".equals(version.getContentMode());
+    boolean evidence="EVIDENCE".equals(version.getContentMode());
+    if(upload!=null&&!evidence)throw bad("ATTACHMENT_REQUIRES_DOCUMENT_FORM");
+    FormAttachmentStore.Attachment inherited=evidence&&inst.getCurrentRevisionId()!=null
+        ? attachments.find(inst.getCurrentRevisionId()).orElse(null) : null;
+    // EVIDENCE uses the versioned single-record metadata contract.
+    boolean single=evidence||"SINGLE_RECORD".equals(version.getContentMode());
     if(!single&&!"ROWSET".equals(version.getContentMode()))
       throw bad("UNSUPPORTED_CONTENT_MODE");
     if(!single&&req.values()!=null&&!req.values().isEmpty())
@@ -335,6 +344,8 @@ public class FormDraftService {
       req.currency(),req.reportingBasis(),req.dataSpace(),normalized,
       prepared.stream().sorted(Comparator.comparing(RowInput::rowId))
         .map(r->List.of(r.rowId().toString(),r.values())).toList()));
+    if(upload!=null)content=json(List.of(content,upload.fileName(),upload.mediaType(),upload.sha256()));
+    else if(inherited!=null)content=json(List.of(content,inherited.fileName(),inherited.mediaType(),inherited.sha256()));
     String contentHash=sha("FIN-LIB-CONTENT-V1|"+content);
     String orderHash=sha("FIN-LIB-ROW-ORDER-V1|"+
        prepared.stream().map(r->r.rowPosition()+":"+r.rowId()).toList());
@@ -362,6 +373,8 @@ public class FormDraftService {
       storedRows.add(entry);
     }
     if(!storedRows.isEmpty())rows.saveAll(storedRows);
+    var attachment=upload==null?inherited:attachments.store(upload);
+    if(attachment!=null)attachments.link(revision.getId(),attachment,normalized.get("documentRef"));
     inst.setCurrentRevisionId(revision.getId());
     inst.setLatestRevisionNo(revision.getRevisionNo());
     instances.saveAndFlush(inst); // Hibernate @Version protects concurrent same-slot commits.
@@ -373,6 +386,21 @@ public class FormDraftService {
     receipts.saveAndFlush(receipt);
     return new DraftReceipt(inst.getId(),revision.getId(),revision.getRevisionNo(),
         contentHash,"UNQUALIFIED_DRAFT");
+  }
+
+  public record SavedReport(UUID instanceId, String periodType, String periodCode,
+                           java.time.LocalDate periodStart, String currency, String coverage,
+                           String reportingBasis, String dataSpace, int revisionNo, String workflowStatus) {}
+
+  @Transactional(readOnly=true)
+  public List<SavedReport> listSavedReports(UUID organizationId, UUID economicEntityId,
+      UUID businessScopeId, UUID projectId, String formCode) {
+    var form=forms.findByFormCode(formCode)
+        .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"FORM_NOT_FOUND"));
+    return instances.findSavedReports(organizationId,economicEntityId,businessScopeId,projectId,form.getId())
+        .stream().map(i->new SavedReport(i.getId(),i.getPeriodType(),i.getPeriodCode(),i.getPeriodStart(),
+            i.getCurrency(),i.getCoverage(),i.getReportingBasis(),i.getDataSpace(),
+            i.getLatestRevisionNo(),i.getWorkflowStatus())).toList();
   }
 
   /** Safe re-open of the exact financial slot. No automatic write or rebind. */
@@ -405,18 +433,7 @@ public class FormDraftService {
   public DraftView readRevision(UUID id,UUID organizationId,Integer revisionNo) {
     FormInstance inst=instances.findByIdAndOrganizationId(id,organizationId)
         .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"INSTANCE_NOT_FOUND"));
-    if(inst.getCurrentRevisionId()==null)
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND");
-    FormRevision rev=revisionNo==null
-       ? revisions.findById(inst.getCurrentRevisionId()).orElseThrow()
-       : revisions.findByInstanceIdAndRevisionNo(id,revisionNo)
-           .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND"));
-    // A tenant-scoped instance is not sufficient proof of revision integrity.
-    // Fail closed before any financial values are materialized into a REST DTO.
-    if(!id.equals(rev.getInstanceId())||
-       (revisionNo==null&&!Objects.equals(inst.getLatestRevisionNo(),rev.getRevisionNo()))||
-       (revisionNo!=null&&rev.getRevisionNo()!=revisionNo))
-      throw new ResponseStatusException(HttpStatus.CONFLICT,"REVISION_INSTANCE_INTEGRITY");
+    FormRevision rev=lookupRevision(inst,revisionNo);
     FormDefinition form=forms.findById(inst.getFormId()).orElseThrow();
     FormVersion version=versions.findById(rev.getFormVersionId()).orElseThrow();
     if(!inst.getFormId().equals(version.getFormId())||
@@ -431,6 +448,34 @@ public class FormDraftService {
         inst.getPeriodEndExclusive(),inst.getCurrency(),
         inst.getWorkflowStatus(),inst.getStatusVersion(),
         inst.getEconomicEntityId(),inst.getBusinessScopeId(),inst.getProjectId(),
-        inst.getCoverage(),inst.getReportingBasis(),inst.getDataSpace());
+        inst.getCoverage(),inst.getReportingBasis(),inst.getDataSpace(),
+        "EVIDENCE".equals(rev.getContentMode())?attachments.find(rev.getId()).orElse(null):null);
+  }
+
+  @Transactional(readOnly=true)
+  public FormAttachmentStore.Download readAttachment(UUID id,UUID organizationId,UUID projectId,int revisionNo) {
+    var instance=instances.findByIdAndOrganizationId(id,organizationId)
+        .filter(i->Objects.equals(i.getProjectId(),projectId))
+        .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"INSTANCE_NOT_FOUND"));
+    var revision=lookupRevision(instance,revisionNo);
+    if(!"EVIDENCE".equals(revision.getContentMode()))
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND,"ATTACHMENT_NOT_FOUND");
+    var attachment=attachments.find(revision.getId())
+        .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"ATTACHMENT_NOT_FOUND"));
+    return attachments.load(attachment);
+  }
+
+  private FormRevision lookupRevision(FormInstance instance,Integer revisionNo) {
+    if(instance.getCurrentRevisionId()==null)
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND");
+    FormRevision revision=(revisionNo==null
+        ? revisions.findById(instance.getCurrentRevisionId())
+        : revisions.findByInstanceIdAndRevisionNo(instance.getId(),revisionNo))
+        .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND"));
+    if(!instance.getId().equals(revision.getInstanceId())||
+       (revisionNo==null&&!Objects.equals(instance.getLatestRevisionNo(),revision.getRevisionNo()))||
+       (revisionNo!=null&&revision.getRevisionNo()!=revisionNo))
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"REVISION_INSTANCE_INTEGRITY");
+    return revision;
   }
 }

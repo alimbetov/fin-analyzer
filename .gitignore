@@ -10,3 +10,5 @@ form-library/target/
 .env
 .env.*
 !.env.example
+
+**/var/form-attachments/

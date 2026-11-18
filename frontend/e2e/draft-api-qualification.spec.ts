@@ -19,8 +19,8 @@ test('draft API rejects invalid writes and preserves an immutable three-revision
     expect((await response.json()).code).toBe(code);
   }
   await rejected({...data,formCode:'QA-NOT-A-FORM'},422,'FORM_NOT_FOUND');
-  await rejected({...data,formCode:'C01'},422,'CAPTURE_SCHEMA_NOT_APPROVED');
-  await rejected({...data,formCode:'D01'},422,'EVIDENCE_UPLOAD_NOT_IMPLEMENTED');
+  await rejected({...data,formCode:'C01',values:{}},422,'INVALID_ROW_COUNT');
+  await rejected({...data,formCode:'D01',values:{netRevenue:'1'}},422,'UNKNOWN_FIELD:netRevenue');
   await rejected({...data,values:{}},422,'REQUIRED_FIELD_MISSING:netRevenue');
   await rejected({...data,values:{...data.values,netRevenue:'0.001'}},422,'CURRENCY_MINOR_UNITS_EXCEEDED');
   await rejected({...data,values:{...data.values,netRevenue:'1,234.56'}},422,'INVALID_DECIMAL');

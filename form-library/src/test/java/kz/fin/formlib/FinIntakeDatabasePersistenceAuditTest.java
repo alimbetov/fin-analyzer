@@ -5,6 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.service.FormDraftService;
 import kz.fin.formlib.service.ReportGridService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
+import kz.fin.formlib.service.FormAttachmentStore;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +34,13 @@ class FinIntakeDatabasePersistenceAuditTest {
  @Autowired MockMvc http;
  @Autowired ObjectMapper mapper;
  @Autowired JdbcTemplate db;
+ @Autowired FormAttachmentStore attachments;
+ @Autowired TransactionTemplate transactions;
+ @TempDir static Path attachmentDirectory;
+
+ @DynamicPropertySource static void configureAttachments(DynamicPropertyRegistry registry){
+   registry.add("fin.attachments.directory",()->attachmentDirectory.toString());
+ }
  private String json(Object o)throws Exception{return mapper.writeValueAsString(o);}
  private JsonNode success(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder b)
      throws Exception {
@@ -223,14 +240,79 @@ class FinIntakeDatabasePersistenceAuditTest {
    assertEquals(200,number("select count(*) from fin_intake.lib_form_revision_row where revision_id=?",revision));
  }
 
- @Test void nonApprovedFormCannotWriteSyntheticFactsDespiteBeingInCatalog()throws Exception{
-   UUID org=UUID.randomUUID();
-   var request=req(null,org,UUID.randomUUID(),"F01",0,Map.of(),List.of());
-   // F01 has a valid catalog identity but no approved typed capture schema.
-   // The denial is based on captureMode, not the locale or UI category.
-   http.perform(post("/api/v1/drafts").header("Idempotency-Key","unapproved-"+org)
-      .contentType(MediaType.APPLICATION_JSON).content(json(request)))
-      .andExpect(status().isUnprocessableEntity());
+ @Test void candidateFormPersistsValuesAsAnUnqualifiedIntakeDraft()throws Exception{
+   UUID org=UUID.randomUUID(),project=UUID.randomUUID();
+   var values=Map.of("assets","123.45","liabilities","23.45","equity","100","asOf","2026-11-30");
+   JsonNode receipt=saveDraft(req(null,org,project,"F01",0,values,List.of()),"candidate-"+org);
+   UUID instance=UUID.fromString(receipt.get("instanceId").asText());
+   UUID revision=UUID.fromString(receipt.get("revisionId").asText());
+   assertEquals("UNQUALIFIED_DRAFT",receipt.get("result").asText());
+   assertEquals("DRAFT",readDraft(instance,org,null).get("workflowStatus").asText());
+   assertEquals(mapper.valueToTree(values),mapper.readTree(db.queryForObject(
+       "select values_json from fin_intake.lib_form_revision where id=?",String.class,revision)));
+   assertEquals("CANDIDATE_UNQUALIFIED",db.queryForObject("""
+       select v.qualification_state from fin_intake.lib_form_revision r
+       join fin_lib.lib_form_version v on v.id=r.form_version_id where r.id=?
+       """,String.class,revision));
+ }
+
+ @Test void documentAttachmentIsVersionedAndStoredOutsideTheDatabase()throws Exception{
+   UUID org=UUID.randomUUID(),project=UUID.randomUUID();
+   byte[] firstFile="%PDF-1.4\nFirst synthetic test document\n%%EOF".getBytes(StandardCharsets.UTF_8);
+   byte[] secondFile="%PDF-1.4\nSecond synthetic test document\n%%EOF".getBytes(StandardCharsets.UTF_8);
+   var initial=req(null,org,project,"D01",0,Map.of("documentRef","DOC-1"),List.of());
+   String key="attachment-first-"+org;
+   JsonNode receipt=success(upload(initial,key,"справка.pdf",firstFile));
+   assertEquals("IDEMPOTENT_REPLAY",success(upload(initial,key,"справка.pdf",firstFile)).get("result").asText());
+   http.perform(upload(initial,key,"справка.pdf",secondFile)).andExpect(status().isConflict());
+   UUID instance=UUID.fromString(receipt.get("instanceId").asText());
+   JsonNode metadata=readDraft(instance,org,null).get("attachment");
+   assertEquals("справка.pdf",metadata.get("fileName").asText());
+   assertArrayEquals(firstFile,Files.readAllBytes(attachmentDirectory.resolve(metadata.get("id").asText()+".bin")));
+   assertEquals(1,number("select count(*) from fin_intake.lib_form_revision_evidence where revision_id=?",
+       UUID.fromString(receipt.get("revisionId").asText())));
+
+   saveDraft(req(instance,org,project,"D01",1,Map.of("documentRef","DOC-2"),List.of()),"attachment-inherit-"+org);
+   assertEquals(metadata,readDraft(instance,org,2).get("attachment"));
+   success(upload(req(instance,org,project,"D01",2,Map.of("documentRef","DOC-2"),List.of()),
+       "attachment-replace-"+org,"замена.pdf",secondFile));
+   String path="/api/v1/drafts/"+instance+"/revisions/";
+   for(int revision=1;revision<=3;revision++){
+     http.perform(get(path+revision+"/attachment").param("organizationId",org.toString()).param("projectId",project.toString()))
+         .andExpect(status().isOk())
+         .andExpect(header().string("X-Content-Type-Options","nosniff"))
+         .andExpect(header().string("Cache-Control","no-store"))
+         .andExpect(content().bytes(revision<3?firstFile:secondFile));
+   }
+   http.perform(get(path+"3/attachment").param("organizationId",org.toString()).param("projectId",UUID.randomUUID().toString()))
+       .andExpect(status().isNotFound());
+   http.perform(upload(initial,"reject-filename-"+org,"../unsafe.pdf",firstFile))
+       .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("ATTACHMENT_FILENAME_INVALID"));
+   http.perform(upload(initial,"reject-content-"+org,"unsafe.pdf",new byte[]{1,2,3}))
+       .andExpect(status().isUnsupportedMediaType());
+   http.perform(upload(req(null,org,project,"F02",0,Map.of(),List.of()),"reject-form-"+org,"valid.pdf",firstFile))
+       .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("ATTACHMENT_REQUIRES_DOCUMENT_FORM"));
+ }
+
+ @Test void rolledBackAttachmentRemovesItsServerFile(){
+   var upload=FormAttachmentStore.validate("test.pdf","%PDF-1.4".getBytes(StandardCharsets.UTF_8));
+   Path file=transactions.execute(transaction->{
+     var attachment=attachments.store(upload);
+     Path path=attachmentDirectory.resolve(attachment.id()+".bin");
+     assertTrue(Files.exists(path));
+     transaction.setRollbackOnly();
+     return path;
+   });
+   assertFalse(Files.exists(file));
+ }
+
+ private org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder upload(
+     FormDraftService.DraftRequest draft,String key,String fileName,byte[] file)throws Exception {
+   var request=multipart("/api/v1/drafts/with-attachment")
+       .file(new MockMultipartFile("draft","",MediaType.APPLICATION_JSON_VALUE,json(draft).getBytes(StandardCharsets.UTF_8)))
+       .file(new MockMultipartFile("file",fileName,MediaType.APPLICATION_OCTET_STREAM_VALUE,file));
+   request.header("Idempotency-Key",key);
+   return request;
  }
 
  @Test void gridThirtyOneDaysWritesCanonicalCellsDirectlyIntoIntakeAndNotApplicableIsNotZero()

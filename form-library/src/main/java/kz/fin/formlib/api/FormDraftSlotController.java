@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -20,6 +21,16 @@ public class FormDraftSlotController {
 
   public FormDraftSlotController(FormDraftService drafts) {
     this.drafts=drafts;
+  }
+
+  @GetMapping("/catalog")
+  public List<FormDraftService.SavedReport> listSavedReports(
+      @RequestParam UUID organizationId,
+      @RequestParam UUID economicEntityId,
+      @RequestParam UUID businessScopeId,
+      @RequestParam UUID projectId,
+      @RequestParam String formCode) {
+    return drafts.listSavedReports(organizationId,economicEntityId,businessScopeId,projectId,formCode);
   }
 
   @GetMapping("/slot")

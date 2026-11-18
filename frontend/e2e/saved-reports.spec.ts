@@ -1,0 +1,52 @@
+import {randomUUID} from 'node:crypto';
+import {expect,test} from '@playwright/test';
+
+test('form opens a scoped period tree and resumes and saves a report',async({page,request})=>{
+  await page.goto('/');
+  const library=page.getByRole('button',{name:'Профессиональная библиотека'});
+  const list=page.getByRole('region',{name:'Сохранённые отчёты'});
+  async function selectF02(){
+    await library.click();
+    await page.getByPlaceholder('Код или название...').fill('F02');
+    await page.getByRole('button',{name:/^Отчёт о прибылях и убытках F02/}).click();
+    await expect(list.getByRole('heading',{name:'Сохранённые отчёты'})).toBeVisible();
+  }
+  await selectF02();
+  await expect(list).toContainText('ещё нет сохранённых отчётов');
+  const scope=await page.evaluate(()=>JSON.parse(localStorage.getItem('fin-local-scope')!));
+  async function saveReport(periodCode:string,projectId=scope.projectId){
+    const response=await request.post('/api/v1/drafts',{
+      headers:{'Idempotency-Key':randomUUID()},
+      data:{...scope,projectId,formCode:'F02',periodType:'M',periodCode,
+        currency:'KZT',coverage:'PERIOD_ONLY',reportingBasis:'MANAGEMENT',dataSpace:'SYNTHETIC',
+        expectedRevision:0,values:{netRevenue:'1900.05',cogs:'300.12',operatingExpenses:'170.91'},
+        rows:[],createdBy:'qa',changeReason:'Synthetic archive test'}
+    });
+    expect(response.status(),await response.text()).toBe(200);
+  }
+  await saveReport('2025-12');
+  await saveReport('2026-03');
+  await saveReport('2026-11',randomUUID());
+
+  await list.getByRole('button',{name:'Создать отчёт'}).click();
+  await page.getByLabel('Учётный период').fill('2026-10');
+  await page.locator('#field-netRevenue').fill('2300.47');
+  await page.locator('#field-cogs').fill('400.12');
+  await page.locator('#field-operatingExpenses').fill('160.91');
+  const save=page.getByRole('button',{name:'Сохранить ревизию'});
+  await save.click();
+  await expect(page.locator('.editor-footer')).toContainText('Сохранено: ревизия 1');
+  await page.reload();
+  await selectF02();
+  await expect(list.locator('.saved-year > summary strong')).toHaveText(['2026','2025']);
+  await expect(list.locator('.saved-year[open] .saved-period > summary strong')).toHaveText(['2026-10','2026-03']);
+  await expect(list).not.toContainText('2026-11');
+  const october=list.locator('.saved-period').filter({hasText:'2026-10'});
+  await october.getByRole('button',{name:/Открыть отчёт/}).click();
+  await expect(page.locator('#field-netRevenue')).toHaveValue('2300.47');
+  await page.locator('#field-netRevenue').fill('2500.49');
+  await save.click();
+  await expect(page.locator('.editor-footer')).toContainText('Сохранено: ревизия 2');
+  await page.getByRole('button',{name:'Сохранённые отчёты'}).click();
+  await expect(october).toContainText('Редакция 2');
+});

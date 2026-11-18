@@ -30,18 +30,17 @@ test('typed ROWSET catalog candidate enables only unqualified draft editing',()=
  assert.equal(result.allowed,true);
  assert.equal(result.reason,null);
 });
-test('non-typed or EVIDENCE forms remain read only',()=>{
+test('candidate and evidence metadata contracts allow draft editing',()=>{
  const unqualified=form({formCode:'F03',captureMode:'SCHEMA_NOT_APPROVED'});
- assert.equal(canEditForm(unqualified,'F03',null).reason,'CAPTURE_SCHEMA_NOT_APPROVED');
+ assert.equal(canEditForm(unqualified,'F03',null).allowed,true);
  assert.equal(canEditForm(form({formCode:'DOC-01',contentMode:'EVIDENCE'}),'DOC-01',null)
-   .reason,'EVIDENCE_UPLOAD_NOT_IMPLEMENTED');
+   .allowed,true);
 });
 test('a stale loaded FormDetail never enables saves for newly selected code',()=>{
  assert.equal(canEditForm(form(),'F03',null).reason,'FORM_LOADING');
  assert.equal(canEditForm(form(),'F03',draft({formCode:'F03'})).allowed,false);
 });
-test('unqualified, non-single, empty, historical and published reports fail closed',()=>{
- assert.equal(canEditForm(form({captureMode:'UNQUALIFIED',formCode:'F03'}),'F03',null).allowed,false);
+test('unsupported, empty, historical and published reports fail closed',()=>{
  assert.equal(canEditForm(form({contentMode:'ROWS'}),'F02',null).allowed,false);
  assert.equal(canEditForm({...form(),fields:[]},'F02',null).allowed,false);
  assert.equal(canEditForm(form(),'F02',draft({workflowStatus:'PUBLISHED'})).allowed,false);

@@ -9,6 +9,10 @@ spring:
     driver-class-name: ${FIN_FORM_DB_DRIVER:org.postgresql.Driver}
     username: ${FIN_FORM_DB_USER:FIN}
     password: ${FIN_FORM_DB_PASSWORD:FIN}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
   jpa:
     open-in-view: false
     properties:
@@ -26,6 +30,8 @@ spring:
 
 # Public, version-aware reference cache only; never tenant-specific reports.
 fin:
+  attachments:
+    directory: ${FIN_FORM_ATTACHMENT_DIR:./var/form-attachments}
   catalog:
     cache:
       ttl: ${FIN_CATALOG_CACHE_TTL:PT5M}

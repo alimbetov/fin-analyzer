@@ -1,5 +1,5 @@
 import {execFileSync} from 'node:child_process';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {writeFileSync} from 'node:fs';
 import {expect,test,type Page} from '@playwright/test';
 import type {CategoryTree,Draft,Field,FormDetail,Receipt,Row} from '../src/api';
@@ -20,8 +20,8 @@ const locales = ['ru','kk','en','zh-Hans'];
 
 type Result = {
   formCode:string;fieldCount:number;definition?:FormDetail;contract?:Contract;categories?:string[];
-  locales?:Record<string,string>;apiWriteBlocked?:boolean;render?:boolean;fill?:boolean;save?:boolean;dbVerify?:boolean;reopen?:boolean;revision?:boolean;
-  result:'PASS'|'FAIL'|'BLOCKED';reason?:string;diagnostics:string[];
+  locales?:Record<string,string>;render?:boolean;fill?:boolean;save?:boolean;dbVerify?:boolean;reopen?:boolean;revision?:boolean;
+  result:'PASS'|'FAIL';reason?:string;diagnostics:string[];
 };
 
 function sample(fields:Field[],form:string,row:number,revision:number):Values {
@@ -145,32 +145,12 @@ test('FIN QA R1 | live catalog, browser and PostgreSQL qualification',async({bro
       expect(root).toBeDefined();
       const fields = detail.fields.filter(f=>f.inputMode==='MANUAL').sort((a,b)=>a.displayOrder-b.displayOrder);
       await openForm(page,root!.title,formCode);
+      await page.getByRole('button',{name:'Создать отчёт'}).click({timeout:budget});
       await expect(page.locator('.editor-head .eyebrow')).toHaveText(formCode+' · '+entry.version,{timeout:budget});
       const rowset = detail.form.contentMode==='ROWSET';
       if(rowset)await expect(page.getByRole('table',{name:'Табличная форма'}).locator('thead th[title]')).toHaveCount(fields.length,{timeout:budget});
       else await expect(page.locator('.editor-body input[id^="field-"]')).toHaveCount(fields.length,{timeout:budget});
       result.render = true;
-      const saveButton = page.getByRole('button',{name:'Сохранить ревизию'});
-      if(detail.form.captureMode!=='TYPED_DRAFT'&&formCode!=='F02'){
-        await expect(saveButton).toBeDisabled({timeout:budget});
-        const reason = detail.form.contentMode==='EVIDENCE'?'EVIDENCE_UPLOAD_NOT_IMPLEMENTED':'CAPTURE_SCHEMA_NOT_APPROVED';
-        const correlationId = randomUUID();
-        const response = await request.post('/api/v1/drafts',{timeout:budget,
-          headers:{'Idempotency-Key':randomUUID(),'X-FIN-UAT-Token':correlationId},
-          data:{formCode,organizationId:randomUUID(),economicEntityId:randomUUID(),
-            businessScopeId:randomUUID(),projectId:randomUUID(),periodType:'M',periodCode:'2026-11',
-            currency:'KZT',coverage:'PERIOD_ONLY',reportingBasis:'MANAGEMENT',dataSpace:'SYNTHETIC',
-            expectedRevision:0,values:{},rows:[],createdBy:'qa-r1',changeReason:'Verify blocked capture'}
-        });
-        expect(response.status(),await response.text()).toBe(422);
-        expect((await response.json()).code).toBe(reason);
-        expect(result.diagnostics).toEqual([]);
-        result.diagnostics.push(`POST /api/v1/drafts 422 ${reason} correlationId=${correlationId}`);
-        result.apiWriteBlocked = true;
-        result.result = 'BLOCKED';
-        result.reason = reason;
-        continue;
-      }
       const values = rowset?{}:sample(fields,formCode,0,1);
       const rowValues = rowset?[sample(fields,formCode,0,1),sample(fields,formCode,1,1)]:[];
       const cell = (row:number,column:number)=>rowset?
@@ -198,9 +178,7 @@ test('FIN QA R1 | live catalog, browser and PostgreSQL qualification',async({bro
       const query = '?organizationId='+first.submitted.organizationId;
       expect(await get(path+query)).toMatchObject(expected);
       await openForm(page,root!.title,formCode);
-      await page.getByRole('button',{name:'Контекст организации'}).click({timeout:budget});
-      await page.getByLabel('Instance UUID').fill(first.receipt.instanceId,{timeout:budget});
-      await page.getByRole('button',{name:'Открыть по UUID (сверить ревизию)'}).click({timeout:budget});
+      await page.getByRole('button',{name:/Открыть отчёт · KZT/}).click({timeout:budget});
       await expect(page.locator('.editor-footer')).toContainText('Открыта ревизия 1',{timeout:budget});
       for(let row=0;row<(rowset?2:1);row++)for(const [i,field] of fields.entries())
         await expect(cell(row,i)).toHaveValue((rowset?rowValues[row]:values)[field.fieldCode],{timeout:budget});

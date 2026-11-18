@@ -3,9 +3,17 @@ package kz.fin.formlib.api;
 import kz.fin.formlib.domain.*;
 import kz.fin.formlib.repository.*;
 import kz.fin.formlib.service.FormDraftService;
+import kz.fin.formlib.service.FormAttachmentStore;
 import kz.fin.formlib.service.CatalogPaging;
 import kz.fin.formlib.service.CatalogReadCache;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.*;
@@ -83,6 +91,34 @@ public class FormLibraryController {
           @RequestBody FormDraftService.DraftRequest payload){
     return drafts.save(payload,key);
   }
+  @PostMapping(value="/drafts/with-attachment",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
+  public FormDraftService.DraftReceipt saveWithAttachment(@RequestHeader("Idempotency-Key") String key,
+      @RequestPart("draft") FormDraftService.DraftRequest payload,@RequestPart("file") MultipartFile file) {
+    if(file.getSize()>FormAttachmentStore.MAX_BYTES)
+      throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"ATTACHMENT_TOO_LARGE");
+    byte[] bytes;
+    try(var input=file.getInputStream()){
+      bytes=input.readNBytes(FormAttachmentStore.MAX_BYTES+1);
+    }catch(IOException e){
+      throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,"ATTACHMENT_READ_FAILED");
+    }
+    return drafts.saveWithAttachment(payload,key,FormAttachmentStore.validate(file.getOriginalFilename(),bytes));
+  }
+
+  @GetMapping("/drafts/{id}/revisions/{number}/attachment")
+  public ResponseEntity<byte[]> downloadAttachment(@PathVariable UUID id,@PathVariable int number,
+      @RequestParam UUID organizationId,@RequestParam UUID projectId) {
+    var file=drafts.readAttachment(id,organizationId,projectId,number);
+    var disposition=ContentDisposition.attachment().filename(file.attachment().fileName(),StandardCharsets.UTF_8).build();
+    return ResponseEntity.ok()
+        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+        .contentLength(file.attachment().sizeBytes())
+        .cacheControl(CacheControl.noStore())
+        .header("Content-Disposition",disposition.toString())
+        .header("X-Content-Type-Options","nosniff")
+        .body(file.bytes());
+  }
+
   @GetMapping("/drafts/{id}")
   public FormDraftService.DraftView read(@PathVariable UUID id,
            @RequestParam UUID organizationId){

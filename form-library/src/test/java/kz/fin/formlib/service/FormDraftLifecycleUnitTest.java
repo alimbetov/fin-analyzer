@@ -48,7 +48,7 @@ class FormDraftLifecycleUnitTest {
     currencies=mock(LibCurrencyRepository.class);
     guard=mock(FieldMetricContractGuard.class);
     editor=new FormDraftService(forms,versions,fields,instances,revisions,rows,
-        receipts,currencies,new ObjectMapper(),guard);
+        receipts,currencies,new ObjectMapper(),guard,mock(FormAttachmentStore.class));
 
     var form=new FormDefinition();
     form.setId(formId);form.setFormCode("F02");

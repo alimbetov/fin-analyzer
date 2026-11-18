@@ -349,3 +349,19 @@
  .fin-atlas *, .kpi-mode-switch *{transition:none!important;animation:none!important}
  .atlas-metric-node:hover,.atlas-form-node:hover{transform:none!important}
 }
+
+.saved-reports-body{padding:16px;display:grid;gap:12px}
+.saved-reports-actions{display:flex;flex-wrap:wrap;gap:8px}
+.saved-reports-actions button,.saved-report{
+  display:flex;align-items:center;gap:8px;text-align:left;padding:10px 12px;
+  border:1px solid #dbe1ec;border-radius:8px;background:#f7f9fd;color:#243b65
+}
+.saved-reports-actions button:hover,.saved-report:hover{background:#edf2fa}
+.saved-year,.saved-period{min-width:0;border:1px solid #dbe1ec;border-radius:8px}
+.saved-year summary,.saved-period summary{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer}
+.saved-year summary span,.saved-period summary span,.saved-report small{color:#58677f;font-size:12px}
+.saved-year[open]>summary svg,.saved-period[open]>summary svg{transform:rotate(90deg)}
+.saved-period{margin:0 8px 8px}
+.saved-report{width:calc(100% - 16px);margin:0 8px 8px;overflow-wrap:anywhere}
+.saved-report span{flex:1;min-width:0;display:grid;gap:3px}
+.saved-report svg{flex-shrink:0}

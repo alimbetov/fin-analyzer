@@ -21,6 +21,21 @@ Local server only: `http://127.0.0.1:8086`.
 | `POST /api/v1/drafts` | Save SINGLE_RECORD F02 or ROWSET draft with Idempotency-Key |
 | `GET /api/v1/drafts/{id}?organizationId={uuid}` | Reopen draft at current immutable revision |
 
+### Server-side document attachments
+
+For an `EVIDENCE` form such as D01, send `POST /api/v1/drafts/with-attachment` with an `Idempotency-Key` and two multipart parts. `draft` is the same JSON object as in the regular draft endpoint. `file` is a PDF, PNG or JPEG of at most 10 MiB.
+
+```bash
+curl http://127.0.0.1:8086/api/v1/drafts/with-attachment \
+  -H 'Idempotency-Key: document-demo-1' \
+  -F 'draft=@draft.json;type=application/json' \
+  -F 'file=@example.pdf;type=application/pdf'
+```
+
+`GET /api/v1/drafts/{id}/revisions/{number}` includes `attachment` metadata when that revision has a file. Use `GET /api/v1/drafts/{id}/revisions/{number}/attachment?organizationId={uuid}&projectId={uuid}` to download its bytes. A JSON-only metadata edit carries forward the existing attachment. Sending a different file creates a new revision. Earlier revisions retain their files.
+
+File bytes live in `FIN_FORM_ATTACHMENT_DIR` (default `./var/form-attachments`, relative to the backend working directory). The database stores the revision link, filename, media type, size and SHA-256. Keep the directory on persistent server storage and back it up alongside PostgreSQL.
+
 Example F02 request (local pilot; replace UUIDs):
 
 ```bash

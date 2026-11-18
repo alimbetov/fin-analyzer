@@ -5,6 +5,8 @@ import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,Peri
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
+import SavedReports from './SavedReports';
+import type {SavedReport} from './SavedReports';
 import FinancialGoalsNavigator from './FinancialGoalsNavigator';
 import type {DecisionContext} from './decisionTree';
 import './styles.css';
@@ -15,8 +17,6 @@ const editorBlockReason:Record<string,string>={
   FORM_NOT_LOADED:'Загрузка контракта формы ещё не завершена.',
   FORM_LOADING:'Ожидаем контракт выбранной формы.',
   UNSUPPORTED_CONTENT_MODE:'Для этой формы ещё нет поддерживаемого редактора.',
-  EVIDENCE_UPLOAD_NOT_IMPLEMENTED:'Документальные формы требуют защищённой загрузки файлов. Запись пока недоступна.',
-  CAPTURE_SCHEMA_NOT_APPROVED:'Для формы пока нет типизированной схемы ввода. Каталог доступен только для просмотра.',
   NO_MANUAL_FIELDS:'В контракте формы отсутствуют поля ручного ввода.',
   DRAFT_FORM_MISMATCH:'Открытый отчёт относится к другой форме. Выберите форму, соответствующую отчёту.',
   REPORT_NOT_EDITABLE:'Отчёт больше не в статусе DRAFT. Существующие ревизии доступны только для чтения.',
@@ -83,6 +83,10 @@ export default function App(){
   const [dashboard,setDashboard]=useState(false);
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [showScope,setShowScope]=useState(false);
+  const [showReports,setShowReports]=useState(false);
+  const [reports,setReports]=useState<SavedReport[]|null>(null);
+  const [reportsError,setReportsError]=useState('');
+  const [reportsRefresh,setReportsRefresh]=useState(0);
   const [range,setRange]=useState('');
   const inFlight=useRef(false);
   const saveKeyRef=useRef<string|null>(null);
@@ -128,6 +132,19 @@ export default function App(){
     return()=>{active=false};
   },[periodType,periodCode]);
 
+  useEffect(()=>{
+    if(!showReports||navigator)return;
+    let active=true;
+    setReports(null);setReportsError('');
+    const query=new URLSearchParams({...scope,formCode});
+    get<SavedReport[]>('/drafts/catalog?'+query).then(items=>{
+      if(active)setReports(items);
+    }).catch(error=>{
+      if(active)setReportsError(String(error));
+    });
+    return()=>{active=false;};
+  },[showReports,navigator,scope,formCode,reportsRefresh]);
+
   const fields=useMemo(()=>(form?.fields??[]).filter(f=>f.inputMode==='MANUAL').sort((a,b)=>a.displayOrder-b.displayOrder),[form]);
   // The catalog is not an approval to write. Backend only accepts qualified
   // typed schemas; F02 is the explicit current pilot.
@@ -145,6 +162,7 @@ export default function App(){
       (f.formCode+' '+f.title+' '+f.functionalDomain).toLowerCase().includes(search.toLowerCase()));
   },[navigation,tree,category,search]);
   const rowset=form?.form.contentMode==='ROWSET';
+  const evidence=form?.form.contentMode==='EVIDENCE';
   const filled=rowset?rowEntries.reduce((n,r)=>n+fields.filter(f=>r.values[f.fieldCode]?.trim()).length,0):fields.filter(f=>values[f.fieldCode]?.trim()).length;
   const fieldCapacity=fields.length*(rowset?rowEntries.length:1);
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
@@ -198,18 +216,18 @@ export default function App(){
     return !dirty||window.confirm('Есть несохранённые значения. Продолжить без сохранения?');
   }
   function switchForm(code:string):boolean{
-    if(code===formCode){
-      setNavigator(false);setDashboard(false);setDecisionContext(null);
-      return true;
+    if(inFlight.current||!confirmDiscard())return false;
+    if(code!==formCode){
+      setForm(null);
+      setFormCode(code);
     }
-    if(!confirmDiscard())return false;
-    // Reset synchronously with the form selection, not after the REST response:
-    // an in-flight render must never show old fieldCode under a new formCode.
-    setForm(null);setDraft(null);setInstanceId('');setValues({});setRowEntries([]);
+    setDraft(null);setInstanceId('');setValues({});setRowEntries([]);
     setProfileId('');setPrevious(null);setPreview(null);setFile(null);
-    setFormCode(code);setNavigator(false);setDashboard(false);setDirty(false);
+    setNavigator(false);setDashboard(false);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
     setDecisionContext(null);
+    setReports(null);setReportsError('');setReportsRefresh(value=>value+1);
+    setShowReports(true);
     return true;
   }
   function openFromFlow(code:string,context:DecisionContext){
@@ -218,7 +236,7 @@ export default function App(){
     if(switchForm(code))setDecisionContext(context);
   }
   const save=()=>execute(async()=>{
-    if(!form||!editable)throw new Error('Запись разрешена только для DRAFT с утверждённым типизированным SINGLE_RECORD контрактом.');
+    if(!form||!editable)throw new Error('Для этой формы запись черновика недоступна.');
     if(!draft&&!dirty&&Object.keys(values).length===0&&rowEntries.length===0)throw new Error('Сначала заполните отчёт');
     if(draft&&!dirty)throw new Error('Нет изменений для сохранения');
     if(range==='Неверный период')throw new Error('Некорректный учётный период');
@@ -288,10 +306,11 @@ export default function App(){
     setDirty(false);setCommitUncertain(false);
     setMessage('Сохранено: ревизия '+snapshot.revisionNo+' · SHA '+snapshot.sha256.slice(0,12));
   });
-  const open=()=>execute(async()=>{
+  const openDraft=(id:string)=>execute(async()=>{
     if(!confirmDiscard())return;
-    if(!instanceId)throw new Error('Укажите UUID экземпляра');
-    const snapshot=await get<Draft>('/drafts/'+instanceId+'?organizationId='+scope.organizationId);
+    if(!id)throw new Error('Укажите UUID экземпляра');
+    const query=new URLSearchParams({organizationId:scope.organizationId});
+    const snapshot=await get<Draft>('/drafts/'+encodeURIComponent(id)+'?'+query);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
     setDraft(snapshot);setValues(snapshot.values);setRowEntries(snapshot.rows);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
     setCurrency(snapshot.currency);setScope({
@@ -299,6 +318,7 @@ export default function App(){
       businessScopeId:snapshot.businessScopeId,projectId:snapshot.projectId
     });setPreview(null);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
+    setInstanceId(snapshot.instanceId);setShowReports(false);
     setMessage('Открыта ревизия '+snapshot.revisionNo);
   });
   const download=()=>execute(async()=>{
@@ -369,12 +389,12 @@ export default function App(){
     setDirty(false);setCommitUncertain(false);
     setMessage('Commit '+current.revisionNo+' · SHA '+current.sha256.slice(0,12)+' · проверено '+Object.keys(preview.values).length+' полей');
   });
-  const reset=()=>{
-    if(!confirmDiscard())return;
+  const resetEditor=()=>{
     setDraft(null);setInstanceId('');setValues({});setRowEntries([]);setProfileId('');
     setPreview(null);setFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
     setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
   };
+  const reset=()=>{if(confirmDiscard())resetEditor();};
 
   function appendGridRow(){
     if(rowEntries.length>=200)return;
@@ -514,17 +534,28 @@ export default function App(){
               {!filtered.length&&<p className="empty">Формы не найдены</p>}
             </div>
           </section>
+          {showReports?<SavedReports title={form?.form.title??formCode} formCode={formCode}
+            reports={reports} error={reportsError} busy={busy} canCreate={editable}
+            formReady={form?.form.formCode===formCode}
+            onRefresh={()=>setReportsRefresh(value=>value+1)}
+            onNew={()=>{resetEditor();setShowReports(false);}}
+            onOpen={openDraft}/>:
           <section className="editor-panel">
             <div className="panel-head editor-head"><div><p className="eyebrow">{formCode} · {form?.form.version||'—'}</p>
               <h2>{form?.form.title||'Загрузка формы'}</h2>
               <p>{draft?'Редакция '+draft.revisionNo+' · '+draft.workflowStatus:'Новая форма · заполнение с нуля'}</p>
               <p className="editor-qualification">{form?.form.captureMode??'—'} · {form?.form.qualificationState??'—'}</p></div>
               <div className="toolbar">
+                <Tool label="Сохранённые отчёты" disabled={busy} onClick={()=>{
+                  if(confirmDiscard()){
+                    resetEditor();setShowReports(true);
+                  }
+                }}><FolderTree size={18}/></Tool>
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
                 <Tool label="Сохранить ревизию" disabled={busy||!editable||!dirty||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={18}/>:<Save size={18}/>}</Tool>
-                <Tool label="Открыть по UUID (сверить ревизию)" disabled={busy} onClick={open}><FolderOpen size={18}/></Tool>
-                <Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>
-                <Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain||saveUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>
+                <Tool label="Открыть по UUID (сверить ревизию)" disabled={busy} onClick={()=>openDraft(instanceId)}><FolderOpen size={18}/></Tool>
+                {!evidence&&<Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>}
+                {!evidence&&<Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain||saveUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>}
                 <Tool label="Контекст организации" onClick={()=>setShowScope(v=>!v)}><Settings2 size={18}/></Tool>
               </div></div>
             <div className="editor-body">
@@ -555,6 +586,7 @@ export default function App(){
               {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
               {saveUncertain&&<div className="warning"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Повторите сохранение с тем же Idempotency-Key; значения заблокированы до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
+              {evidence&&<p className="period-caption">Сохраняются реквизиты документа. Загрузка файла недоступна.</p>}
               <div className="sheet-head"><div><b>Показатели отчёта</b><p>Вставка из Excel: Ctrl+V · Enter / ↓ для следующего поля</p></div>
                 <span className="total-badge">{fields.length} полей{rowset?' на строку · '+rowEntries.length+' строк':''}</span></div>
               {rowset?<div className="sheet-scroll">
@@ -586,7 +618,7 @@ export default function App(){
                       onChange={e=>setValue(f.fieldCode,e.target.value)} onPaste={e=>pasteRange(e,i)}
                       onKeyDown={e=>nextCell(e,i)}/></div>)}
                 </div>}
-              <div className="import-box">
+              {!evidence&&<div className="import-box">
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
                 <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null)}}/>
                 <div className="import-tools">
@@ -603,10 +635,10 @@ export default function App(){
                   </tbody></table></div>
                   <p>Preview не создаёт ревизию. Commit станет доступен только для этого файла и текущего snapshot.</p>
                 </div>}
-              </div>
+              </div>}
             </div>
             <div className="editor-footer"><span className="dot"/> {message}<span className="footer-sha">{draft?'SHA256 '+draft.sha256.slice(0,16):'Unsaved'}</span></div>
-          </section>
+          </section>}
         </div>
         </>}
         <footer className="disclaimer"><AlertTriangle size={15}/> Локальный стенд. Backend без Security: не публикуйте порт 8086 в сеть и не используйте реальные финансовые данные.</footer>

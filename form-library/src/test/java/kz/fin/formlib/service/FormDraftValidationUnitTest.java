@@ -33,7 +33,7 @@ class FormDraftValidationUnitTest {
         mock(FormDefinitionRepository.class), mock(FormVersionRepository.class), fields,
         mock(FormInstanceRepository.class), mock(FormRevisionRepository.class),
         mock(FormRevisionRowRepository.class), mock(FormCommandReceiptRepository.class),
-        mock(LibCurrencyRepository.class), new ObjectMapper(), mock(FieldMetricContractGuard.class));
+        mock(LibCurrencyRepository.class), new ObjectMapper(), mock(FieldMetricContractGuard.class), mock(FormAttachmentStore.class));
     when(fields.findByFormVersionIdOrderByDisplayOrderAsc(version)).thenReturn(List.of(
         field("revenue", "MONEY", "MANUAL", true),
         field("quantity", "INTEGER", "MANUAL", false),

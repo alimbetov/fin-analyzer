@@ -29,6 +29,7 @@ async function openF02(page:Page){
   await expect(page.locator('.decision-context')).toContainText('NET_PROFIT');
   await expect(page.locator('.decision-context')).toContainText('CFO-01');
   await expect(page.locator('.decision-context')).toContainText('F02');
+  await page.getByRole('button',{name:'Создать отчёт'}).click();
   await expect(page.locator('#field-netRevenue')).toBeVisible();
 }
 
@@ -134,6 +135,7 @@ test('FIN UX-R1.1: keyboard-only selection, expand/collapse and form opening',as
   const source=page.getByRole('button',{name:'Открыть форму F02 из модели CFO-01'});
   await source.focus();
   await page.keyboard.press('Enter');
+  await page.getByRole('button',{name:'Создать отчёт'}).click();
   await expect(page.locator('#field-netRevenue')).toBeVisible();
   await expect(page.locator('.decision-context')).toContainText('CFO-01');
 });
@@ -167,6 +169,7 @@ test('FIN Atlas: same KPI graph, exact model → F02 input, editor context and r
   await expect(page.locator('.decision-context')).toContainText('BANK_FINANCING');
   await expect(page.locator('.decision-context')).toContainText('NET_PROFIT');
   await expect(page.locator('.decision-context')).toContainText('CFO-01');
+  await page.getByRole('button',{name:'Создать отчёт'}).click();
   await expect(page.locator('#field-netRevenue')).toBeVisible();
 
   await page.getByRole('button',{name:'К дереву задачи'}).click();
@@ -192,6 +195,7 @@ test('FIN Atlas: keyboard access, mobile layout and no animation when reduced mo
   const f02=page.getByRole('button',{name:'Atlas: открыть форму F02 из модели CFO-01'});
   await f02.focus();
   await page.keyboard.press('Enter');
+  await page.getByRole('button',{name:'Создать отчёт'}).click();
   await expect(page.locator('.decision-context')).toContainText('CFO-01');
   await page.getByRole('button',{name:'К дереву задачи'}).click();
   await expect(page.locator('.fin-atlas')).toBeVisible();
