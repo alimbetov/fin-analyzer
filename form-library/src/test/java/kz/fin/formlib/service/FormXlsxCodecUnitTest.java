@@ -90,10 +90,49 @@ class FormXlsxCodecUnitTest {
   @Test
   void changingFieldCodeOrInsertingUnboundCellIsRejected() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.CLASSIC),fields());
-    rejected(mutate(file,"REPORT",4,0,"otherMetric",false),"XLSX_REPORT_KEY_CHANGED");
+    // Human labels are intentionally cosmetic and do not define a binding.
+    var renamed=FormXlsxCodec.parse(mutate(file,"REPORT",4,0,"Другой заголовок",false),fields());
+    assertEquals("125000.50",renamed.values().get("netRevenue"));
     rejected(mutate(file,"PARAMETERS",14,0,"otherMetric",false),"XLSX_FIELD_BINDING_CHANGED");
     rejected(mutate(file,"REPORT",12,3,"hidden financial value",false),"XLSX_UNBOUND_REPORT_CELL");
     rejected(mutate(file,"PARAMETERS",24,5,"rogue metadata",false),"XLSX_UNBOUND_PARAMETER_CELL");
+  }
+
+  @Test
+  void localizedHeadingsAndHighlightedEditableCellsDoNotChangeInputMappings() throws Exception {
+    var translated=List.of(
+      new FormXlsxCodec.Entry("netRevenue","125000.50","MONEY","KZT",true,
+          "Выручка"),
+      new FormXlsxCodec.Entry("cogs","70000","MONEY","KZT",true,
+          "Себестоимость"),
+      new FormXlsxCodec.Entry("description","","STRING","",false,
+          "Примечание"));
+    byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),translated,
+      new FormXlsxCodec.Display("ru","Отчёт о прибылях и убытках"));
+    try(Workbook workbook=WorkbookFactory.create(new ByteArrayInputStream(file))){
+      var report=workbook.getSheet("REPORT");
+      assertEquals("FIN Form Library — Отчёт о прибылях и убытках",
+          report.getRow(0).getCell(0).getStringCellValue());
+      assertEquals("Выручка",report.getRow(4).getCell(0).getStringCellValue());
+      assertEquals("125000.50",report.getRow(4).getCell(1).getStringCellValue());
+      assertNull(report.getRow(4).getCell(2));
+      assertEquals("B5",workbook.getSheet("PARAMETERS")
+          .getRow(14).getCell(1).getStringCellValue());
+      assertEquals("ru",workbook.getSheet("PARAMETERS")
+          .getRow(9).getCell(1).getStringCellValue());
+      assertNotEquals(report.getRow(4).getCell(1).getCellStyle().getFillForegroundColor(),
+          report.getRow(6).getCell(1).getCellStyle().getFillForegroundColor());
+    }
+    assertEquals("125000.50",FormXlsxCodec.parse(file,fields()).values().get("netRevenue"));
+  }
+
+  @Test
+  void translatedLabelsInAllLocalesRemainDisplayOnly() {
+    for(String locale:List.of("ru","kk","en","zh-Hans")){
+      var display=new FormXlsxCodec.Display(locale,"Report title "+locale);
+      byte[] output=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.CLASSIC),fields(),display);
+      assertEquals(SHA,FormXlsxCodec.parse(output,fields()).envelope().contentSha256());
+    }
   }
 
   @Test
