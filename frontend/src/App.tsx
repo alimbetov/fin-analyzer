@@ -55,7 +55,7 @@ export default function App(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [message,setMessage]=useState('Подключение к Backend...');
-  const [sidebar,setSidebar]=useState(true);
+  const [sidebar,setSidebar]=useState(()=>window.innerWidth>920);
   const [dashboard,setDashboard]=useState(true);
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [showScope,setShowScope]=useState(false);
