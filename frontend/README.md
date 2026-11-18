@@ -20,7 +20,15 @@ docker compose -f compose.local.yml up -d
 docker compose -f compose.local.yml ps
 ```
 
-The development database persists in Docker volume `fin_pgdata`. The Compose password `fin_local_password` is a localhost-only example; for a distinct password set `FIN_FORM_DB_PASSWORD` before container creation, then set it for Backend too. **Changing the password environment variable does not alter the password inside an already initialized PostgreSQL volume.** Never commit a production password.
+The local development database persists in Docker volume `fin_pgdata`. Its **local-only defaults** are database `fin_form_library`, user `FIN`, password `FIN`, host `127.0.0.1`, port `5433`. Backend `application.yml` uses the same defaults; `FIN_FORM_DB_URL`, `FIN_FORM_DB_USER`, and `FIN_FORM_DB_PASSWORD` can override them. **Changing PostgreSQL initialization variables does not change users/passwords inside an existing volume.** If the volume already contains important data, do not delete it: change its role password using SQL or migrate it first. Never use `FIN/FIN` outside isolated localhost development.
+
+To inspect a freshly initialized local database:
+
+```powershell
+docker compose -f compose.local.yml exec postgres psql -U FIN -d fin_form_library -c "select current_user, current_database();"
+```
+
+If you previously ran Docker with `POSTGRES_USER=fin`, an existing `fin_pgdata` volume will **not** create the new `FIN` role automatically. Inspect current data and roles before migration. For a disposable empty UAT database only, `docker compose -f compose.local.yml down -v` removes its data, after which `up -d` initializes the new credentials.
 
 In terminal 1 (Backend, Java 21):
 
@@ -53,7 +61,7 @@ Vite proxies `/api/v1/*` to `http://127.0.0.1:8086/api/v1/*`; no browser CORS ch
 
 - Import `form-library/pom.xml` as Maven; run `FormLibraryApplication` on Java 21.
 - Open terminal in `frontend`, run `npm install` and `npm run dev`. IntelliJ supports an npm Run Configuration with `package.json=frontend/package.json`, command `run`, script `dev`.
-- PostgreSQL Data Source: host `127.0.0.1`, port `5433`, database `fin_form_library`, user `fin`, password matching `FIN_FORM_DB_PASSWORD`.
+- PostgreSQL Data Source: host `127.0.0.1`, port `5433`, database `fin_form_library`, user `FIN`, password `FIN` (unless overridden).
 - Verify Backend: http://127.0.0.1:8086/api/v1/catalog/navigation?locale=ru
 - Verify React proxy: http://127.0.0.1:5173/api/v1/catalog/category-tree?locale=ru
 
