@@ -4,6 +4,7 @@ import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste} from './clipboard';
+import {canEditForm,fileSha256,matchesPreview} from './editorPolicy';
 import './styles.css';
 
 const periodExamples:Record<string,string>={D:'2026-11-18',W:'2026-W47',DEC:'2026-11-2',M:'2026-11',Q:'2026-Q4',H:'2026-H2',Y:'2026'};
@@ -92,7 +93,7 @@ export default function App(){
   useEffect(()=>{
     let active=true;
     get<FormDetail>('/catalog/forms/'+encodeURIComponent(formCode)+'?locale='+language)
-      .then(v=>{if(active){setForm(v);if(lastForm.current!==formCode){lastForm.current=formCode;setDraft(null);setInstanceId('');setValues({});setProfileId('');setPreview(null);}}})
+      .then(v=>{if(active){setForm(v);lastForm.current=formCode;}})
       .catch(e=>{if(active)setError(String(e))});
     return()=>{active=false};
   },[formCode,language]);
@@ -107,10 +108,8 @@ export default function App(){
   const fields=useMemo(()=>(form?.fields??[]).filter(f=>f.inputMode==='MANUAL').sort((a,b)=>a.displayOrder-b.displayOrder),[form]);
   // The catalog is not an approval to write. Backend only accepts qualified
   // typed schemas; F02 is the explicit current pilot.
-  const editable=form?.form.contentMode==='SINGLE_RECORD' &&
-    (form.form.captureMode==='TYPED_DRAFT'||formCode==='F02') &&
-    (!draft||(draft.workflowStatus==='DRAFT'&&draft.formVersion===form.form.version)) &&
-    fields.length>0;
+  const eligibility=canEditForm(form,formCode,draft);
+  const editable=eligibility.allowed;
   const roots=(tree?.categories??[]).filter(c=>c.type==='ROOT');
   const filtered=useMemo(()=>{
     const included=new Set<string>();
@@ -175,6 +174,10 @@ export default function App(){
   }
   function switchForm(code:string){
     if(code===formCode||!confirmDiscard())return;
+    // Reset synchronously with the form selection, not after the REST response:
+    // an in-flight render must never show old fieldCode under a new formCode.
+    setForm(null);setDraft(null);setInstanceId('');setValues({});
+    setProfileId('');setPrevious(null);setPreview(null);setFile(null);
     setFormCode(code);setDashboard(false);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
   }
@@ -255,17 +258,23 @@ export default function App(){
     const body=new FormData();body.append('file',file);body.append('instanceId',draft.instanceId);
     body.append('organizationId',scope.organizationId);body.append('actor','react-local-uat');
     body.append('reason','React Excel Preview');
+    const uploadSha=await fileSha256(file);
     const ticket=await multipart<PreviewTicket>('/import-profiles/'+id+'/preview',body);
     const current=await get<Draft>('/drafts/'+draft.instanceId+'?organizationId='+scope.organizationId);
     if(current.revisionNo!==draft.revisionNo||current.sha256!==draft.sha256)
       throw new Error('Ревизия или SHA изменились во время Preview');
-    if(ticket.expectedRevision!==draft.revisionNo)
-      throw new Error('Preview относится к другой ревизии');
+    if(ticket.profileId!==id||!matchesPreview(ticket,current,uploadSha))
+      throw new Error('Preview не соответствует файлу, организации или ревизии');
     setPrevious(current);setPreview(ticket);
     setMessage('Preview OK: '+Object.keys(ticket.values).length+' полей · без записи в fin_intake');
   });
   const doCommit=()=>execute(async()=>{
     if(!preview||!file||!draft||!previous)throw new Error('Требуется Preview');
+    const uploadSha=await fileSha256(file);
+    if(!matchesPreview(preview,previous,uploadSha))
+      throw new Error('Файл, организация или ревизия изменились после Preview');
+    if(Date.parse(preview.expiresAt)<=Date.now())
+      throw new Error('Preview истёк. Выполните проверку файла заново.');
     const changes=Object.keys(preview.values).filter(k=>preview.values[k]!==previous.values[k]);
     if(!window.confirm('Сохранить новую immutable-ревизию? Изменений: '+changes.length+
       '. Проверьте таблицу сравнения перед подтверждением.'))return;
@@ -295,7 +304,7 @@ export default function App(){
   const reset=()=>{
     if(!confirmDiscard())return;
     setDraft(null);setInstanceId('');setValues({});setProfileId('');
-    setPreview(null);setFile(null);setDirty(false);setCommitUncertain(false);
+    setPreview(null);setFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
     setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
   };
 
@@ -401,7 +410,14 @@ export default function App(){
               {showScope&&<div className="scope-panel">
                 <div><b>Локальный UAT-контекст</b><p>Синтетические UUID; не является авторизацией</p></div>
                 {Object.entries(scope).map(([key,value])=><label key={key}>{key}<input value={value} onChange={e=>setScope(old=>({...old,[key]:e.target.value}))} disabled={isLocked}/></label>)}
-                <button onClick={()=>{setScope(newScope());reset()}}>Новая организация UAT</button>
+                <button onClick={()=>{
+                  if(!confirmDiscard())return;
+                  setScope(newScope());setDraft(null);setInstanceId('');
+                  setValues({});setProfileId('');setPreview(null);setPrevious(null);
+                  setFile(null);setDirty(false);setSaveUncertain(false);
+                  setCommitUncertain(false);saveKeyRef.current=null;
+                  setMessage('Новая локальная организация UAT');
+                }}>Новая организация UAT</button>
                 <label>Instance UUID<input value={instanceId} onChange={e=>setInstanceId(e.target.value)} /></label>
               </div>}
               {!editable&&form&&<div className="warning"><AlertTriangle size={17}/> Запись отключена: нет утверждённого типизированного SINGLE_RECORD контракта, отчёт не в DRAFT или ревизия использует другую версию формы. Каталог сам по себе не разрешает ввод.</div>}
