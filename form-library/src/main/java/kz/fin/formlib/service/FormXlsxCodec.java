@@ -89,7 +89,8 @@ public final class FormXlsxCodec {
       context.periodStart()+" — "+end;
   }
   private static String basisSummary(Display display,ReportContext context){
-    return heading(display.locale(),"Основа","Есеп негізі","Basis","编制基础")+": "+context.reportingBasis();
+    return heading(display.locale(),"Основа","Есеп негізі","Basis","编制基础")+": "+
+      context.reportingBasis()+" | "+context.formVersionLabel()+" | "+context.workflowStatus();
   }
   private static String revisionSummary(Display display,Envelope envelope,ReportContext context){
     return heading(display.locale(),"Ревизия","Редакция","Revision","修订")+": "+
@@ -208,7 +209,8 @@ public final class FormXlsxCodec {
         }
       }
       if(envelope.style()==Style.EXCEL){
-        write(report,3,0,"Field key",title);write(report,3,1,"Value",title);
+        write(report,3,0,heading(display.locale(),"Показатель","Көрсеткіш","Indicator","指标"),title);
+        write(report,3,1,heading(display.locale(),"Значение","Мәні","Value","数值"),title);
       }
       List<String> metadata=metadata(envelope,entries.size());
       String[] metaKeys={"contractFormat","instanceId","organizationId","formVersionId",
@@ -318,8 +320,10 @@ public final class FormXlsxCodec {
         expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
       }
       if(style==Style.EXCEL){
-        expect(read(report,3,0),"Field key","XLSX_HEADER_MISMATCH");
-        expect(read(report,3,1),"Value","XLSX_HEADER_MISMATCH");
+        expect(read(report,3,0),heading(locale,"Показатель","Көрсеткіш","Indicator","指标"),
+          "XLSX_HEADER_MISMATCH");
+        expect(read(report,3,1),heading(locale,"Значение","Мәні","Value","数值"),
+          "XLSX_HEADER_MISMATCH");
       }
       String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
       for(int i=0;i<columns.length;i++)
