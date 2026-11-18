@@ -34,7 +34,7 @@ export function parseExcelPaste(text:string,start:number,fields:PasteField[]):st
     row[0].trim()===String(start+i+1)&&equalLabel(row[1],fields[start+i])))
     values=grid.map(row=>row[2]);
   else if(grid.length===1&&grid[0].every(v=>
-    /^-?\\d+(?:[.,]\\d+)?$/.test(v.trim())))
+    /^-?\d+(?:[.,]\d+)?$/.test(v.trim())))
     values=grid[0];
   else
     throw new ClipboardShapeError(
