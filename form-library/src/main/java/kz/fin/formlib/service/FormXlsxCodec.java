@@ -35,7 +35,67 @@ public final class FormXlsxCodec {
   }
   public record Envelope(UUID instanceId,UUID organizationId,UUID formVersionId,
                          String formCode,int revision,String contentSha256,Style style) {}
-  public record Parsed(Envelope envelope,Map<String,String> values,String displayLocale) {}
+  public record ReportContext(String periodType,String periodCode,String periodStart,
+       String periodEndExclusive,String currency,String reportingBasis,String coverage,
+       String dataSpace,String formVersionLabel,String workflowStatus) {
+    public ReportContext {
+      for(String part:List.of(periodType,periodCode,periodStart,periodEndExclusive,
+          currency,reportingBasis,coverage,dataSpace,formVersionLabel,workflowStatus))
+        if(part==null||part.isBlank())throw invalid("XLSX_REPORT_CONTEXT_REQUIRED");
+    }
+  }
+  public record Parsed(Envelope envelope,Map<String,String> values,String displayLocale,
+                       ReportContext reportContext) {}
+  private static final String[] CONTEXT_KEYS={
+    "periodType","periodCode","periodStart","periodEndExclusive","currency",
+    "reportingBasis","coverage","dataSpace","formVersionLabel","workflowStatus"};
+  private static List<String> contextValues(ReportContext c){
+    return List.of(c.periodType(),c.periodCode(),c.periodStart(),c.periodEndExclusive(),
+      c.currency(),c.reportingBasis(),c.coverage(),c.dataSpace(),c.formVersionLabel(),
+      c.workflowStatus());
+  }
+  private static String heading(String locale,String ru,String kk,String en,String zh){
+    return switch(locale){
+      case "ru" -> ru; case "kk" -> kk; case "en" -> en; case "zh-Hans" -> zh;
+      default -> throw invalid("XLSX_LOCALE_UNSUPPORTED");
+    };
+  }
+  private static String periodLabel(String locale,String type){
+    String[] label=switch(type){
+      case "D" -> new String[]{"День","Күн","Day","日"};
+      case "W" -> new String[]{"Неделя","Апта","Week","周"};
+      case "DEC" -> new String[]{"Декада","Онкүндік","Ten-day period","旬"};
+      case "M" -> new String[]{"Месяц","Ай","Month","月"};
+      case "Q" -> new String[]{"Квартал","Тоқсан","Quarter","季度"};
+      case "H" -> new String[]{"Полугодие","Жартыжылдық","Half-year","半年"};
+      case "Y" -> new String[]{"Год","Жыл","Year","年"};
+      default -> new String[]{type,type,type,type};
+    };
+    return switch(locale){
+      case "ru" -> label[0];case "kk" -> label[1];case "en" -> label[2];
+      case "zh-Hans" -> label[3];default -> throw invalid("XLSX_LOCALE_UNSUPPORTED");
+    };
+  }
+  private static String periodSummary(Display display,ReportContext context){
+    return heading(display.locale(),"Период","Кезең","Period","期间")+": "+
+      context.periodCode()+" ("+periodLabel(display.locale(),context.periodType())+")";
+  }
+  private static String currencySummary(Display display,ReportContext context){
+    return heading(display.locale(),"Валюта","Валюта","Currency","币种")+": "+context.currency();
+  }
+  private static String datesSummary(Display display,ReportContext context){
+    String end=java.time.LocalDate.parse(context.periodEndExclusive()).minusDays(1).toString();
+    return heading(display.locale(),"Даты","Мерзімі","Dates","日期")+": "+
+      context.periodStart()+" — "+end;
+  }
+  private static String basisSummary(Display display,ReportContext context){
+    return heading(display.locale(),"Основа","Есеп негізі","Basis","编制基础")+": "+context.reportingBasis();
+  }
+  private static String revisionSummary(Display display,Envelope envelope,ReportContext context){
+    return heading(display.locale(),"Ревизия","Редакция","Revision","修订")+": "+
+      envelope.revision()+" | "+context.formVersionLabel()+" | "+envelope.style();
+  }
+
 
   private static ResponseStatusException invalid(String reason) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,reason);
@@ -83,6 +143,11 @@ public final class FormXlsxCodec {
   }
 
   public static byte[] export(Envelope envelope,List<Entry> entries,Display display) {
+    return export(envelope,entries,display,null);
+  }
+
+  public static byte[] export(Envelope envelope,List<Entry> entries,Display display,
+                              ReportContext context) {
     if(envelope==null||entries==null||entries.isEmpty()||entries.size()>MAX_CELLS)
       throw invalid("XLSX_FIELD_COUNT_INVALID");
     Set<String> names=new HashSet<>();
@@ -124,8 +189,24 @@ public final class FormXlsxCodec {
       metadataStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
       write(report,0,0,"FIN Form Library — "+display.reportTitle(),title);
-      write(report,1,0,"Style: "+envelope.style()+", revision: "+envelope.revision(),null);
-      write(report,2,0,"Input cells are highlighted; change values only. PARAMETERS is read-only.",null);
+      report.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(
+        0,0,0,envelope.style()==Style.DASHBOARD?4:1));
+      if(context==null){
+        write(report,1,0,"Style: "+envelope.style()+", revision: "+envelope.revision(),null);
+        write(report,2,0,"Input cells are highlighted; change values only. PARAMETERS is read-only.",null);
+      }else{
+        write(report,1,0,periodSummary(display,context),bold);
+        write(report,1,1,currencySummary(display,context),bold);
+        write(report,2,0,datesSummary(display,context),null);
+        write(report,2,1,basisSummary(display,context),null);
+        if(envelope.style()==Style.DASHBOARD){
+          write(report,1,3,heading(display.locale(),"Тип","Түрі","Type","类型")+
+            ": "+context.periodType(),bold);
+          write(report,1,4,revisionSummary(display,envelope,context),bold);
+          write(report,2,3,heading(display.locale(),"Охват","Қамту","Coverage","范围")+
+            ": "+context.coverage(),null);
+        }
+      }
       if(envelope.style()==Style.EXCEL){
         write(report,3,0,"Field key",title);write(report,3,1,"Value",title);
       }
@@ -140,6 +221,14 @@ public final class FormXlsxCodec {
       write(params,9,1,display.locale(),metadataStyle);
       write(params,10,0,"reportTitle",bold);
       write(params,10,1,display.reportTitle(),metadataStyle);
+      if(context!=null){
+        List<String> attrs=contextValues(context);
+        for(int i=0;i<CONTEXT_KEYS.length;i++){
+          int row=11+i/5,col=(i%5)*2;
+          write(params,row,col,CONTEXT_KEYS[i],bold);
+          write(params,row,col+1,attrs.get(i),metadataStyle);
+        }
+      }
       String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
       for(int i=0;i<columns.length;i++)write(params,FIRST_FIELD_ROW-1,i,columns[i],title);
       for(int i=0;i<entries.size();i++){
@@ -162,6 +251,9 @@ public final class FormXlsxCodec {
         report.setColumnWidth(4,11500);
       }
       report.createFreezePane(1,4);
+      report.getRow(0).setHeightInPoints(27);
+      report.getRow(1).setHeightInPoints(27);
+      report.getRow(2).setHeightInPoints(27);
       report.setDisplayGridlines(false);
       params.setColumnWidth(0,11000);params.setColumnWidth(1,13000);
       params.setColumnWidth(2,7500);params.setColumnWidth(3,7500);
@@ -197,8 +289,34 @@ public final class FormXlsxCodec {
       expect(read(params,9,0),"displayLocale","XLSX_PARAMETER_KEY_CHANGED");
       expect(read(params,10,0),"reportTitle","XLSX_PARAMETER_KEY_CHANGED");
       String locale=read(params,9,1);
-      new Display(locale,read(params,10,1));
-      expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
+      Display display=new Display(locale,read(params,10,1));
+      ReportContext context=null;
+      if(!read(params,11,0).isBlank()){
+        List<String> attr=new ArrayList<>();
+        for(int i=0;i<CONTEXT_KEYS.length;i++){
+          int row=11+i/5,col=(i%5)*2;
+          expect(read(params,row,col),CONTEXT_KEYS[i],"XLSX_CONTEXT_KEY_CHANGED");
+          String value=read(params,row,col+1);
+          if(value.isBlank())throw invalid("XLSX_REPORT_CONTEXT_REQUIRED");
+          attr.add(value);
+        }
+        context=new ReportContext(attr.get(0),attr.get(1),attr.get(2),attr.get(3),
+          attr.get(4),attr.get(5),attr.get(6),attr.get(7),attr.get(8),attr.get(9));
+        expect(read(report,1,0),periodSummary(display,context),"XLSX_PERIOD_HEADER_CHANGED");
+        expect(read(report,1,1),currencySummary(display,context),"XLSX_CURRENCY_HEADER_CHANGED");
+        expect(read(report,2,0),datesSummary(display,context),"XLSX_DATES_HEADER_CHANGED");
+        expect(read(report,2,1),basisSummary(display,context),"XLSX_BASIS_HEADER_CHANGED");
+        if(style==Style.DASHBOARD){
+          expect(read(report,1,3),heading(locale,"Тип","Түрі","Type","类型")+
+            ": "+context.periodType(),"XLSX_PERIOD_TYPE_HEADER_CHANGED");
+          expect(read(report,1,4),revisionSummary(display,new Envelope(instance,organization,
+            version,code,revision,sha,style),context),"XLSX_REVISION_HEADER_CHANGED");
+          expect(read(report,2,3),heading(locale,"Охват","Қамту","Coverage","范围")+
+            ": "+context.coverage(),"XLSX_COVERAGE_HEADER_CHANGED");
+        }
+      }else{
+        expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
+      }
       if(style==Style.EXCEL){
         expect(read(report,3,0),"Field key","XLSX_HEADER_MISMATCH");
         expect(read(report,3,1),"Value","XLSX_HEADER_MISMATCH");
@@ -239,7 +357,8 @@ public final class FormXlsxCodec {
       for(Row row:params){
         for(Cell c:row){
           int r=row.getRowNum(),col=c.getColumnIndex();
-          boolean fixed=(r<keys.length || r==9 || r==10) && col<=1;
+          boolean fixed=((r<keys.length || r==9 || r==10) && col<=1)
+             || (context!=null && (r==11||r==12) && col<10);
           boolean header=r==FIRST_FIELD_ROW-1 && col<columns.length;
           boolean binding=allowedParams.contains(r+":"+col);
           if(c.getCellType()!=CellType.BLANK && !(fixed||header||binding))
@@ -247,7 +366,7 @@ public final class FormXlsxCodec {
         }
       }
       return new Parsed(new Envelope(instance,organization,version,code,revision,sha,style),
-          Collections.unmodifiableMap(values),locale);
+          Collections.unmodifiableMap(values),locale,context);
     }catch(ResponseStatusException ex){throw ex;}
      catch(Exception ex){throw invalid("XLSX_INVALID_OR_CORRUPT");}
   }
