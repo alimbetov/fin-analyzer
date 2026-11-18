@@ -16,7 +16,8 @@ import java.util.*;
 public final class FormXlsxCodec {
   private FormXlsxCodec() {}
   public static final int MAX_BYTES=2_000_000, MAX_CELLS=20_000;
-  private static final String MAGIC="FIN-FORM-XLSX-V2";
+  private static final String MAGIC="FIN-FORM-XLSX-V3";
+  private static final String LEGACY_MAGIC="FIN-FORM-XLSX-V2";
   private static final int FIRST_FIELD_ROW=14;
   public enum Style { CLASSIC, EXCEL, DASHBOARD }
 
@@ -120,12 +121,18 @@ public final class FormXlsxCodec {
     if(cell.getCellType()!=CellType.STRING)throw invalid("XLSX_TEXT_CELL_REQUIRED");
     return cell.getStringCellValue();
   }
-  private static int[] location(Style style,int index) {
-    return switch(style){
-      case CLASSIC -> new int[]{4+index,0,1};
-      case EXCEL -> new int[]{4+index,0,1};
+  private static int[] location(Style style,int index,boolean legacy) {
+    if(legacy) return switch(style){
+      case CLASSIC,EXCEL -> new int[]{4+index,0,1};
       case DASHBOARD -> new int[]{4+index/2,(index%2)*3,(index%2)*3+1};
     };
+    return switch(style){
+      case CLASSIC,EXCEL -> new int[]{4+index,1,2};
+      case DASHBOARD -> new int[]{4+index/2,(index%2)*4+1,(index%2)*4+2};
+    };
+  }
+  private static int numberColumn(Style style,int index) {
+    return style==Style.DASHBOARD?(index%2)*4:0;
   }
   private static void expect(String actual,String expected,String reason) {
     if(!Objects.equals(actual,expected))throw invalid(reason);
@@ -184,6 +191,12 @@ public final class FormXlsxCodec {
       keyStyle.setFont(font);
       keyStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
       keyStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+      CellStyle indexStyle=book.createCellStyle();
+      indexStyle.setAlignment(HorizontalAlignment.CENTER);
+      indexStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+      indexStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+      indexStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+      indexStyle.setBorderBottom(BorderStyle.THIN);
       CellStyle metadataStyle=book.createCellStyle();
       metadataStyle.cloneStyleFrom(text);
       metadataStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
@@ -191,7 +204,7 @@ public final class FormXlsxCodec {
 
       write(report,0,0,"FIN Form Library — "+display.reportTitle(),title);
       report.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(
-        0,0,0,envelope.style()==Style.DASHBOARD?4:1));
+        0,0,0,envelope.style()==Style.DASHBOARD?6:2));
       if(context==null){
         write(report,1,0,"Style: "+envelope.style()+", revision: "+envelope.revision(),null);
         write(report,2,0,"Input cells are highlighted; change values only. PARAMETERS is read-only.",null);
@@ -208,9 +221,15 @@ public final class FormXlsxCodec {
             ": "+context.coverage(),null);
         }
       }
-      if(envelope.style()==Style.EXCEL){
-        write(report,3,0,heading(display.locale(),"Показатель","Көрсеткіш","Indicator","指标"),title);
-        write(report,3,1,heading(display.locale(),"Значение","Мәні","Value","数值"),title);
+      String labelTitle=heading(display.locale(),"Показатель","Көрсеткіш","Indicator","指标");
+      String valueTitle=heading(display.locale(),"Значение","Мәні","Value","数值");
+      write(report,3,0,"№",title);
+      write(report,3,1,labelTitle,title);
+      write(report,3,2,valueTitle,title);
+      if(envelope.style()==Style.DASHBOARD){
+        write(report,3,4,"№",title);
+        write(report,3,5,labelTitle,title);
+        write(report,3,6,valueTitle,title);
       }
       List<String> metadata=metadata(envelope,entries.size());
       String[] metaKeys={"contractFormat","instanceId","organizationId","formVersionId",
@@ -235,7 +254,8 @@ public final class FormXlsxCodec {
       for(int i=0;i<columns.length;i++)write(params,FIRST_FIELD_ROW-1,i,columns[i],title);
       for(int i=0;i<entries.size();i++){
         Entry e=entries.get(i);
-        int[] p=location(envelope.style(),i);
+        int[] p=location(envelope.style(),i,false);
+        write(report,p[0],numberColumn(envelope.style(),i),Integer.toString(i+1),indexStyle);
         write(report,p[0],p[1],e.label(),keyStyle);
         write(report,p[0],p[2],e.value(),e.required()?mandatory:optional);
         int row=FIRST_FIELD_ROW+i;
@@ -246,11 +266,14 @@ public final class FormXlsxCodec {
         write(params,row,4,Boolean.toString(e.required()),text);
         write(params,row,5,"CANONICAL_TEXT",text);
       }
-      report.setColumnWidth(0,12000);report.setColumnWidth(1,11500);
+      report.setColumnWidth(0,1700);
+      report.setColumnWidth(1,13000);
+      report.setColumnWidth(2,11000);
       if(envelope.style()==Style.DASHBOARD){
-        report.setColumnWidth(2,1600);
-        report.setColumnWidth(3,12000);
-        report.setColumnWidth(4,11500);
+        report.setColumnWidth(3,1200);
+        report.setColumnWidth(4,1700);
+        report.setColumnWidth(5,13000);
+        report.setColumnWidth(6,11000);
       }
       report.createFreezePane(1,4);
       report.getRow(0).setHeightInPoints(27);
@@ -278,7 +301,9 @@ public final class FormXlsxCodec {
       String[] keys={"contractFormat","instanceId","organizationId","formVersionId",
           "formCode","expectedRevision","contentSha256","styleCode","fieldCount"};
       for(int i=0;i<keys.length;i++)expect(read(params,i,0),keys[i],"XLSX_PARAMETER_KEY_CHANGED");
-      expect(read(params,0,1),MAGIC,"XLSX_MAGIC_INVALID");
+      String fileMagic=read(params,0,1);
+      boolean legacy=LEGACY_MAGIC.equals(fileMagic);
+      if(!legacy&&!MAGIC.equals(fileMagic))throw invalid("XLSX_MAGIC_INVALID");
       UUID instance=UUID.fromString(read(params,1,1));
       UUID organization=UUID.fromString(read(params,2,1));
       UUID version=UUID.fromString(read(params,3,1));
@@ -319,11 +344,22 @@ public final class FormXlsxCodec {
       }else{
         expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
       }
-      if(style==Style.EXCEL){
-        expect(read(report,3,0),heading(locale,"Показатель","Көрсеткіш","Indicator","指标"),
-          "XLSX_HEADER_MISMATCH");
-        expect(read(report,3,1),heading(locale,"Значение","Мәні","Value","数值"),
-          "XLSX_HEADER_MISMATCH");
+      String labelTitle=heading(locale,"Показатель","Көрсеткіш","Indicator","指标");
+      String valueTitle=heading(locale,"Значение","Мәні","Value","数值");
+      if(legacy){
+        if(style==Style.EXCEL){
+          expect(read(report,3,0),labelTitle,"XLSX_HEADER_MISMATCH");
+          expect(read(report,3,1),valueTitle,"XLSX_HEADER_MISMATCH");
+        }
+      }else{
+        expect(read(report,3,0),"№","XLSX_HEADER_MISMATCH");
+        expect(read(report,3,1),labelTitle,"XLSX_HEADER_MISMATCH");
+        expect(read(report,3,2),valueTitle,"XLSX_HEADER_MISMATCH");
+        if(style==Style.DASHBOARD){
+          expect(read(report,3,4),"№","XLSX_HEADER_MISMATCH");
+          expect(read(report,3,5),labelTitle,"XLSX_HEADER_MISMATCH");
+          expect(read(report,3,6),valueTitle,"XLSX_HEADER_MISMATCH");
+        }
       }
       String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
       for(int i=0;i<columns.length;i++)
@@ -334,7 +370,7 @@ public final class FormXlsxCodec {
       Set<String> allowedParams=new HashSet<>();
       for(int i=0;i<expected.size();i++){
         Entry e=expected.get(i);
-        int[] p=location(style,i);
+        int[] p=location(style,i,legacy);
         int r=FIRST_FIELD_ROW+i;
         expect(read(params,r,0),e.key(),"XLSX_FIELD_BINDING_CHANGED");
         expect(read(params,r,1),cellRef(p),"XLSX_CELL_MAPPING_CHANGED");
@@ -345,6 +381,12 @@ public final class FormXlsxCodec {
         // Display labels are presentation only: use server-pinned fieldKey and
         // valueCell from PARAMETERS for identity, not translated human captions.
         if(read(report,p[0],p[1]).isBlank())throw invalid("XLSX_DISPLAY_LABEL_REQUIRED");
+        if(!legacy){
+          int numberColumn=numberColumn(style,i);
+          expect(read(report,p[0],numberColumn),Integer.toString(i+1),
+            "XLSX_ROW_NUMBER_CHANGED");
+          allowed.add(p[0]+":"+numberColumn);
+        }
         allowed.add(p[0]+":"+p[1]);allowed.add(p[0]+":"+p[2]);
         values.put(e.key(),read(report,p[0],p[2]));
         for(int c=0;c<columns.length;c++)allowedParams.add(r+":"+c);
