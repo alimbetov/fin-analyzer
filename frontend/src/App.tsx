@@ -123,7 +123,7 @@ export default function App(){
   },[navigation,tree,category,search]);
   const filled=fields.filter(f=>values[f.fieldCode]?.trim()).length;
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
-  const isLocked=Boolean(draft);
+  const isLocked=Boolean(draft)||saveUncertain||commitUncertain;
 
   function setValue(code:string,value:string){
     setValues(old=>({...old,[code]:value}));
@@ -224,7 +224,7 @@ export default function App(){
   });
   const doPreview=()=>execute(async()=>{
     if(!draft||!file)throw new Error('Откройте отчёт и выберите XLSX');
-    if(dirty||saveUncertain)throw new Error('Есть несохранённая или неопределённая запись React; сначала сверьте ревизию');
+    if(dirty||saveUncertain||commitUncertain)throw new Error('Есть несохранённая или неопределённая запись React; сначала сверьте ревизию');
     if(file.size>2_000_000)throw new Error('XLSX превышает лимит Backend 2 MB');
     let id=profileId;
     if(!id){
@@ -247,6 +247,9 @@ export default function App(){
   });
   const doCommit=()=>execute(async()=>{
     if(!preview||!file||!draft||!previous)throw new Error('Требуется Preview');
+    const changes=Object.keys(preview.values).filter(k=>preview.values[k]!==previous.values[k]);
+    if(!window.confirm('Сохранить новую immutable-ревизию? Изменений: '+changes.length+
+      '. Проверьте таблицу сравнения перед подтверждением.'))return;
     const body=new FormData();body.append('file',file);body.append('instanceId',draft.instanceId);
     body.append('organizationId',scope.organizationId);body.append('actor','react-local-uat');
     body.append('reason','React Excel Commit');
@@ -385,9 +388,19 @@ export default function App(){
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
                 <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null)}}/>
                 <div className="import-tools">
-                  <Tool label="Предпросмотр XLSX без записи" disabled={!file||!draft||busy} onClick={doPreview}><Eye size={18}/></Tool>
-                  <Tool label="Подтвердить импорт новой ревизии" disabled={!preview||busy||commitUncertain} onClick={doCommit}><Check size={18}/></Tool>
+                  <Tool label="Предпросмотр XLSX без записи" disabled={!file||!draft||busy||saveUncertain||commitUncertain||dirty} onClick={doPreview}><Eye size={18}/></Tool>
+                  <Tool label="Подтвердить импорт новой ревизии" disabled={!preview||busy||commitUncertain||saveUncertain} onClick={doCommit}><Check size={18}/></Tool>
                   <span>{file?.name??'Файл не выбран'}</span></div>
+                {preview&&previous&&<div className="preview-diff" aria-label="Сравнение Excel и текущей ревизии">
+                  <div className="diff-title"><b>Preview · ревизия {previous.revisionNo} → {previous.revisionNo+1}</b>
+                    <span>{Object.keys(preview.values).filter(k=>preview.values[k]!==previous.values[k]).length} изменений</span></div>
+                  <div className="diff-scroll"><table><thead><tr><th>Поле</th><th>До</th><th>После</th></tr></thead><tbody>
+                    {Object.entries(preview.values).filter(([k,v])=>previous.values[k]!==v).map(([k,v])=>
+                      <tr key={k}><td>{fields.find(f=>f.fieldCode===k)?.title||k}</td>
+                        <td>{previous.values[k]??'—'}</td><td>{v}</td></tr>)}
+                  </tbody></table></div>
+                  <p>Preview не создаёт ревизию. Commit станет доступен только для этого файла и текущего snapshot.</p>
+                </div>}
               </div>
             </div>
             <div className="editor-footer"><span className="dot"/> {message}<span className="footer-sha">{draft?'SHA256 '+draft.sha256.slice(0,16):'Unsaved'}</span></div>
