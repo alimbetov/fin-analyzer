@@ -71,7 +71,7 @@ class ReportExportFilenameUnitTest {
       new ReportExportFilename.Identity("F02","M","2026-11","KZT",
         "EXCEL","unknown","FIN-FORM-V2",3,SHA),
       ReportExportFilename.Format.PDF));
-    assertThrows(IllegalArgumentException.class,()->ReportExportFilename.build(
+    assertThrows(NullPointerException.class,()->ReportExportFilename.build(
       identity(),null));
     assertThrows(NullPointerException.class,()->ReportExportFilename.build(
       null,ReportExportFilename.Format.HTML));
