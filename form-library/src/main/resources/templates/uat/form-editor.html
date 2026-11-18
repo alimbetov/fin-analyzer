@@ -64,6 +64,8 @@ table{border-collapse:collapse;width:100%}th,td{border:1px solid #d9e2ed;text-al
 <label style="margin-top:12px">Выбрать отредактированный XLSX<input id="upload" type="file" accept=".xlsx"></label>
 <div class="actions"><button id="preview">Preview без записи</button><button id="commit" disabled>Commit в fin_intake</button></div>
 <div class="grid"><label>Profile UUID<input id="profileId" readonly></label><label>Preview UUID<input id="previewId" readonly></label></div>
+<div class="actions"><button class="secondary" id="reconcile">Сверить сохранённые значения</button></div>
+<p class="info">Сверка сравнивает ревизию, SHA и поля с Preview, затем проверяет сохранность предыдущей ревизии.</p>
 <p class="info">Поддерживается только FIN XLSX V2, экспортированный системой. Страницы REPORT и PARAMETERS проверяются сервером. Изменяйте только значения на REPORT.</p>
 </section>
 <section><h2>4. HTTP-результаты</h2><div role="status" aria-live="polite" id="message">Загрузка тестовых полей...</div></section>
@@ -72,7 +74,7 @@ table{border-collapse:collapse;width:100%}th,td{border:1px solid #d9e2ed;text-al
 (() => {
 "use strict";
 const api="/api/v1",el=id=>document.getElementById(id),val=id=>el(id).value.trim(),set=(id,v)=>{el(id).value=v||"";};
-const data={fields:[],values:{},revision:0,profile:null,preview:null,file:null};
+const data={fields:[],values:{},revision:0,profile:null,preview:null,file:null,verifiedCandidate:null,previousSnapshot:null,lastReceipt:null};
 const uuid=()=>crypto.randomUUID();
 const log=(text,error=false)=>{el("message").className=error?"error":"";el("message").textContent=typeof text==="string"?text:JSON.stringify(text,null,2);};
 const clearTicket=()=>{data.preview=null;data.file=null;set("previewId","");el("commit").disabled=true;};
@@ -201,6 +203,11 @@ async function preview(){
  clearTicket();
  const result=await (await call("/import-profiles/"+encodeURIComponent(data.profile)+"/preview",
    {method:"POST",body:multipart(file)})).json();
+ data.previousSnapshot=await (await call("/drafts/"+encodeURIComponent(val("instanceId"))+
+   "?organizationId="+encodeURIComponent(val("organizationId")))).json();
+ if(data.previousSnapshot.revisionNo!==result.expectedRevision)
+   throw Error("Preview/исходная ревизия не совпадают");
+ data.verifiedCandidate={...result.values};
  data.preview=result.previewId;data.file=file;set("previewId",result.previewId);
  el("commit").disabled=false;log({event:"PREVIEW_NO_FINANCIAL_WRITE",result});
 }
@@ -208,7 +215,41 @@ async function commit(){
  if(!data.preview||!data.file)throw Error("Сначала Preview");
  const result=await (await call("/import-profiles/previews/"+encodeURIComponent(data.preview)+"/commit",
    {method:"POST",headers:{"Idempotency-Key":uuid()},body:multipart(data.file)})).json();
- clearTicket();await open();log({event:"COMMIT",result});
+ data.lastReceipt=result;clearTicket();await reconcile();await open();
+}
+async function reconcile(){
+ if(!val("instanceId"))throw Error("Сначала сохраните отчёт");
+ const org=encodeURIComponent(val("organizationId")),id=encodeURIComponent(val("instanceId"));
+ const current=await (await call("/drafts/"+id+"?organizationId="+org)).json();
+ const errors=[];
+ if(data.verifiedCandidate){
+   for(const [key,expected] of Object.entries(data.verifiedCandidate)){
+     if(current.values[key]!==expected)
+       errors.push(key+": expected="+expected+" actual="+current.values[key]);
+   }
+ }
+ if(data.previousSnapshot&&data.lastReceipt){
+   const previous=data.previousSnapshot,receipt=data.lastReceipt;
+   if(current.revisionNo!==previous.revisionNo+1)errors.push("Incorrect revision increment");
+   if(current.sha256===previous.sha256)errors.push("Unchanged content SHA");
+   if(current.sha256!==receipt.contentSha256)errors.push("Receipt SHA mismatch");
+   if(current.periodType!==previous.periodType||
+      current.periodCode!==previous.periodCode||
+      current.currency!==previous.currency)errors.push("Accounting context changed");
+   const old=await (await call("/drafts/"+id+"/revisions/"+
+     previous.revisionNo+"?organizationId="+org)).json();
+   if(old.sha256!==previous.sha256 ||
+     JSON.stringify(old.values)!==JSON.stringify(previous.values))
+       errors.push("Historical revision mutated");
+ }
+ const result={event:"RECONCILIATION",status:errors.length?"FAIL":"PASS",
+   revision:current.revisionNo,periodType:current.periodType,periodCode:current.periodCode,
+   currency:current.currency,sha256:current.sha256,
+   checkedValues:data.verifiedCandidate?Object.keys(data.verifiedCandidate).length:0,
+   errors,note:data.verifiedCandidate?"Compared to Preview and prior revision":
+     "No Preview available: current snapshot only"};
+ log(result,errors.length>0);
+ if(errors.length)throw Error("Reconciliation failed: "+errors.join("; "));
 }
 function bind(id,action){
  el(id).addEventListener("click",async()=>{const b=el(id);b.disabled=true;
@@ -219,10 +260,10 @@ function bind(id,action){
 bind("generate",async()=>{
  for(const id of ["organizationId","economicEntityId","businessScopeId","projectId"])set(id,uuid());
  set("instanceId","");data.revision=0;data.values={};data.profile=null;set("profileId","");
- clearTicket();el("revision").textContent="0";el("sha").textContent="";await load();
+ clearTicket();data.verifiedCandidate=null;data.previousSnapshot=null;data.lastReceipt=null;el("revision").textContent="0";el("sha").textContent="";await load();
 });
 bind("load",load);bind("open",open);bind("save",save);
-bind("export",download);bind("register",register);bind("preview",preview);bind("commit",commit);
+bind("export",download);bind("register",register);bind("preview",preview);bind("commit",commit);bind("reconcile",reconcile);
 el("style").addEventListener("change",render);
 el("locale").addEventListener("change",()=>loadReferenceCatalogs().catch(e=>log(e.message,true)));
 el("periodType").addEventListener("change",()=>{
