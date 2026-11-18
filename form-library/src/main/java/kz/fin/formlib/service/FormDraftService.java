@@ -363,8 +363,17 @@ public class FormDraftService {
        ? revisions.findById(inst.getCurrentRevisionId()).orElseThrow()
        : revisions.findByInstanceIdAndRevisionNo(id,revisionNo)
            .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"REVISION_NOT_FOUND"));
+    // A tenant-scoped instance is not sufficient proof of revision integrity.
+    // Fail closed before any financial values are materialized into a REST DTO.
+    if(!id.equals(rev.getInstanceId())||
+       (revisionNo==null&&!Objects.equals(inst.getLatestRevisionNo(),rev.getRevisionNo()))||
+       (revisionNo!=null&&rev.getRevisionNo()!=revisionNo))
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"REVISION_INSTANCE_INTEGRITY");
     FormDefinition form=forms.findById(inst.getFormId()).orElseThrow();
     FormVersion version=versions.findById(rev.getFormVersionId()).orElseThrow();
+    if(!inst.getFormId().equals(version.getFormId())||
+       !Objects.equals(rev.getContentMode(),version.getContentMode()))
+      throw new ResponseStatusException(HttpStatus.CONFLICT,"REVISION_FORM_CONTRACT_INTEGRITY");
     List<RowView> lineItems=rows.findByRevisionIdOrderByRowPositionAscRowIdAsc(rev.getId())
        .stream().map(r->new RowView(r.getRowId(),r.getRowPosition(),parseValues(r.getValuesJson()))).toList();
     return new DraftView(inst.getId(),inst.getOrganizationId(),rev.getRevisionNo(),
