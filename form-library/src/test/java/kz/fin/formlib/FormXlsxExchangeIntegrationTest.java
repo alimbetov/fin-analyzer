@@ -137,6 +137,37 @@ class FormXlsxExchangeIntegrationTest {
   }
 
   @Test
+  void exportedPeriodAndCurrencyRemainPinnedToFinIntake()throws Exception {
+    Saved saved=create("F02",Map.of("netRevenue","500",
+        "cogs","200","operatingExpenses","100"),List.of());
+    byte[] original=export(saved,"EXCEL");
+    try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(original))) {
+      var report=book.getSheet("REPORT");
+      assertTrue(report.getRow(1).getCell(0).getStringCellValue().contains("2026-11"));
+      assertTrue(report.getRow(1).getCell(1).getStringCellValue().contains("KZT"));
+      assertTrue(report.getRow(2).getCell(0).getStringCellValue().contains("2026-11-30"));
+    }
+    // Even changing both the visible header and PARAMETERS cannot change
+    // the already persisted reporting currency or accounting period.
+    byte[] changed=changeCell(original,4,1,"600");
+    try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(changed));
+        ByteArrayOutputStream out=new ByteArrayOutputStream()) {
+      book.getSheet("REPORT").getRow(1).getCell(1).setCellValue("Валюта: USD");
+      book.getSheet("PARAMETERS").getRow(11).getCell(9).setCellValue("USD");
+      book.write(out);
+      changed=out.toByteArray();
+    }
+    var file=new MockMultipartFile("file","wrong-currency.xlsx",
+       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",changed);
+    http.perform(multipart("/api/v1/drafts/"+saved.id()+"/import.xlsx")
+      .file(file).param("organizationId",saved.org().toString())
+      .param("actor","qa").param("reason","invalid context")
+      .header("Idempotency-Key","currency-context-"+saved.org()))
+      .andExpect(status().isConflict());
+    assertEquals(1,revision(saved,1).get("revisionNo").asInt());
+  }
+
+  @Test
   void staleWorkbookIsRejectedWithoutCreatingNewRevision()throws Exception{
     Saved saved=create("F02",Map.of("netRevenue","500",
         "cogs","200","operatingExpenses","100"),List.of());
