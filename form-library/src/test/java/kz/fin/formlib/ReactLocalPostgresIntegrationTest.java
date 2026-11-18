@@ -111,6 +111,56 @@ class ReactLocalPostgresIntegrationTest {
   @Autowired FormDraftService draftService;
 
   @Test
+  void concurrentFirstSaveCreatesExactlyOneSlotAndReturnsRecoverableConflict()
+      throws Exception {
+    UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),scope=UUID.randomUUID(),
+      project=UUID.randomUUID();
+    var command=new FormDraftService.DraftRequest(null,org,entity,scope,project,
+      "F02","M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
+      0,Map.of("netRevenue","120","cogs","30","operatingExpenses","5"),
+      List.of(),"pg-r3","initial concurrent");
+    byte[] payload=json.writeValueAsBytes(command);
+    var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+    var ready=new java.util.concurrent.CountDownLatch(2);
+    var fire=new java.util.concurrent.CountDownLatch(1);
+    try {
+      List<java.util.concurrent.Future<Integer>> outcomes=new java.util.ArrayList<>();
+      for(int i=0;i<2;i++){
+        final int n=i;
+        outcomes.add(pool.submit(()->{
+          ready.countDown();
+          if(!fire.await(10,java.util.concurrent.TimeUnit.SECONDS))
+            throw new IllegalStateException("START_BARRIER_TIMEOUT");
+          return mvc.perform(post("/api/v1/drafts")
+              .header("Idempotency-Key","pg-r3-first-"+org+"-"+n)
+              .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andReturn().getResponse().getStatus();
+        }));
+      }
+      assertTrue(ready.await(10,java.util.concurrent.TimeUnit.SECONDS));
+      fire.countDown();
+      List<Integer> statuses=new java.util.ArrayList<>();
+      for(var f:outcomes)statuses.add(f.get(30,java.util.concurrent.TimeUnit.SECONDS));
+      assertEquals(1,statuses.stream().filter(v->v==200).count(),statuses.toString());
+      assertEquals(1,statuses.stream().filter(v->v==409).count(),statuses.toString());
+    } finally {
+      fire.countDown();
+      pool.shutdownNow();
+    }
+    assertEquals(1,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_instance WHERE organization_id=?",
+      Integer.class,org));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_intake.lib_form_revision r
+      JOIN fin_intake.lib_form_instance i ON i.id=r.instance_id
+      WHERE i.organization_id=?
+      """,Integer.class,org));
+    assertEquals(1,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_command_receipt WHERE organization_id=?",
+      Integer.class,org));
+  }
+
+  @Test
   void competingWritesProduceOneImmutableRevisionAndOneConflict() throws Exception {
     UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),scope=UUID.randomUUID(),
       project=UUID.randomUUID();
