@@ -65,7 +65,7 @@ class VersionedImportProfileIntegrationTest {
   private static byte[] changed(byte[] file,String value)throws Exception{
     try(var book=WorkbookFactory.create(new ByteArrayInputStream(file));
         var out=new ByteArrayOutputStream()){
-      book.getSheet("REPORT").getRow(4).getCell(2).setCellValue(value);
+      book.getSheet("REPORT").getRow(4).getCell(1).setCellValue(value);
       book.write(out);
       return out.toByteArray();
     }
