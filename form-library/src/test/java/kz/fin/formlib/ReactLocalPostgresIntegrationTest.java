@@ -171,6 +171,10 @@ class ReactLocalPostgresIntegrationTest {
     var first=draftService.save(initial,"r3-create-"+org);
     UUID id=first.instanceId();
     assertEquals(1,first.revisionNo());
+    var replay=draftService.save(initial,"r3-create-"+org);
+    assertEquals("IDEMPOTENT_REPLAY",replay.result());
+    assertEquals(first.revisionId(),replay.revisionId());
+    assertEquals(first.contentSha256(),replay.contentSha256());
     var unchanged=new FormDraftService.DraftRequest(id,org,entity,scope,project,
       "F02","M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
       1,initial.values(),List.of(),"pg-r3","no change");
