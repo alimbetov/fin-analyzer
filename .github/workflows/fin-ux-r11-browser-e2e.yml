@@ -1,0 +1,108 @@
+name: FIN UX-R1.1 — Real Chromium Browser Functional Qualification
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - frontend/**
+      - form-library/**
+      - .github/workflows/fin-ux-r11-browser-e2e.yml
+  pull_request:
+    paths:
+      - frontend/**
+      - form-library/**
+      - .github/workflows/fin-ux-r11-browser-e2e.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-postgresql:
+    name: Chromium / React + Spring Boot + PostgreSQL 16
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fin_form_library
+          POSTGRES_USER: fin
+          POSTGRES_PASSWORD: fin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fin -d fin_form_library"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      CI: 'true'
+      FIN_FORM_DB_URL: jdbc:postgresql://127.0.0.1:5432/fin_form_library
+      FIN_FORM_DB_DRIVER: org.postgresql.Driver
+      FIN_FORM_DB_USER: fin
+      FIN_FORM_DB_PASSWORD: fin
+      FIN_FORM_UAT_EDITOR_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Package real Spring Boot application (no mocked API)
+        run: mvn -B -ntp -f form-library/pom.xml -DskipTests package
+
+      - name: Start backend against disposable PostgreSQL 16
+        shell: bash
+        run: |
+          nohup java -jar form-library/target/fin-form-library-0.1.0-SNAPSHOT.jar \
+            > /tmp/fin-ux-r11-backend.log 2>&1 &
+          echo $! > /tmp/fin-ux-r11-backend.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent \
+               'http://127.0.0.1:8086/api/v1/catalog/navigation?locale=ru' > /dev/null; then
+              echo 'FIN Backend REST ready with real PostgreSQL'
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/fin-ux-r11-backend.pid)" 2>/dev/null; then
+              echo 'Backend stopped unexpectedly'
+              tail -n 120 /tmp/fin-ux-r11-backend.log
+              exit 1
+            fi
+            sleep 2
+          done
+          echo 'Backend did not become ready'
+          tail -n 120 /tmp/fin-ux-r11-backend.log
+          exit 1
+
+      - name: Install React and real Chromium browser
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Browser E2E — decision → F02 → write/reopen → branch + mobile + keyboard
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Preserve Playwright browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-ux-r11-browser-evidence
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Show backend diagnostic only on failure
+        if: failure()
+        run: tail -n 150 /tmp/fin-ux-r11-backend.log || true
