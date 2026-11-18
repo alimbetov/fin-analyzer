@@ -136,6 +136,40 @@ class FormXlsxCodecUnitTest {
   }
 
   @Test
+  void accountingPeriodCurrencyAndBasisAreVisibleAndVerifiedForEveryStyle()
+      throws Exception {
+    var context=new FormXlsxCodec.ReportContext("M","2026-11","2026-11-01",
+      "2026-12-01","KZT","MANAGEMENT","PERIOD_ONLY","SYNTHETIC",
+      "F02-V1","DRAFT");
+    for(var style:FormXlsxCodec.Style.values()){
+      var display=new FormXlsxCodec.Display("kk","Пайда мен залал туралы есеп");
+      byte[] file=FormXlsxCodec.export(envelope(style),fields(),display,context);
+      try(var book=WorkbookFactory.create(new ByteArrayInputStream(file))){
+        var report=book.getSheet("REPORT");
+        assertTrue(report.getRow(1).getCell(0).getStringCellValue().contains("2026-11"));
+        assertTrue(report.getRow(1).getCell(0).getStringCellValue().contains("Ай"));
+        assertTrue(report.getRow(1).getCell(1).getStringCellValue().contains("KZT"));
+        assertTrue(report.getRow(2).getCell(0).getStringCellValue().contains("2026-11-30"));
+        assertTrue(report.getRow(2).getCell(1).getStringCellValue().contains("MANAGEMENT"));
+        var params=book.getSheet("PARAMETERS");
+        assertEquals("periodType",params.getRow(11).getCell(0).getStringCellValue());
+        assertEquals("M",params.getRow(11).getCell(1).getStringCellValue());
+        assertEquals("currency",params.getRow(11).getCell(8).getStringCellValue());
+        assertEquals("KZT",params.getRow(11).getCell(9).getStringCellValue());
+      }
+      var parsed=FormXlsxCodec.parse(file,fields());
+      assertEquals(context,parsed.reportContext());
+      assertEquals("125000.50",parsed.values().get("netRevenue"));
+      rejected(mutate(file,"PARAMETERS",11,9,"USD",false),
+          "XLSX_CURRENCY_HEADER_CHANGED");
+      rejected(mutate(file,"REPORT",1,1,"USD",false),
+          "XLSX_CURRENCY_HEADER_CHANGED");
+      rejected(mutate(file,"PARAMETERS",11,3,"2026-10",false),
+          "XLSX_PERIOD_HEADER_CHANGED");
+    }
+  }
+
+  @Test
   void rejectsExcelFormulasInsteadOfEvaluatingThem() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
     rejected(mutate(file,"REPORT",4,1,"SUM(1,2)",true),"XLSX_TEXT_CELL_REQUIRED");
