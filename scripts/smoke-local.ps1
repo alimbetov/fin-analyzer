@@ -84,6 +84,7 @@ function EditXlsx([string]$source,[string]$target,[string]$amount) {
     $output=[IO.Compression.ZipFile]::Open($target,[IO.Compression.ZipArchiveMode]::Create)
     foreach($entry in $original.Entries){
       $copy=$output.CreateEntry($entry.FullName,[IO.Compression.CompressionLevel]::Optimal)
+      if($entry.FullName.EndsWith('/')){continue}
       $src=$entry.Open()
       $dst=$copy.Open()
       try {
