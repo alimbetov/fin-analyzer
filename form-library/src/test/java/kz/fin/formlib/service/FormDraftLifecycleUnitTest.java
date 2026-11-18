@@ -145,6 +145,34 @@ class FormDraftLifecycleUnitTest {
   }
 
   @Test
+  void sameIdempotencyKeyReturnsOriginalRevisionWithoutDuplicateWrite() {
+    var command=request(null,0,Map.of("netRevenue","125.50","comment","original"));
+    var first=editor.save(command,"same-key");
+    var receiptCaptor=ArgumentCaptor.forClass(FormCommandReceipt.class);
+    verify(receipts).saveAndFlush(receiptCaptor.capture());
+    var storedReceipt=receiptCaptor.getValue();
+    var storedRevision=new FormRevision();
+    storedRevision.setId(first.revisionId());
+    storedRevision.setInstanceId(first.instanceId());
+    storedRevision.setRevisionNo(first.revisionNo());
+    storedRevision.setCanonicalContentSha256(first.contentSha256());
+    when(receipts.findByOrganizationIdAndIdempotencyKey(org,"same-key"))
+        .thenReturn(Optional.of(storedReceipt));
+    when(revisions.findById(first.revisionId())).thenReturn(Optional.of(storedRevision));
+
+    var replay=editor.save(command,"same-key");
+    assertEquals("IDEMPOTENT_REPLAY",replay.result());
+    assertEquals(first.revisionId(),replay.revisionId());
+    assertEquals(first.contentSha256(),replay.contentSha256());
+    verify(revisions,times(1)).saveAndFlush(any(FormRevision.class));
+    verify(receipts,times(1)).saveAndFlush(any(FormCommandReceipt.class));
+
+    rejects(()->editor.save(request(null,0,Map.of("netRevenue","999")),"same-key"),
+        HttpStatus.CONFLICT,"IDEMPOTENCY_KEY_REUSED");
+    verify(revisions,times(1)).saveAndFlush(any(FormRevision.class));
+  }
+
+  @Test
   void staleRevisionDoesNotWriteAnything() {
     var id=UUID.randomUUID();
     when(instances.lockByIdAndOrganizationId(id,org))
@@ -168,7 +196,7 @@ class FormDraftLifecycleUnitTest {
   }
 
   @Test
-  void invalidRequestRejectsBeforeAnyRepositoryWrite() {
+  void invalidRequestRejectsBeforeAnyRevisionWrite() {
     rejects(()->editor.save(request(null,0,Map.of("comment","missing revenue")),"invalid"),
         HttpStatus.UNPROCESSABLE_ENTITY,"REQUIRED_FIELD_MISSING");
     verify(revisions,never()).saveAndFlush(any(FormRevision.class));
