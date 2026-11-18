@@ -244,6 +244,13 @@ public class FormDraftService {
     if(req.instanceId()==null) {
       if(req.expectedRevision()!=0)
         throw new ResponseStatusException(HttpStatus.CONFLICT,"EXPECTED_INITIAL_REVISION_0");
+      // An existing slot is not a new document. Never silently append a
+      // financial revision or hide this condition as a database unique error.
+      if(instances.findExactSlot(req.organizationId(),req.economicEntityId(),
+          req.businessScopeId(),req.projectId(),form.getId(),period.periodType(),
+          period.periodCode(),req.coverage(),req.currency(),req.reportingBasis(),
+          req.dataSpace()).isPresent())
+        throw new ResponseStatusException(HttpStatus.CONFLICT,"REPORT_SLOT_ALREADY_EXISTS");
       inst=new FormInstance();inst.setId(UUID.randomUUID());
       inst.setOrganizationId(req.organizationId());inst.setEconomicEntityId(req.economicEntityId());
       inst.setBusinessScopeId(req.businessScopeId());inst.setProjectId(req.projectId());
@@ -346,6 +353,27 @@ public class FormDraftService {
     receipts.saveAndFlush(receipt);
     return new DraftReceipt(inst.getId(),revision.getId(),revision.getRevisionNo(),
         contentHash,"UNQUALIFIED_DRAFT");
+  }
+
+  /** Safe re-open of the exact financial slot. No automatic write or rebind. */
+  @Transactional(readOnly=true)
+  public DraftView readExactSlot(UUID organizationId, UUID economicEntityId,
+      UUID businessScopeId, UUID projectId, String formCode,
+      String periodType, String periodCode, String coverage,
+      String currency, String reportingBasis, String dataSpace) {
+    required(organizationId,"ORGANIZATION"); required(economicEntityId,"ENTITY");
+    required(businessScopeId,"SCOPE"); required(projectId,"PROJECT");
+    required(formCode,"FORM_CODE"); required(periodType,"PERIOD_TYPE");
+    required(periodCode,"PERIOD_CODE"); required(currency,"CURRENCY");
+    required(coverage,"COVERAGE"); required(reportingBasis,"REPORTING_BASIS");
+    required(dataSpace,"DATA_SPACE");
+    var form=forms.findByFormCode(formCode)
+        .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"FORM_NOT_FOUND"));
+    var instance=instances.findExactSlot(organizationId,economicEntityId,
+        businessScopeId,projectId,form.getId(),periodType,periodCode,
+        coverage,currency,reportingBasis,dataSpace)
+        .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"REPORT_SLOT_NOT_FOUND"));
+    return read(instance.getId(),organizationId);
   }
 
   @Transactional(readOnly=true)
