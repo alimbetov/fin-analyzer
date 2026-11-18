@@ -92,11 +92,47 @@ class FormXlsxExchangeIntegrationTest {
       JsonNode receipt=upload(saved,changeCell(file,4,column,"150000.25"),
          "xlsx-import-"+style+"-"+saved.org());
       assertEquals(2,receipt.get("revisionNo").asInt());
+      assertNotEquals(saved.sha(),receipt.get("contentSha256").asText());
+      assertEquals(receipt.get("contentSha256").asText(),revision(saved,2).get("sha256").asText());
       assertEquals("150000.25",revision(saved,2).get("values").get("netRevenue").asText());
       assertEquals("70000",revision(saved,2).get("values").get("cogs").asText());
       assertEquals("1000",revision(saved,2).get("values").get("operatingExpenses").asText());
       assertEquals("125000.5",revision(saved,1).get("values").get("netRevenue").asText());
       assertEquals(saved.sha(),revision(saved,1).get("sha256").asText());
+    }
+  }
+
+  @Test
+  void unchangedXlsxDoesNotCreateNewRevision() throws Exception {
+    Saved saved=create("F02",Map.of("netRevenue","100",
+       "cogs","40","operatingExpenses","10"),List.of());
+    byte[] unchanged=export(saved,"EXCEL");
+    var file=new MockMultipartFile("file","unchanged.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",unchanged);
+    http.perform(multipart("/api/v1/drafts/"+saved.id()+"/import.xlsx")
+      .file(file).param("organizationId",saved.org().toString())
+      .param("actor","qa").param("reason","no changes")
+      .header("Idempotency-Key","unchanged-"+saved.org()))
+      .andExpect(status().isUnprocessableEntity());
+    assertEquals(1,revision(saved,1).get("revisionNo").asInt());
+  }
+
+  @Test
+  void localizedExportKeepsCanonicalFieldCodesInParameters() throws Exception {
+    Saved saved=create("F02",Map.of("netRevenue","100",
+       "cogs","40","operatingExpenses","10"),List.of());
+    for(String locale:List.of("ru","kk","en","zh-Hans")) {
+      byte[] bytes=http.perform(get("/api/v1/drafts/"+saved.id()+"/export.xlsx")
+        .param("organizationId",saved.org().toString())
+        .param("styleCode","EXCEL").param("locale",locale))
+        .andExpect(status().isOk())
+        .andReturn().getResponse().getContentAsByteArray();
+      try(Workbook workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+        assertEquals(locale,workbook.getSheet("PARAMETERS").getRow(9)
+          .getCell(1).getStringCellValue());
+        assertEquals("netRevenue",workbook.getSheet("PARAMETERS")
+          .getRow(14).getCell(0).getStringCellValue());
+      }
     }
   }
 
