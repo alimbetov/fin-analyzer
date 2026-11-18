@@ -121,6 +121,16 @@ public class FormXlsxExchangeService {
     return result;
   }
 
+  private static FormXlsxCodec.ReportContext reportContext(Current current){
+    var view=current.view();
+    var instance=current.instance();
+    return new FormXlsxCodec.ReportContext(
+       view.periodType(),view.periodCode(),
+       view.periodStart().toString(),view.periodEndExclusive().toString(),
+       view.currency(),instance.getReportingBasis(),instance.getCoverage(),
+       instance.getDataSpace(),view.formVersion(),view.workflowStatus());
+  }
+
   @Transactional(readOnly=true)
   public byte[] export(UUID instanceId,UUID organizationId,String styleCode,UUID userId){
     return export(instanceId,organizationId,styleCode,userId,"ru");
@@ -138,7 +148,8 @@ public class FormXlsxExchangeService {
       current.revision().getRevisionNo(),current.revision().getCanonicalContentSha256(),
       FormXlsxCodec.style(selected));
     var resolved=FormXlsxCodec.export(envelope,localizedEntries(current,locale),
-      new FormXlsxCodec.Display(locale,localizedTitle(current,locale)));
+      new FormXlsxCodec.Display(locale,localizedTitle(current,locale)),
+      reportContext(current));
     return resolved;
   }
 
@@ -167,6 +178,9 @@ public class FormXlsxExchangeService {
     if(current.revision().getRevisionNo()!=metadata.revision()||
        !current.revision().getCanonicalContentSha256().equals(metadata.contentSha256()))
       throw conflict("XLSX_STALE_REVISION");
+    if(parsed.reportContext()!=null&&
+       !reportContext(current).equals(parsed.reportContext()))
+      throw conflict("XLSX_REPORT_CONTEXT_CHANGED");
     Map<String,String> values=new LinkedHashMap<>();
     List<FormDraftService.RowInput> rows=new ArrayList<>();
     Map<String,String> normalizedCells=new LinkedHashMap<>();
