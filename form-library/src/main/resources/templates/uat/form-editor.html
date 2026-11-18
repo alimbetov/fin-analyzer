@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIN Form Library — UAT</title>
+<style>
+body{margin:0;background:#f3f6fa;color:#17263c;font:14px/1.5 system-ui,sans-serif}
+header{background:#172b48;color:white;padding:20px}
+main{max-width:1100px;margin:auto;padding:20px;display:grid;gap:14px}
+section{background:white;border:1px solid #d5dfea;border-radius:9px;padding:18px}
+h1{margin:0;font-size:23px}h2{font-size:17px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+label{display:grid;gap:4px;color:#495b73;font-weight:600;font-size:12px}
+input,select{width:100%;min-width:0;box-sizing:border-box;border:1px solid #bdccdc;padding:8px;border-radius:5px}
+button{background:#1862a5;color:white;border:0;border-radius:5px;padding:9px 13px;cursor:pointer}
+button.secondary{background:#e8f0fa;color:#164e84}button:disabled{opacity:.5}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.info{color:#5f7089;font-size:12px}
+#message{white-space:pre-wrap;overflow-wrap:anywhere;background:#10233a;color:#d6e7fa;padding:12px;border-radius:7px;min-height:40px}
+#message.error{background:#fff0f2;color:#a02230}
+#editor{display:grid;gap:10px}
+#editor.excel{display:block}
+#editor.dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}
+#editor label{border:1px solid #e0e7f0;border-radius:6px;padding:9px}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #d9e2ed;text-align:left;padding:8px}th{background:#edf3fa}
+@media(max-width:700px){.grid,#editor.dashboard{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>FIN Form Library — тестовый редактор</h1><div>Временная MVC / Thymeleaf страница. Сохранение, выгрузка и загрузка работают через действующие REST-контроллеры.</div></header>
+<main>
+<section>
+<h2>1. Контекст</h2>
+<div class="grid">
+<label>Форма<select id="formCode"><option value="F02">F02</option></select></label>
+<label>Стиль<select id="style"><option>CLASSIC</option><option selected>EXCEL</option><option>DASHBOARD</option></select></label>
+<label>Период<input id="period" value="2026-11"></label>
+<label>Валюта<input id="currency" value="KZT"></label>
+<label>Организация UUID<input id="organizationId"></label>
+<label>Компания UUID<input id="economicEntityId"></label>
+<label>Scope UUID<input id="businessScopeId"></label>
+<label>Проект UUID<input id="projectId"></label>
+<label>Автор<input id="actor" value="local-uat"></label>
+<label>Причина изменения<input id="reason" value="local UAT"></label>
+</div>
+<div class="actions"><button id="generate">Создать тестовый контекст</button><button class="secondary" id="load">Загрузить поля</button></div>
+<p class="info">Для UAT используются демонстрационные UUID. Авторизация и проверка принадлежности пользователю здесь не реализованы.</p>
+</section>
+<section>
+<h2>2. Создание / редактирование</h2>
+<label>Instance UUID<input id="instanceId" placeholder="Пусто для нового отчёта"></label>
+<div class="actions"><button id="open" class="secondary">Открыть отчёт</button><button id="save">Сохранить новую ревизию</button><span>Ревизия: <strong id="revision">0</strong></span></div>
+<div class="info" id="sha"></div>
+<h2 style="margin-top:18px">Поля отчёта</h2>
+<div id="editor"></div>
+<p class="info">Поддерживается SINGLE_RECORD. Значения отправляются полным снимком, не PATCH. Необязательные поля не пропадают при обычном редактировании через эту страницу.</p>
+</section>
+<section>
+<h2>3. Excel — экспорт, Preview, Commit</h2>
+<div class="actions"><button id="export">Скачать XLSX (REPORT + PARAMETERS)</button><button id="register" class="secondary">Создать R19-профиль</button></div>
+<label style="margin-top:12px">Выбрать отредактированный XLSX<input id="upload" type="file" accept=".xlsx"></label>
+<div class="actions"><button id="preview">Preview без записи</button><button id="commit" disabled>Commit в fin_intake</button></div>
+<div class="grid"><label>Profile UUID<input id="profileId" readonly></label><label>Preview UUID<input id="previewId" readonly></label></div>
+<p class="info">Поддерживается только FIN XLSX V2, экспортированный системой. Страницы REPORT и PARAMETERS проверяются сервером. Изменяйте только значения на REPORT.</p>
+</section>
+<section><h2>4. HTTP-результаты</h2><div role="status" aria-live="polite" id="message">Загрузка тестовых полей...</div></section>
+</main>
+<script>
+(() => {
+"use strict";
+const api="/api/v1",el=id=>document.getElementById(id),val=id=>el(id).value.trim(),set=(id,v)=>{el(id).value=v||"";};
+const data={fields:[],values:{},revision:0,profile:null,preview:null,file:null};
+const uuid=()=>crypto.randomUUID();
+const log=(text,error=false)=>{el("message").className=error?"error":"";el("message").textContent=typeof text==="string"?text:JSON.stringify(text,null,2);};
+const clearTicket=()=>{data.preview=null;data.file=null;set("previewId","");el("commit").disabled=true;};
+async function call(url,options={}){
+  const res=await fetch(api+url,{cache:"no-store",...options});
+  if(!res.ok)throw Error("HTTP "+res.status+" "+url+" — "+(await res.text()).slice(0,1200));
+  return res;
+}
+const jpost=(payload,key)=>({method:"POST",headers:{"Content-Type":"application/json",...(key?{"Idempotency-Key":key}:{})},body:JSON.stringify(payload)});
+function context(){
+  for(const id of ["organizationId","economicEntityId","businessScopeId","projectId"]){
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val(id)))
+      throw Error("Нужен UUID: "+id);
+  }
+  return {organizationId:val("organizationId"),economicEntityId:val("economicEntityId"),businessScopeId:val("businessScopeId"),projectId:val("projectId")};
+}
+function input(field){
+ const label=document.createElement("label"),i=document.createElement("input");
+ label.append(document.createTextNode(field.fieldCode+(field.required?" *":"")+" — "+field.fieldType));
+ i.value=data.values[field.fieldCode]??"";
+ i.addEventListener("input",()=>{data.values[field.fieldCode]=i.value;clearTicket();});
+ label.append(i);return label;
+}
+function render(){
+ const host=el("editor");host.replaceChildren();host.className=val("style")==="DASHBOARD"?"dashboard":"";
+ const fields=data.fields.filter(f=>f.inputMode==="MANUAL");
+ if(val("style")==="EXCEL"){
+   const table=document.createElement("table"),head=document.createElement("tr");
+   for(const t of ["Код","Тип","Значение"]){const th=document.createElement("th");th.textContent=t;head.append(th);}
+   table.append(head);
+   for(const f of fields){
+     const tr=document.createElement("tr"),k=document.createElement("td"),type=document.createElement("td"),v=document.createElement("td");
+     k.textContent=f.fieldCode+(f.required?" *":"");type.textContent=f.fieldType;
+     v.append(input(f).lastChild);tr.append(k,type,v);table.append(tr);
+   }
+   host.append(table);
+ }else for(const f of fields)host.append(input(f));
+}
+async function load(){
+ const dto=await (await call("/forms/"+encodeURIComponent(val("formCode")))).json();
+ if(dto.summary.contentMode!=="SINGLE_RECORD")throw Error("Тестовая страница пока только SINGLE_RECORD");
+ data.fields=dto.fields;render();
+ log({event:"CATALOG",form:dto.summary,fields:dto.fields.length});
+}
+async function open(){
+ if(!val("instanceId"))throw Error("Укажите instanceId");
+ const dto=await (await call("/drafts/"+encodeURIComponent(val("instanceId"))+"?organizationId="+encodeURIComponent(val("organizationId")))).json();
+ if(val("formCode")!==dto.formCode){set("formCode",dto.formCode);await load();}
+ data.values={...dto.values};data.revision=dto.revisionNo;
+ el("revision").textContent=String(dto.revisionNo);el("sha").textContent=dto.sha256;
+ clearTicket();render();log({event:"OPEN",revision:dto.revisionNo,values:dto.values});
+}
+async function save(){
+ const fields=data.fields.filter(f=>f.inputMode==="MANUAL");
+ if(!fields.length)throw Error("Сначала загрузите поля");
+ const values={};
+ for(const f of fields) {
+  if(data.values[f.fieldCode]!==undefined)values[f.fieldCode]=data.values[f.fieldCode];
+  if(f.required&&(!values[f.fieldCode]||!values[f.fieldCode].trim()))
+    throw Error("Не заполнено обязательное поле "+f.fieldCode);
+ }
+ const payload={instanceId:val("instanceId")||null,...context(),formCode:val("formCode"),
+  periodType:"M",periodCode:val("period"),currency:val("currency"),coverage:"PERIOD_ONLY",
+  reportingBasis:"MANAGEMENT",dataSpace:"SYNTHETIC",expectedRevision:data.revision,
+  values,rows:[],createdBy:val("actor"),changeReason:val("reason")};
+ const result=await (await call("/drafts",jpost(payload,uuid()))).json();
+ set("instanceId",result.instanceId);await open();
+ log({event:"SAVE",result});
+}
+async function download(){
+ if(!val("instanceId"))throw Error("Сохраните экземпляр перед экспортом");
+ const q=new URLSearchParams({organizationId:val("organizationId"),styleCode:val("style")});
+ const blob=await (await call("/drafts/"+encodeURIComponent(val("instanceId"))+"/export.xlsx?"+q)).blob();
+ const u=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=u;a.download="fin-"+val("formCode")+"-"+val("style")+".xlsx";
+ document.body.append(a);a.click();a.remove();URL.revokeObjectURL(u);
+ log({event:"EXPORT",bytes:blob.size});
+}
+async function register(){
+ if(!val("instanceId"))throw Error("Сначала сохраните отчёт");
+ const version=await (await call("/uat-helper/drafts/"+encodeURIComponent(val("instanceId"))+"/version?organizationId="+encodeURIComponent(val("organizationId")))).json();
+ const profile=await (await call("/import-profiles",jpost({formVersionId:version.formVersionId}))).json();
+ data.profile=profile.id;set("profileId",profile.id);log({event:"PROFILE",profile});
+}
+function multipart(file){
+ const body=new FormData();
+ body.append("file",file);body.append("instanceId",val("instanceId"));body.append("organizationId",val("organizationId"));
+ body.append("actor",val("actor"));body.append("reason",val("reason"));
+ return body;
+}
+async function preview(){
+ const file=el("upload").files[0];if(!file)throw Error("Выберите Excel");
+ if(file.size>2000000)throw Error("Файл превышает 2 MB");
+ if(!data.profile)await register();
+ clearTicket();
+ const result=await (await call("/import-profiles/"+encodeURIComponent(data.profile)+"/preview",
+   {method:"POST",body:multipart(file)})).json();
+ data.preview=result.previewId;data.file=file;set("previewId",result.previewId);
+ el("commit").disabled=false;log({event:"PREVIEW_NO_FINANCIAL_WRITE",result});
+}
+async function commit(){
+ if(!data.preview||!data.file)throw Error("Сначала Preview");
+ const result=await (await call("/import-profiles/previews/"+encodeURIComponent(data.preview)+"/commit",
+   {method:"POST",headers:{"Idempotency-Key":uuid()},body:multipart(data.file)})).json();
+ clearTicket();await open();log({event:"COMMIT",result});
+}
+function bind(id,action){
+ el(id).addEventListener("click",async()=>{const b=el(id);b.disabled=true;
+  try{await action();}catch(err){log(err.message,true);}
+  finally{b.disabled=id==="commit"?!data.preview:false;}
+ });
+}
+bind("generate",async()=>{
+ for(const id of ["organizationId","economicEntityId","businessScopeId","projectId"])set(id,uuid());
+ set("instanceId","");data.revision=0;data.values={};data.profile=null;set("profileId","");
+ clearTicket();el("revision").textContent="0";el("sha").textContent="";await load();
+});
+bind("load",load);bind("open",open);bind("save",save);
+bind("export",download);bind("register",register);bind("preview",preview);bind("commit",commit);
+el("style").addEventListener("change",render);
+el("formCode").addEventListener("change",()=>{data.fields=[];data.values={};clearTicket();});
+for(const id of ["organizationId","economicEntityId","businessScopeId","projectId"])set(id,uuid());
+load().catch(e=>log(e.message,true));
+})();
+</script>
+</body>
+</html>
