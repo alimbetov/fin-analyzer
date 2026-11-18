@@ -288,7 +288,11 @@ export default function App(){
     try{
       receipt=await multipart<Receipt>('/import-profiles/previews/'+preview.previewId+'/commit',body,true);
     }catch(error){
-      if(isDefiniteRejection(error))setCommitUncertain(false);
+      // HTTP 409 can mean a consumed ticket after a successful but unobserved
+      // commit. Never unlock the editor until the actual revision is read.
+      if(isDefiniteRejection(error) &&
+         !(error instanceof Error && error.message.startsWith('HTTP 409:')))
+        setCommitUncertain(false);
       throw error;
     }
     const current=await get<Draft>('/drafts/'+draft.instanceId+'?organizationId='+scope.organizationId);
