@@ -35,8 +35,10 @@ table{border-collapse:collapse;width:100%}th,td{border:1px solid #d9e2ed;text-al
 <label>Форма<select id="formCode"><option value="F02">F02</option></select></label>
 <label>Стиль<select id="style"><option>CLASSIC</option><option selected>EXCEL</option><option>DASHBOARD</option></select></label>
 <label>Язык Excel<select id="locale"><option value="ru" selected>Русский</option><option value="kk">Қазақша</option><option value="en">English</option><option value="zh-Hans">中文</option></select></label>
-<label>Период<input id="period" value="2026-11"></label>
-<label>Валюта<input id="currency" value="KZT"></label>
+<label>Тип периода<select id="periodType"><option value="D">D</option><option value="W">W</option><option value="DEC">DEC</option><option value="M" selected>M</option><option value="Q">Q</option><option value="H">H</option><option value="Y">Y</option></select></label>
+<label>Код периода<input id="period" value="2026-11" placeholder="2026-11"></label>
+<label>Валюта<select id="currency"><option value="KZT">KZT</option></select></label>
+<label>Диапазон учётного периода<input id="periodRange" readonly placeholder="Проверьте период"></label>
 <label>Организация UUID<input id="organizationId"></label>
 <label>Компания UUID<input id="economicEntityId"></label>
 <label>Scope UUID<input id="businessScopeId"></label>
@@ -109,6 +111,34 @@ function render(){
    host.append(table);
  }else for(const f of fields)host.append(input(f));
 }
+const examplePeriod={D:"2026-11-18",W:"2026-W47",DEC:"2026-11-2",
+  M:"2026-11",Q:"2026-Q4",H:"2026-H2",Y:"2026"};
+async function resolvePeriod(){
+  const query=new URLSearchParams({type:val("periodType"),code:val("period")});
+  const range=await (await call("/catalog/periods/resolve?"+query)).json();
+  set("periodRange",range.startInclusive+" — "+range.endExclusive+" (exclusive)");
+  return range;
+}
+async function loadReferenceCatalogs(){
+  const [periods,currencies]=await Promise.all([
+    (await call("/catalog/period-types?locale="+encodeURIComponent(val("locale")))).json(),
+    (await call("/catalog/currencies?locale="+encodeURIComponent(val("locale")))).json()
+  ]);
+  const periodChoice=val("periodType")||"M",currencyChoice=val("currency")||"KZT";
+  const p=el("periodType"),c=el("currency");
+  p.replaceChildren();c.replaceChildren();
+  for(const item of periods){
+    const o=document.createElement("option");o.value=item.code;
+    o.textContent=item.title+" ("+item.code+")";p.append(o);
+  }
+  for(const item of currencies.filter(x=>x.status==="ACTIVE")){
+    const o=document.createElement("option");o.value=item.code;
+    o.textContent=(item.title||item.code)+" ("+item.code+", "+item.minorUnits+" decimals)";
+    c.append(o);
+  }
+  set("periodType",periodChoice);set("currency",currencyChoice);
+  await resolvePeriod();
+}
 async function load(){
  const dto=await (await call("/forms/"+encodeURIComponent(val("formCode")))).json();
  if(dto.summary.contentMode!=="SINGLE_RECORD")throw Error("Тестовая страница пока только SINGLE_RECORD");
@@ -119,6 +149,8 @@ async function open(){
  if(!val("instanceId"))throw Error("Укажите instanceId");
  const dto=await (await call("/drafts/"+encodeURIComponent(val("instanceId"))+"?organizationId="+encodeURIComponent(val("organizationId")))).json();
  if(val("formCode")!==dto.formCode){set("formCode",dto.formCode);await load();}
+ set("periodType",dto.periodType);set("period",dto.periodCode);set("currency",dto.currency);
+ await resolvePeriod();
  data.values={...dto.values};data.revision=dto.revisionNo;
  el("revision").textContent=String(dto.revisionNo);el("sha").textContent=dto.sha256;
  clearTicket();render();log({event:"OPEN",revision:dto.revisionNo,values:dto.values});
@@ -132,8 +164,9 @@ async function save(){
   if(f.required&&(!values[f.fieldCode]||!values[f.fieldCode].trim()))
     throw Error("Не заполнено обязательное поле "+f.fieldCode);
  }
+ await resolvePeriod();
  const payload={instanceId:val("instanceId")||null,...context(),formCode:val("formCode"),
-  periodType:"M",periodCode:val("period"),currency:val("currency"),coverage:"PERIOD_ONLY",
+  periodType:val("periodType"),periodCode:val("period"),currency:val("currency"),coverage:"PERIOD_ONLY",
   reportingBasis:"MANAGEMENT",dataSpace:"SYNTHETIC",expectedRevision:data.revision,
   values,rows:[],createdBy:val("actor"),changeReason:val("reason")};
  const result=await (await call("/drafts",jpost(payload,uuid()))).json();
@@ -191,9 +224,15 @@ bind("generate",async()=>{
 bind("load",load);bind("open",open);bind("save",save);
 bind("export",download);bind("register",register);bind("preview",preview);bind("commit",commit);
 el("style").addEventListener("change",render);
+el("locale").addEventListener("change",()=>loadReferenceCatalogs().catch(e=>log(e.message,true)));
+el("periodType").addEventListener("change",()=>{
+  set("period",examplePeriod[val("periodType")]||"");
+  resolvePeriod().catch(e=>log(e.message,true));
+});
+el("period").addEventListener("change",()=>resolvePeriod().catch(e=>log(e.message,true)));
 el("formCode").addEventListener("change",()=>{data.fields=[];data.values={};clearTicket();});
 for(const id of ["organizationId","economicEntityId","businessScopeId","projectId"])set(id,uuid());
-load().catch(e=>log(e.message,true));
+Promise.all([load(),loadReferenceCatalogs()]).catch(e=>log(e.message,true));
 })();
 </script>
 </body>
