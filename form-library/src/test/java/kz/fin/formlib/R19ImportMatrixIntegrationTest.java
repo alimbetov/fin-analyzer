@@ -114,14 +114,14 @@ class R19ImportMatrixIntegrationTest {
         ByteArrayOutputStream output=new ByteArrayOutputStream()){
       Sheet report=workbook.getSheet("REPORT");
       assertNotNull(report);assertNotNull(workbook.getSheet("PARAMETERS"));
-      var number=report.getRow(4).getCell(0);
+      var number=report.getRow(4).getCell(1);
       assertEquals("1",number.getStringCellValue());
       assertEquals(HorizontalAlignment.CENTER,number.getCellStyle().getAlignment());
-      assertEquals("FIN-FORM-XLSX-V3",workbook.getSheet("PARAMETERS")
+      assertEquals("FIN-FORM-XLSX-V4",workbook.getSheet("PARAMETERS")
         .getRow(0).getCell(1).getStringCellValue());
-      assertEquals("C5",workbook.getSheet("PARAMETERS")
+      assertEquals("D5",workbook.getSheet("PARAMETERS")
         .getRow(14).getCell(1).getStringCellValue());
-      report.getRow(4).getCell(2).setCellValue(value);
+      report.getRow(4).getCell(3).setCellValue(value);
       workbook.write(output);
       return output.toByteArray();
     }
