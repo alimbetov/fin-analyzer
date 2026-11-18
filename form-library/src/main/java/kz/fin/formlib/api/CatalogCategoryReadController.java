@@ -27,6 +27,10 @@ public class CatalogCategoryReadController {
   public Tree get(@RequestParam(defaultValue="ru") String locale){
     if(!Set.of("ru","kk","en","zh-Hans").contains(locale))
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"UNSUPPORTED_LOCALE");
+    return cache.get("category-tree",locale,()->readTree(locale));
+  }
+
+  private Tree readTree(String locale){
     var categories=jdbc.query("""
       SELECT c.code,c.parent_code,c.category_type,c.sort_order,t.title,t.review_status
       FROM fin_lib.lib_catalog_category c
