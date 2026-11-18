@@ -168,6 +168,10 @@ public class FormDraftService {
     if(!contractGuard.matches(req.formCode(),pinnedFormVersionId))
       throw bad("FIELD_METRIC_CONTRACT_STALE");
     boolean single="SINGLE_RECORD".equals(version.getContentMode());
+    if(!single&&!"ROWSET".equals(version.getContentMode()))
+      throw bad("UNSUPPORTED_CONTENT_MODE");
+    if(!single&&req.values()!=null&&!req.values().isEmpty())
+      throw bad("ROWSET_TOP_LEVEL_VALUES_FORBIDDEN");
     Map<String,String> normalizedValues=canonical(pinnedFormVersionId,req.values(),single,currency.getMinorUnits());
     var sourceRows=req.rows()==null?List.<RowInput>of():req.rows();
     if((single&&!sourceRows.isEmpty())||(!single&&
@@ -218,6 +222,9 @@ public class FormDraftService {
         &&!"F02".equals(form.getFormCode()))
       throw bad("CAPTURE_SCHEMA_NOT_APPROVED");
 
+    // Reject malformed rows before generating any database writes or hashes.
+    if(req.rows()!=null&&req.rows().stream().anyMatch(Objects::isNull))
+      throw bad("INVALID_ROW");
     // Hash the caller's exact request (before generation of row UUIDs), with map keys ordered.
     String canonicalRequest=json(List.of(String.valueOf(req.instanceId()),
       req.organizationId().toString(),req.economicEntityId().toString(),
@@ -297,6 +304,10 @@ public class FormDraftService {
     if(!contractGuard.matches(req.formCode(),version.getId()))
       throw bad("FIELD_METRIC_CONTRACT_STALE");
     boolean single="SINGLE_RECORD".equals(version.getContentMode());
+    if(!single&&!"ROWSET".equals(version.getContentMode()))
+      throw bad("UNSUPPORTED_CONTENT_MODE");
+    if(!single&&req.values()!=null&&!req.values().isEmpty())
+      throw bad("ROWSET_TOP_LEVEL_VALUES_FORBIDDEN");
     Map<String,String> normalized=canonical(version.getId(),req.values(),single,
       currency.getMinorUnits());
     List<RowInput> sourceRows=req.rows()==null?List.of():req.rows();
