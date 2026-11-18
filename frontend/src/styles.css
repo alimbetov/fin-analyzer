@@ -453,3 +453,54 @@
 .history-trigger:focus-visible,.history-heading button:focus-visible,.history-versions button:focus-visible,.history-download:focus-visible{outline:3px solid #95b9f7;outline-offset:2px}
 @media(max-width:720px){.editor-sticky-actions{padding:10px;flex-wrap:wrap;gap:8px}.editor-sticky-actions .primary-save{width:100%}.history-heading,.history-content{padding:15px}.history-versions{padding:10px}.history-meta{flex-direction:column;align-items:flex-start}}
 @media(prefers-reduced-motion:reduce){.history-backdrop *{scroll-behavior:auto}}
+
+
+/* FIN R17.C — restrained color system, icon semantics and sectioned editor */
+:root{--fin-blue:#2758a6;--fin-blue-pale:#eef4ff;--fin-teal:#087f83;--fin-teal-pale:#e8f7f5;--fin-violet:#6e56a7;--fin-violet-pale:#f3effc;--fin-amber:#a66a25;--fin-amber-pale:#fff6e8;--fin-ink:#263b56;--fin-border:#dce6f1}
+.workspace{background:#f3f6fb}
+.topbar{background:#fdfefe}
+.catalog-panel{background:#f9fbff}
+.saved-reports{background:#fff}
+.editor-panel{background:#fff}
+.editor-head{background:linear-gradient(115deg,#f0f5ff 0%,#fff 80%);border-bottom-color:#dce6f4}
+.completion-box{background:linear-gradient(100deg,#eff6ff,#edf9f7);border-color:#d4e8ea}
+.editor-options{background:#f8f6fe}
+.import-details{background:#f7fafb}
+.form-list-item.active{border-color:#adc7eb;background:var(--fin-blue-pale)}
+.form-icon.icon-finance{background:var(--fin-blue-pale);color:var(--fin-blue)}
+.form-icon.icon-document{background:var(--fin-violet-pale);color:var(--fin-violet)}
+.form-icon.icon-table{background:var(--fin-teal-pale);color:var(--fin-teal)}
+.sectioned-editor{display:grid;grid-template-columns:minmax(185px,245px) minmax(0,1fr);gap:18px;align-items:start}
+.section-nav{position:sticky;top:15px;background:#f4f7fc;padding:10px;border:1px solid var(--fin-border);border-radius:12px;display:flex;flex-direction:column;gap:7px;max-height:70vh;overflow:auto}
+.section-nav button{display:flex;align-items:center;gap:8px;width:100%;border:1px solid transparent;border-radius:8px;padding:10px 11px;background:#fff;color:#35516f;text-align:left;cursor:pointer;font-size:12px}
+.section-nav button:hover{border-color:#b5cbe9;background:var(--fin-blue-pale)}
+.section-nav button span{flex:1;overflow-wrap:anywhere}
+.section-nav button small{color:#71829a;white-space:nowrap}
+.section-nav button svg{color:#6684b5;flex-shrink:0}
+.section-groups{display:flex;flex-direction:column;gap:13px;min-width:0}
+.form-section{background:#fff;border:1px solid var(--fin-border);border-radius:12px;overflow:hidden;scroll-margin-top:20px}
+.form-section:nth-child(3n + 2){border-color:#cce6e2}
+.form-section:nth-child(3n + 3){border-color:#e1d8f0}
+.form-section summary{list-style:none;display:flex;align-items:center;gap:13px;padding:16px;cursor:pointer;background:#f2f6ff;color:var(--fin-ink)}
+.form-section:nth-child(3n + 2) summary{background:#edfaf7}
+.form-section:nth-child(3n + 3) summary{background:#f7f3fc}
+.form-section summary::-webkit-details-marker{display:none}
+.form-section summary>svg:last-child{margin-left:auto;transition:transform .2s ease}
+.form-section[open] summary>svg:last-child{transform:rotate(180deg)}
+.section-symbol{width:37px;height:37px;flex-shrink:0;border-radius:10px;display:grid;place-items:center;background:#dce9ff;color:#315eab}
+.form-section:nth-child(3n + 2) .section-symbol{background:#d3f0eb;color:#087f83}
+.form-section:nth-child(3n + 3) .section-symbol{background:#e8e0f6;color:#6e56a7}
+.section-title{display:flex;flex-direction:column;gap:3px;min-width:0}
+.section-title strong{font-size:13px;overflow-wrap:anywhere}
+.section-title small{font-size:11px;color:#7789a0}
+.form-section>.classic-layout,.form-section>.cards-layout{padding:15px}
+.form-section .metric-card{background:#fff;border-color:#edf1f7}
+.form-section .metric-card:nth-child(even){background:#fbfcff}
+.section-error{font-size:11px;font-weight:700;color:#a24f31;background:#fff0e8;border-radius:6px;padding:6px 8px;white-space:nowrap}
+.metric-card.field-invalid{border-color:#d88f7d;background:#fff9f7}
+.metric-card.field-invalid input{border-color:#d67762;background:white}
+.metric-card .field-error{grid-column:1/-1;color:#b34631;font-size:11px;padding-left:28px}
+.section-nav button:focus-visible,.form-section summary:focus-visible{outline:3px solid #97b9ed;outline-offset:2px}
+@media(max-width:1000px){.sectioned-editor{grid-template-columns:minmax(0,1fr)}.section-nav{position:static;display:flex;flex-direction:row;overflow-x:auto;max-height:none}.section-nav button{width:auto;min-width:155px;flex-shrink:0}}
+@media(max-width:640px){.form-section>.classic-layout,.form-section>.cards-layout{padding:10px}.form-section summary{padding:12px}.form-section .metric-card{grid-template-columns:25px minmax(0,1fr)}.form-section .metric-card input{grid-column:1/-1}.section-error{white-space:normal}.section-nav button{min-width:135px}}
+@media(prefers-reduced-motion:reduce){.form-section summary>svg:last-child{transition:none}}
