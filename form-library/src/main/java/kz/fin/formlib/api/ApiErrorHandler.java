@@ -45,26 +45,30 @@ public class ApiErrorHandler {
 
   private static String findConstraint(Throwable error) {
     for(Throwable cause=error;cause!=null;cause=cause.getCause()) {
-      if(cause instanceof org.postgresql.util.PSQLException pg &&
-          pg.getServerErrorMessage()!=null) {
-        String constraint=pg.getServerErrorMessage().getConstraint();
-        if(constraint!=null)return constraint;
+      if(cause instanceof SQLException sql) {
+        String constraint=uniqueConstraint(sql);
+        if(!constraint.isEmpty())return constraint;
+        for(SQLException next=sql.getNextException();next!=null;
+            next=next.getNextException()) {
+          constraint=uniqueConstraint(next);
+          if(!constraint.isEmpty())return constraint;
+        }
       }
       if(cause instanceof org.hibernate.exception.ConstraintViolationException hibernate) {
         String constraint=hibernate.getConstraintName();
         if(constraint!=null)return constraint;
       }
-      if(cause instanceof SQLException sql) {
-        // Batch JDBC drivers can carry the real constraint in nextException.
-        for(SQLException next=sql.getNextException();next!=null;
-            next=next.getNextException()) {
-          if(next instanceof org.postgresql.util.PSQLException pg &&
-              pg.getServerErrorMessage()!=null &&
-              pg.getServerErrorMessage().getConstraint()!=null)
-            return pg.getServerErrorMessage().getConstraint();
-        }
-      }
     }
     return "";
+  }
+
+  private static String uniqueConstraint(SQLException error) {
+    if(!"23505".equals(error.getSQLState())||error.getMessage()==null)return "";
+    // PostgreSQL includes the constraint in an escaped-quoted identifier.
+    // Only the exact allowlisted name is later exposed to REST.
+    var matcher=java.util.regex.Pattern.compile(
+      "(?i)(?:constraint|ограничение)\\s+[\"«]([a-z_0-9]+)[\"»]")
+      .matcher(error.getMessage());
+    return matcher.find()?matcher.group(1):"";
   }
 }
