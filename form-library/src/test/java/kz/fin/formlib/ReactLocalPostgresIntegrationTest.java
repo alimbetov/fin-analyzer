@@ -164,6 +164,19 @@ class ReactLocalPostgresIntegrationTest {
     assertEquals(entity.toString(),current.path("economicEntityId").asText());
     assertEquals(business.toString(),current.path("businessScopeId").asText());
     assertEquals(project.toString(),current.path("projectId").asText());
+    // Cross-tenant reads must not reveal even historical financial data.
+    UUID otherOrg=UUID.randomUUID();
+    mvc.perform(get("/api/v1/drafts/"+instance)
+      .param("organizationId",otherOrg.toString()))
+      .andExpect(status().isNotFound());
+    mvc.perform(get("/api/v1/drafts/"+instance+"/revisions/1")
+      .param("organizationId",otherOrg.toString()))
+      .andExpect(status().isNotFound());
+    // Invalid revision must never fall back to the current one.
+    mvc.perform(get("/api/v1/drafts/"+instance+"/revisions/99")
+      .param("organizationId",org.toString()))
+      .andExpect(status().isNotFound());
+
     assertEquals("PERIOD_ONLY",current.path("coverage").asText());
     assertEquals("MANAGEMENT",current.path("reportingBasis").asText());
     assertEquals("SYNTHETIC",current.path("dataSpace").asText());
