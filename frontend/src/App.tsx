@@ -61,10 +61,21 @@ export default function App(){
   const [showScope,setShowScope]=useState(false);
   const [range,setRange]=useState('');
   const inFlight=useRef(false);
+  const saveKeyRef=useRef<string|null>(null);
+  const [saveUncertain,setSaveUncertain]=useState(false);
   const [dirty,setDirty]=useState(false);
   const [commitUncertain,setCommitUncertain]=useState(false);
 
   useEffect(()=>{localStorage.setItem(storageKey,JSON.stringify(scope));},[scope]);
+  useEffect(()=>{
+    if(!dirty&&!saveUncertain&&!commitUncertain)return;
+    const beforeUnload=(event:BeforeUnloadEvent)=>{
+      event.preventDefault();
+      event.returnValue='';
+    };
+    window.addEventListener('beforeunload',beforeUnload);
+    return()=>window.removeEventListener('beforeunload',beforeUnload);
+  },[dirty,saveUncertain,commitUncertain]);
   useEffect(()=>{
     let active=true;
     Promise.all([
@@ -156,11 +167,15 @@ export default function App(){
     finally{inFlight.current=false;setBusy(false)}
   }
   function confirmDiscard():boolean {
+    if(saveUncertain||commitUncertain)
+      return window.confirm('Последняя запись могла выполниться на сервере. '+
+        'Перед продолжением проверьте текущую ревизию. Всё равно выйти?');
     return !dirty||window.confirm('Есть несохранённые значения. Продолжить без сохранения?');
   }
   function switchForm(code:string){
     if(code===formCode||!confirmDiscard())return;
-    setFormCode(code);setDashboard(false);setDirty(false);setCommitUncertain(false);
+    setFormCode(code);setDashboard(false);setDirty(false);
+    setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
   }
   const save=()=>execute(async()=>{
     if(!form||!editable)throw new Error('Запись разрешена только для DRAFT с утверждённым типизированным SINGLE_RECORD контрактом.');
@@ -171,6 +186,9 @@ export default function App(){
       throw new Error('Обязательное поле: '+f.title+' ('+f.fieldCode+')');
     const cleaned=Object.fromEntries(fields.filter(f=>values[f.fieldCode]!==undefined)
       .map(f=>[f.fieldCode,normalize(values[f.fieldCode],f.fieldType)]));
+    if(!saveKeyRef.current)saveKeyRef.current=crypto.randomUUID();
+    // Preserve the exact idempotency key after uncertain network outcomes.
+    setSaveUncertain(true);
     const receipt=await post<Receipt>('/drafts',{
       instanceId:draft?.instanceId??null,...scope,formCode,
       periodType:draft?.periodType??periodType,periodCode:draft?.periodCode??periodCode,
@@ -178,9 +196,12 @@ export default function App(){
       reportingBasis:'MANAGEMENT',dataSpace:'SYNTHETIC',
       expectedRevision:draft?.revisionNo??0,values:cleaned,rows:[],
       createdBy:'react-local-uat',changeReason:'React editor input'
-    },true);
+    },saveKeyRef.current);
     const snapshot=await get<Draft>('/drafts/'+receipt.instanceId+'?organizationId='+scope.organizationId);
+    if(snapshot.sha256!==receipt.contentSha256||snapshot.revisionNo!==receipt.revisionNo)
+      throw new Error('Сохранение выполнено, но сверка ревизии не прошла. Повторите с тем же ключом.');
     setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setPreview(null);
+    saveKeyRef.current=null;setSaveUncertain(false);
     setDirty(false);setCommitUncertain(false);
     setMessage('Сохранено: ревизия '+snapshot.revisionNo+' · SHA '+snapshot.sha256.slice(0,12));
   });
@@ -190,7 +211,8 @@ export default function App(){
     const snapshot=await get<Draft>('/drafts/'+instanceId+'?organizationId='+scope.organizationId);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
     setDraft(snapshot);setValues(snapshot.values);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
-    setCurrency(snapshot.currency);setPreview(null);setDirty(false);setCommitUncertain(false);
+    setCurrency(snapshot.currency);setPreview(null);setDirty(false);
+    setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
     setMessage('Открыта ревизия '+snapshot.revisionNo);
   });
   const download=()=>execute(async()=>{
@@ -202,7 +224,7 @@ export default function App(){
   });
   const doPreview=()=>execute(async()=>{
     if(!draft||!file)throw new Error('Откройте отчёт и выберите XLSX');
-    if(dirty)throw new Error('Есть несохранённые изменения React; сначала сохраните их либо откройте отчёт заново');
+    if(dirty||saveUncertain)throw new Error('Есть несохранённая или неопределённая запись React; сначала сверьте ревизию');
     if(file.size>2_000_000)throw new Error('XLSX превышает лимит Backend 2 MB');
     let id=profileId;
     if(!id){
@@ -230,9 +252,9 @@ export default function App(){
     body.append('reason','React Excel Commit');
     // Commit is a mutating request. Once it returns, avoid blind retries if
     // read-back fails: the database may already contain the new revision.
-    const receipt=await multipart<Receipt>('/import-profiles/previews/'+preview.previewId+'/commit',body,true);
     setCommitUncertain(true);
     setPreview(null);
+    const receipt=await multipart<Receipt>('/import-profiles/previews/'+preview.previewId+'/commit',body,true);
     const current=await get<Draft>('/drafts/'+draft.instanceId+'?organizationId='+scope.organizationId);
     const mismatch=Object.entries(preview.values).filter(([code,v])=>current.values[code]!==v);
     if(mismatch.length||current.sha256!==receipt.contentSha256||
@@ -245,7 +267,8 @@ export default function App(){
   const reset=()=>{
     if(!confirmDiscard())return;
     setDraft(null);setInstanceId('');setValues({});setProfileId('');
-    setPreview(null);setFile(null);setDirty(false);setCommitUncertain(false);setMessage('Новый черновик');
+    setPreview(null);setFile(null);setDirty(false);setCommitUncertain(false);
+    setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
   };
 
   function renderRow(field:Field,index:number){
@@ -253,7 +276,7 @@ export default function App(){
       <td className="metric"><span>{field.title||field.fieldCode}{field.required&&<strong className="required"> *</strong>}</span>
         <small>{field.fieldCode} · {field.fieldType}</small></td>
       <td><input id={'field-'+field.fieldCode} className={'cell-input '+(field.required?'required-cell':'')}
-        value={values[field.fieldCode]??''} disabled={!editable||busy}
+        value={values[field.fieldCode]??''} disabled={!editable||busy||saveUncertain||commitUncertain}
         onChange={e=>setValue(field.fieldCode,e.target.value)}
         onBlur={e=>{const fixed=normalize(e.target.value,field.fieldType);if(fixed!==e.target.value)setValue(field.fieldCode,fixed)}}
         onPaste={e=>pasteRange(e,index)} onKeyDown={e=>nextCell(e,index)}
@@ -320,9 +343,9 @@ export default function App(){
               <div className="toolbar">
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
                 <Tool label="Сохранить ревизию" disabled={busy||!editable||!dirty||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={18}/>:<Save size={18}/>}</Tool>
-                <Tool label="Открыть по UUID" disabled={busy} onClick={open}><History size={18}/></Tool>
+                <Tool label="Открыть по UUID (сверить ревизию)" disabled={busy} onClick={open}><History size={18}/></Tool>
                 <Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>
-                <Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>
+                <Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain||saveUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>
                 <Tool label="Контекст организации" onClick={()=>setShowScope(v=>!v)}><Settings2 size={18}/></Tool>
               </div></div>
             <div className="editor-body">
@@ -344,6 +367,7 @@ export default function App(){
               </div>}
               {!editable&&form&&<div className="warning"><AlertTriangle size={17}/> Запись отключена: нет утверждённого типизированного SINGLE_RECORD контракта или отчёт не в DRAFT. Каталог сам по себе не разрешает ввод.</div>}
               {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
+              {saveUncertain&&<div className="warning"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Повторите сохранение с тем же Idempotency-Key; значения заблокированы до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
               <div className="sheet-head"><div><b>Показатели отчёта</b><p>Вставка из Excel: Ctrl+V · Enter / ↓ для следующего поля</p></div>
                 <span className="total-badge">{fields.length} показателей</span></div>
@@ -353,7 +377,7 @@ export default function App(){
                   {fields.map((f,i)=><div className="metric-card" key={f.fieldCode}>
                     <span className="card-seq">{i+1}</span><label htmlFor={'field-'+f.fieldCode}>{f.title||f.fieldCode}
                     {f.required&&<span className="required"> *</span>}<small>{f.fieldCode} · {f.fieldType}</small></label>
-                    <input id={'field-'+f.fieldCode} value={values[f.fieldCode]??''} disabled={!editable||busy}
+                    <input id={'field-'+f.fieldCode} value={values[f.fieldCode]??''} disabled={!editable||busy||saveUncertain||commitUncertain}
                       onChange={e=>setValue(f.fieldCode,e.target.value)} onPaste={e=>pasteRange(e,i)}
                       onKeyDown={e=>nextCell(e,i)}/></div>)}
                 </div>}
