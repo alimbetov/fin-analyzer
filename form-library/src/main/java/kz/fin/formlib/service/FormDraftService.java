@@ -45,7 +45,9 @@ public class FormDraftService {
                           Map<String,String> values, List<RowView> rows, String sha256,
                           String periodType, String periodCode, java.time.LocalDate periodStart,
                           java.time.LocalDate periodEndExclusive, String currency,
-                          String workflowStatus,long statusVersion) {}
+                          String workflowStatus,long statusVersion,
+                          UUID economicEntityId,UUID businessScopeId,UUID projectId,
+                          String coverage,String reportingBasis,String dataSpace) {}
 
   public FormDraftService(FormDefinitionRepository forms,FormVersionRepository versions,
          FormFieldRepository fields,FormInstanceRepository instances,
@@ -370,6 +372,8 @@ public class FormDraftService {
         parseValues(rev.getValuesJson()),lineItems,rev.getCanonicalContentSha256(),
         inst.getPeriodType(),inst.getPeriodCode(),inst.getPeriodStart(),
         inst.getPeriodEndExclusive(),inst.getCurrency(),
-        inst.getWorkflowStatus(),inst.getStatusVersion());
+        inst.getWorkflowStatus(),inst.getStatusVersion(),
+        inst.getEconomicEntityId(),inst.getBusinessScopeId(),inst.getProjectId(),
+        inst.getCoverage(),inst.getReportingBasis(),inst.getDataSpace());
   }
 }
