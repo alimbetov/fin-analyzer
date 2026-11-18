@@ -215,9 +215,9 @@ class FormXlsxCodecUnitTest {
         row.removeCell(row.getCell(3));
         row.removeCell(row.getCell(2));
         row.getCell(1).setCellValue(value);
-        row.getCell(0).setCellValue(label);
+        row.createCell(0,CellType.STRING).setCellValue(label);
       }
-      report.getRow(3).getCell(0).setCellValue("Field key");
+      report.getRow(3).createCell(0,CellType.STRING).setCellValue("Field key");
       report.getRow(3).getCell(1).setCellValue("Value");
       report.getRow(3).removeCell(report.getRow(3).getCell(2));
       report.getRow(3).removeCell(report.getRow(3).getCell(3));
@@ -267,6 +267,34 @@ class FormXlsxCodecUnitTest {
         }
       }
       assertEquals(3,FormXlsxCodec.parse(bytes,fields()).values().size());
+    }
+  }
+
+  @Test
+  void previousV3NumberedLayoutRemainsReadable() throws Exception {
+    byte[] v4=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
+    try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(v4));
+        ByteArrayOutputStream out=new ByteArrayOutputStream()){
+      Sheet sheet=book.getSheet("REPORT"), params=book.getSheet("PARAMETERS");
+      for(int i=0;i<fields().size();i++){
+        Row row=sheet.getRow(4+i);
+        String value=row.getCell(3).getStringCellValue();
+        String label=row.getCell(2).getStringCellValue();
+        row.removeCell(row.getCell(3));
+        row.getCell(2).setCellValue(value);
+        row.getCell(1).setCellValue(label);
+        row.createCell(0,CellType.STRING).setCellValue(Integer.toString(i+1));
+        params.getRow(14+i).getCell(1).setCellValue("C"+(5+i));
+      }
+      sheet.getRow(3).getCell(3).setCellValue("");
+      sheet.getRow(3).getCell(2).setCellValue("Value");
+      sheet.getRow(3).getCell(1).setCellValue("Field key");
+      sheet.getRow(3).createCell(0,CellType.STRING).setCellValue("№");
+      params.getRow(0).getCell(1).setCellValue("FIN-FORM-XLSX-V3");
+      book.write(out);
+      var parsed=FormXlsxCodec.parse(out.toByteArray(),fields());
+      assertEquals("125000.50",parsed.values().get("netRevenue"));
+      assertEquals("70000",parsed.values().get("cogs"));
     }
   }
 
