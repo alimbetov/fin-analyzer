@@ -11,8 +11,7 @@ public class FormRevision {
 @Column(name="revision_no",nullable=false) private Integer revisionNo;
 @Column(name="form_version_id",nullable=false) private UUID formVersionId;
 @Column(name="content_mode",nullable=false) private String contentMode;
-@Lob
-@Column(name="values_json") private String valuesJson;
+@Column(name="values_json",columnDefinition="text") private String valuesJson;
 @Column(name="canonical_content_sha256",nullable=false) private String canonicalContentSha256;
 @Column(name="row_order_sha256",nullable=false) private String rowOrderSha256;
 @Column(name="source_kind",nullable=false) private String sourceKind;
