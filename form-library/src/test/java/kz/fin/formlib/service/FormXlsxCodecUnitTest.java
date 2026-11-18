@@ -114,7 +114,7 @@ class FormXlsxCodecUnitTest {
       assertEquals("FIN Form Library — Отчёт о прибылях и убытках",
           report.getRow(0).getCell(0).getStringCellValue());
       assertEquals("Выручка",report.getRow(4).getCell(1).getStringCellValue());
-      assertEquals("125000.50",report.getRow(4).getCell(1).getStringCellValue());
+      assertEquals("125000.50",report.getRow(4).getCell(2).getStringCellValue());
       assertEquals("1",report.getRow(4).getCell(0).getStringCellValue());
       assertEquals("C5",workbook.getSheet("PARAMETERS")
           .getRow(14).getCell(1).getStringCellValue());
