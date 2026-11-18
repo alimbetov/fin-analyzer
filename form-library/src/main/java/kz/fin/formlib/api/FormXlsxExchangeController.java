@@ -34,12 +34,13 @@ public class FormXlsxExchangeController {
       @RequestParam(required=false) String styleCode,
       @RequestParam(required=false) UUID userId,
       @RequestParam(defaultValue="ru") String locale){
-    byte[] file=exchange.export(instanceId,organizationId,styleCode,userId,locale);
+    var export=exchange.exportNamed(instanceId,organizationId,styleCode,userId,locale);
     return ResponseEntity.ok().contentType(XLSX)
       .header(HttpHeaders.CONTENT_DISPOSITION,
-          "attachment; filename=\"fin-report-"+instanceId+".xlsx\"")
+          "attachment; filename=\""+export.filename()+"\"")
       .header(HttpHeaders.CACHE_CONTROL,"private, no-store")
-      .body(file);
+      .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS,HttpHeaders.CONTENT_DISPOSITION)
+      .body(export.bytes());
   }
 
   @PostMapping(value="/import.xlsx",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
