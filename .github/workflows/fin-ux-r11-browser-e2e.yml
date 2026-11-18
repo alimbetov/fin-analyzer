@@ -21,7 +21,7 @@ permissions:
 jobs:
   browser-postgresql:
     name: Chromium / React + Spring Boot + PostgreSQL 16
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     services:
       postgres:
