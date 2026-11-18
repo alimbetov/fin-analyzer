@@ -29,3 +29,5 @@ databaseChangeLog:
       file: db/changelog/014-lib-versioned-field-contracts.sql
   - include:
       file: db/changelog/015-lib-contract-append-only-postgresql.sql
+  - include:
+      file: db/changelog/016-lib-form-style-preferences.sql
