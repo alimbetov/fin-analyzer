@@ -114,7 +114,7 @@ export default function App(){
     const lines=plain.replace(/\r/g,'').trimEnd().split('\n');
     const parts=lines.length===1
       ?(()=>{const cols=lines[0].split('\t');
-          return cols.length>=3&&/^\\d+$/.test(cols[0].trim())?[cols[cols.length-1]]:cols;})()
+          return cols.length>=3&&/^\d+$/.test(cols[0].trim())?[cols[cols.length-1]]:cols;})()
       :lines.map(line=>{const cols=line.split('\t');return cols[cols.length-1]});
     setValues(old=>{
       const next={...old};
