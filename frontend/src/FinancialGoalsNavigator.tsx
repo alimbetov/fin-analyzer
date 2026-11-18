@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {Activity,ArrowRight,BookOpen,CheckCircle2,CircleAlert,FileSpreadsheet,Search} from 'lucide-react';
-import type {FormItem,IndicatorDefinition,IndicatorGoal,Locale} from './api';
+import type {FormItem,IndicatorDefinition,IndicatorGoal,Locale,MetricReferenceView} from './api';
 import {get} from './api';
 
 const roleLabel:Record<string,string>={
@@ -30,6 +30,7 @@ export default function FinancialGoalsNavigator({
 }:Props){
   const [goals,setGoals]=useState<IndicatorGoal[]>([]);
   const [indicators,setIndicators]=useState<IndicatorDefinition[]>([]);
+  const [metrics,setMetrics]=useState<MetricReferenceView[]>([]);
   const [selectedCode,setSelectedCode]=useState('');
   const [query,setQuery]=useState('');
   const [busy,setBusy]=useState(true);
@@ -39,11 +40,14 @@ export default function FinancialGoalsNavigator({
     setBusy(true);setFailure('');
     Promise.all([
       get<IndicatorGoal[]>('/indicator-catalog/goals?locale='+encodeURIComponent(locale)),
-      get<IndicatorDefinition[]>('/indicator-catalog/indicators')
-    ]).then(([g,i])=>{
+      get<IndicatorDefinition[]>('/indicator-catalog/indicators'),
+      get<MetricReferenceView[]>('/catalog/metrics?kind=ANALYTICAL_OUTPUT&locale='+
+        encodeURIComponent(locale)).catch(()=>[] as MetricReferenceView[])
+    ]).then(([g,i,metricReferences])=>{
       if(!active)return;
       setGoals(g);
       setIndicators(i);
+      setMetrics(metricReferences);
       setSelectedCode(old=>g.some(goal=>goal.code===old)?old:g[0]?.code??'');
       setBusy(false);
     }).catch(error=>{
@@ -57,6 +61,7 @@ export default function FinancialGoalsNavigator({
   const goal=goals.find(g=>g.code===selectedCode)??goals[0];
   const knownNames=useMemo(()=>new Map(forms.map(f=>[f.formCode,f])),[forms]);
   const indexed=useMemo(()=>new Map(indicators.map(x=>[x.code,x])),[indicators]);
+  const namedMetrics=useMemo(()=>new Map(metrics.map(x=>[x.metricCode,x])),[metrics]);
   const visibleGoals=goals.filter(g=>
     (g.title??g.code).toLocaleLowerCase().includes(query.toLocaleLowerCase())||
     g.code.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
@@ -119,11 +124,14 @@ export default function FinancialGoalsNavigator({
             {metricCodes.map(code=>{
               const indicator=indexed.get(code);
               const dependencies=indicator?.inputFormCodes??[];
+              const reference=namedMetrics.get(code);
               return <div className="kpi-metric" key={code}>
-                <div className="kpi-metric-top"><b>{code}</b><span>КОНТРАКТ НЕ УТВЕРЖДЁН</span></div>
-                <p>Показатель ожидаемого результата аналитической модели.
-                  Исходных форм по каталогу: {dependencies.length}.</p>
-                <small>Единицы, формула, интерпретация и условия применимости требуют проверки.</small>
+                <div className="kpi-metric-top"><b>{reference?.title||code}</b><span>КОНТРАКТ НЕ УТВЕРЖДЁН</span></div>
+                <p className="kpi-metric-code">{code} · {reference?.translationStatus??'PENDING_TRANSLATION'}</p>
+                <p>{reference?.description||'Показатель ожидаемого результата аналитической модели.'}
+                  {' '}Исходных форм по каталогу: {dependencies.length}.</p>
+                <small>Единица: {reference?.unitPolicy??'PENDING_METRIC_REVIEW'}.
+                  Формула, интерпретация и условия применимости требуют S2-проверки.</small>
               </div>;
             })}
           </div>
