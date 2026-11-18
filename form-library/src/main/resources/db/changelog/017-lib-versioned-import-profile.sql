@@ -9,7 +9,7 @@ CREATE TABLE fin_lib.lib_import_profile_version (
  profile_version INT NOT NULL CHECK(profile_version > 0),
  file_format VARCHAR(16) NOT NULL CHECK(file_format IN ('XLSX')),
  binding_sha256 VARCHAR(64) NOT NULL CHECK(length(binding_sha256)=64),
- binding_json CLOB NOT NULL,
+ binding_json TEXT NOT NULL,
  lifecycle_state VARCHAR(32) NOT NULL
    CHECK(lifecycle_state IN ('LOCAL_TEST_ONLY')),
  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
