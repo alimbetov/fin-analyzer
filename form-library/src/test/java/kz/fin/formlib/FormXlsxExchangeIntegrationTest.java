@@ -79,6 +79,40 @@ class FormXlsxExchangeIntegrationTest {
   }
 
   @Test
+  void exportedFilenameIncludesActualPeriodCurrencyStyleLocaleVersionAndRevision()
+      throws Exception {
+    Saved saved=create("F02",Map.of("netRevenue","100",
+      "cogs","40","operatingExpenses","10"),List.of());
+    for(String style:List.of("CLASSIC","EXCEL","DASHBOARD")){
+      for(String locale:List.of("ru","kk","en","zh-Hans")){
+        var response=http.perform(get("/api/v1/drafts/"+saved.id()+"/export.xlsx")
+          .param("organizationId",saved.org().toString())
+          .param("styleCode",style).param("locale",locale))
+          .andExpect(status().isOk()).andReturn().getResponse();
+        String header=response.getHeader("Content-Disposition");
+        assertNotNull(header);
+        assertTrue(header.startsWith("attachment; filename=\\"FIN_F02_M-2026-11_KZT_"+
+          style+"_"+locale+"_FIN-FORM-V2_r0001_"),header);
+        assertTrue(header.endsWith(".xlsx\\""),header);
+        assertTrue(header.contains(saved.sha().substring(0,12)),header);
+        assertFalse(header.contains(saved.id().toString()));
+        assertFalse(header.contains(saved.org().toString()));
+      }
+    }
+    JsonNode committed=upload(saved,changeCell(export(saved,"EXCEL"),4,3,"200"),
+      "filename-revision-"+saved.org());
+    var newer=http.perform(get("/api/v1/drafts/"+saved.id()+"/export.xlsx")
+      .param("organizationId",saved.org().toString())
+      .param("styleCode","EXCEL").param("locale","ru"))
+      .andExpect(status().isOk()).andReturn().getResponse();
+    String updated=newer.getHeader("Content-Disposition");
+    assertNotNull(updated);
+    assertTrue(updated.contains("_r0002_"),updated);
+    assertTrue(updated.contains(committed.get("contentSha256").asText().substring(0,12)),updated);
+    assertFalse(updated.contains("_r0001_"));
+  }
+
+  @Test
   void threeStylesExportEditAndReimportIntoImmutableFinIntakeRevisions() throws Exception {
     for(String style:List.of("CLASSIC","EXCEL","DASHBOARD")){
       Saved saved=create("F02",Map.of("netRevenue","125000.50",
