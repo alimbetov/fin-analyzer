@@ -12,9 +12,14 @@ export type IndicatorGoal = {
   deliverable:string;version:string;qualificationStatus:string;
   models:IndicatorModel[];forms:GoalFormLink[]
 };
+export type IndicatorExplanation = {
+  meaning:string|null;helpsDecision:string|null;limitations:string|null;
+  reviewStatus:string;source:string
+};
 export type IndicatorDefinition = {
   code:string;metricKind:string;qualificationStatus:string;
-  models:IndicatorModel[];inputFormCodes:string[];goalCodes:string[]
+  models:IndicatorModel[];inputFormCodes:string[];goalCodes:string[];
+  explanation:IndicatorExplanation
 };
 export type IndicatorFormUsage = {
   formCode:string;goalCodes:string[];modelCodes:string[];qualificationStatus:string
