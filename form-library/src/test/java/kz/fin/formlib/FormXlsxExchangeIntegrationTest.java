@@ -91,9 +91,9 @@ class FormXlsxExchangeIntegrationTest {
           .andExpect(status().isOk()).andReturn().getResponse();
         String header=response.getHeader("Content-Disposition");
         assertNotNull(header);
-        assertTrue(header.startsWith("attachment; filename=\\"FIN_F02_M-2026-11_KZT_"+
+        assertTrue(header.startsWith("attachment; filename=\"FIN_F02_M-2026-11_KZT_"+
           style+"_"+locale+"_FIN-FORM-V2_r0001_"),header);
-        assertTrue(header.endsWith(".xlsx\\""),header);
+        assertTrue(header.endsWith(".xlsx\""),header);
         assertTrue(header.contains(saved.sha().substring(0,12)),header);
         assertFalse(header.contains(saved.id().toString()));
         assertFalse(header.contains(saved.org().toString()));
