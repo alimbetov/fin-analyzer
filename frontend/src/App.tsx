@@ -2,7 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
 import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,History,Eye,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Style} from './api';
-import {exportXlsx,get,multipart,post} from './api';
+import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste} from './clipboard';
 import './styles.css';
 
@@ -189,14 +189,23 @@ export default function App(){
     if(!saveKeyRef.current)saveKeyRef.current=crypto.randomUUID();
     // Preserve the exact idempotency key after uncertain network outcomes.
     setSaveUncertain(true);
-    const receipt=await post<Receipt>('/drafts',{
-      instanceId:draft?.instanceId??null,...scope,formCode,
-      periodType:draft?.periodType??periodType,periodCode:draft?.periodCode??periodCode,
-      currency:draft?.currency??currency,coverage:'PERIOD_ONLY',
-      reportingBasis:'MANAGEMENT',dataSpace:'SYNTHETIC',
-      expectedRevision:draft?.revisionNo??0,values:cleaned,rows:[],
-      createdBy:'react-local-uat',changeReason:'React editor input'
-    },saveKeyRef.current);
+    let receipt:Receipt;
+    try{
+      receipt=await post<Receipt>('/drafts',{
+        instanceId:draft?.instanceId??null,...scope,formCode,
+        periodType:draft?.periodType??periodType,periodCode:draft?.periodCode??periodCode,
+        currency:draft?.currency??currency,coverage:'PERIOD_ONLY',
+        reportingBasis:'MANAGEMENT',dataSpace:'SYNTHETIC',
+        expectedRevision:draft?.revisionNo??0,values:cleaned,rows:[],
+        createdBy:'react-local-uat',changeReason:'React editor input'
+      },saveKeyRef.current);
+    }catch(error){
+      if(isDefiniteRejection(error)){
+        setSaveUncertain(false);
+        saveKeyRef.current=null;
+      }
+      throw error;
+    }
     const snapshot=await get<Draft>('/drafts/'+receipt.instanceId+'?organizationId='+scope.organizationId);
     if(snapshot.sha256!==receipt.contentSha256||snapshot.revisionNo!==receipt.revisionNo)
       throw new Error('Сохранение выполнено, но сверка ревизии не прошла. Повторите с тем же ключом.');
@@ -257,7 +266,13 @@ export default function App(){
     // read-back fails: the database may already contain the new revision.
     setCommitUncertain(true);
     setPreview(null);
-    const receipt=await multipart<Receipt>('/import-profiles/previews/'+preview.previewId+'/commit',body,true);
+    let receipt:Receipt;
+    try{
+      receipt=await multipart<Receipt>('/import-profiles/previews/'+preview.previewId+'/commit',body,true);
+    }catch(error){
+      if(isDefiniteRejection(error))setCommitUncertain(false);
+      throw error;
+    }
     const current=await get<Draft>('/drafts/'+draft.instanceId+'?organizationId='+scope.organizationId);
     const mismatch=Object.entries(preview.values).filter(([code,v])=>current.values[code]!==v);
     if(mismatch.length||current.sha256!==receipt.contentSha256||
