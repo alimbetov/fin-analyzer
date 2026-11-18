@@ -3,7 +3,6 @@ package kz.fin.formlib.service;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -21,7 +20,7 @@ public final class ImportNumberNormalizer {
       throw invalid(fieldCode,"UNSUPPORTED_LOCALE");
     String value=raw.trim().replace('\u00a0',' ').replace('\u202f',' ');
     if(value.isEmpty())return "";
-    if(!value.matches("-?[0-9 ,\.]+"))
+    if(!value.matches("-?[0-9 ,.]+"))
       throw invalid(fieldCode,"INVALID_NUMBER_FORMAT");
     boolean comma=value.indexOf(',')>=0, dot=value.indexOf('.')>=0;
     if(comma&&dot)throw invalid(fieldCode,"MIXED_DECIMAL_SEPARATORS");
