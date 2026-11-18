@@ -139,8 +139,16 @@ public class FormDraftService {
    * canonical field/value normalizer as save(). The commit revalidates everything.
    * Caller must already have pinned instance scope and form version.
    */
+  public record ImportCanonical(Map<String,String> values,
+      Map<UUID,Map<String,String>> rowValues) {}
+
   @Transactional(readOnly=true)
   public void validateImportCandidate(DraftRequest req,UUID pinnedFormVersionId) {
+    normalizeImportCandidate(req,pinnedFormVersionId);
+  }
+
+  @Transactional(readOnly=true)
+  public ImportCanonical normalizeImportCandidate(DraftRequest req,UUID pinnedFormVersionId) {
     if(req==null||pinnedFormVersionId==null)throw bad("IMPORT_CONTEXT_REQUIRED");
     var currency=currencies.findById(required(req.currency(),"CURRENCY"))
       .filter(x->"ACTIVE".equals(x.getStatus()))
@@ -158,11 +166,12 @@ public class FormDraftService {
     if(!contractGuard.matches(req.formCode(),pinnedFormVersionId))
       throw bad("FIELD_METRIC_CONTRACT_STALE");
     boolean single="SINGLE_RECORD".equals(version.getContentMode());
-    canonical(pinnedFormVersionId,req.values(),single,currency.getMinorUnits());
+    Map<String,String> normalizedValues=canonical(pinnedFormVersionId,req.values(),single,currency.getMinorUnits());
     var sourceRows=req.rows()==null?List.<RowInput>of():req.rows();
     if((single&&!sourceRows.isEmpty())||(!single&&
         (sourceRows.isEmpty()||sourceRows.size()>200)))
       throw bad("INVALID_ROW_COUNT");
+    Map<UUID,Map<String,String>> normalizedRows=new HashMap<>();
     if(!single){
       Set<UUID> ids=new HashSet<>();
       Set<Integer> positions=new HashSet<>();
@@ -170,9 +179,11 @@ public class FormDraftService {
         if(row==null||row.rowId()==null||!ids.add(row.rowId())
             ||row.rowPosition()<1||!positions.add(row.rowPosition()))
           throw bad("INVALID_IMPORT_ROW");
-        canonical(pinnedFormVersionId,row.values(),true,currency.getMinorUnits());
+        normalizedRows.put(row.rowId(),canonical(pinnedFormVersionId,row.values(),true,
+          currency.getMinorUnits()));
       }
     }
+    return new ImportCanonical(Map.copyOf(normalizedValues),Map.copyOf(normalizedRows));
   }
 
   @Transactional
