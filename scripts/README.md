@@ -113,3 +113,39 @@ preserving the database. On a database where the original migrations were
 already successfully applied (e.g., H2), modifying a Liquibase changeset
 can cause checksum validation to fail: that environment requires separate
 migration planning; do not clear checksums blindly.
+
+## Lombok / IntelliJ IDEA (R0.2 local PostgreSQL acceptance)
+
+Backend `pom.xml` now includes Lombok as an optional compile dependency,
+configures its annotation processor explicitly for Java 21, and excludes
+Lombok from the Spring Boot executable JAR. Only the simple
+`FormValidationRule` JPA entity was migrated to `@Getter`, `@Setter`,
+`@NoArgsConstructor`; other JPA entities were left unchanged to avoid
+accidental equality / proxy / persistence behavior changes. Do not use
+`@Data` on these JPA entities.
+
+After updating the branch, reload the `form-library/pom.xml` Maven
+project in IntelliJ. Enable annotation processing under
+**Settings > Build, Execution, Deployment > Compiler > Annotation Processors**
+if your IntelliJ configuration requires it.
+
+```powershell
+cd form-library
+mvn -Dtest=LombokJpaEntityCompilationUnitTest,PostgresqlMigrationTextCompatibilityUnitTest test
+mvn clean verify
+```
+
+The first test proves generated Lombok getters/setters are compiled; the second
+guards PostgreSQL against reintroduced CLOB/OID mismatches.
+
+If working in a downloaded `fin-analyzer-feat-fin-form-library-standalone`
+ZIP folder without a `.git` directory, `git pull` will not update those
+files. Download and extract the **latest branch ZIP**, or clone the branch
+into a new folder:
+
+```powershell
+git clone --branch feat/fin-form-library-standalone --single-branch https://github.com/alimbetov/fin-analyzer.git fin-analyzer-local
+```
+
+Keep the existing Docker volume; updating and rebuilding the Backend does not
+require deleting PostgreSQL data.
