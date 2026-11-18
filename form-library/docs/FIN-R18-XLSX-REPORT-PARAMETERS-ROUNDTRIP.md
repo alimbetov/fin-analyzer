@@ -50,3 +50,22 @@ Test coverage: all three styles, two-sheet output, exact values, preservation of
 ## Future: declarative parser policies
 
 For controlled external spreadsheets, the trusted server must store a versioned **ImportProfile** (separate from UI style), containing source format, sheet and coordinate mappings, locale-aware decimal policy, header signature, unit conversion rules, validators, fixed SHA-256 and moderation state. Preview parses into a normalized candidate snapshot with diagnostics, and only an explicit commit calls `FormDraftService`. The workbook's PARAMETERS can select a registered profile ID/version but must not define permissive validation policy itself.
+
+## R18.1 — compact editor layout, localization and revision safety
+
+- `EXCEL` now renders **Field / Value in adjacent columns A and B**, with values located at `B5`, `B6`, etc. The unused B gap from the previous layout is gone; addresses in `PARAMETERS` reflect the new export.
+- Input cells use visual hints: yellow for required values, pale blue for optional values. Field labels and headers are styled independently. Financial values are exported as **text**, preserving exact decimal digits and avoiding Excel binary rounding.
+- `GET /api/v1/drafts/{instanceId}/export.xlsx?organizationId=<uuid>&styleCode=EXCEL&locale=kk` supports `ru`, `kk`, `en`, `zh-Hans`; default is `ru`. The temporary UAT page has a corresponding language selection. Form title and visible field labels are resolved from existing `fin_lib` translations. When no suitable translation exists, codes are displayed; translations are NOT generated or verified automatically.
+- The human-readable `REPORT` captions are **not** used to determine field identity. The unchanged, server-validated `PARAMETERS.fieldKey` and `valueCell` remain authoritative. Therefore the report can be presented in any supported language without altering values, form version, immutable content SHA or import mapping.
+- `PARAMETERS` includes `displayLocale` and `reportTitle` as informational presentation values. Financial metadata remains separately validated against the pinned server snapshot.
+- Import now canonicalizes incoming values in the no-write preview. An **unchanged** file fails with `XLSX_NO_CHANGES` (422) and does not create a redundant financial revision. A changed financial value goes through `FormDraftService.save` with the source `expectedRevision`; the writer calculates a **new** canonical `contentSha256` and saves an immutable next revision. The original revision and SHA remain readable.
+- Existing XLSX files exported under the previous `EXCEL` A/C coordinate layout are not transparently migrated by the strict current V2 parser. Re-export using this version before editing, or introduce an explicit versioned compatibility adapter.
+
+### Regression commands
+
+```bash
+mvn -f form-library/pom.xml -Dtest=FormXlsxCodecUnitTest,FormXlsxExchangeIntegrationTest,VersionedImportProfileIntegrationTest test
+mvn -f form-library/pom.xml clean verify
+```
+
+**Release state remains HOLD until a real Maven/CI GREEN on the same commit SHA.**
