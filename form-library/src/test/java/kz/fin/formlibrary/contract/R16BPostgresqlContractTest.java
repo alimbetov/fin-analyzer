@@ -28,6 +28,7 @@ class R16BPostgresqlContractTest {
     static PostgreSQLContainer<?> pg = new PostgreSQLContainer<>("postgres:16-alpine");
 
     static String version = UUID.randomUUID().toString();
+    static String duplicateVersion = UUID.randomUUID().toString();
     static String field = "REVENUE";
 
     @BeforeAll
@@ -46,6 +47,7 @@ class R16BPostgresqlContractTest {
             s.execute("CREATE TABLE fin_lib.lib_period_type(code varchar(8) primary key)");
             s.execute("CREATE TABLE fin_lib.lib_metric_definition(metric_code varchar(160) unique not null)");
             s.execute("INSERT INTO fin_lib.lib_form_version(id) VALUES ('" + version + "')");
+            s.execute("INSERT INTO fin_lib.lib_form_version(id) VALUES ('" + duplicateVersion + "')");
             s.execute("INSERT INTO fin_lib.lib_form_field(form_version_id,field_code) VALUES ('"
                     + version + "','REVENUE')");
             s.execute("INSERT INTO fin_lib.lib_period_type(code) VALUES ('M')");
@@ -137,13 +139,13 @@ class R16BPostgresqlContractTest {
                compatibility_class,governance_state,created_at)
             VALUES ('%s',1,'catalog-1','UNCLASSIFIED','CANDIDATE_UNQUALIFIED',CURRENT_TIMESTAMP)
             ON CONFLICT (form_version_id) DO NOTHING
-            """.formatted(version));
+            """.formatted(duplicateVersion));
         reject("""
             INSERT INTO fin_lib.lib_form_contract_policy
               (form_version_id,canonicalization_version,source_descriptor_version,
                compatibility_class,governance_state,created_at)
             VALUES ('%s',1,'catalog-1','UNCLASSIFIED','CANDIDATE_UNQUALIFIED',CURRENT_TIMESTAMP)
-            """.formatted(version), "23505");
+            """.formatted(duplicateVersion), "23505");
         reject("""
             INSERT INTO fin_lib.lib_form_contract_policy
               (form_version_id,canonicalization_version,source_descriptor_version,
