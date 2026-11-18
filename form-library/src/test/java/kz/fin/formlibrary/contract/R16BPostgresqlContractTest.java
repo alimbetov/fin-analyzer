@@ -129,7 +129,15 @@ class R16BPostgresqlContractTest {
     }
 
     @Test
-    void duplicatePolicyAndUnknownVersionFailClosed() {
+    void duplicatePolicyAndUnknownVersionFailClosed() throws SQLException {
+        // Independent fixture: test order must not affect the primary-key assertion.
+        execute("""
+            INSERT INTO fin_lib.lib_form_contract_policy
+              (form_version_id,canonicalization_version,source_descriptor_version,
+               compatibility_class,governance_state,created_at)
+            VALUES ('%s',1,'catalog-1','UNCLASSIFIED','CANDIDATE_UNQUALIFIED',CURRENT_TIMESTAMP)
+            ON CONFLICT (form_version_id) DO NOTHING
+            """.formatted(version));
         reject("""
             INSERT INTO fin_lib.lib_form_contract_policy
               (form_version_id,canonicalization_version,source_descriptor_version,
