@@ -38,9 +38,10 @@ export async function request(path:string,options:RequestInit={}):Promise<Respon
   return response;
 }
 export async function get<T>(path:string):Promise<T>{return (await request(path)).json() as Promise<T>;}
-export async function post<T>(path:string,data:unknown,idem=false):Promise<T>{
+export async function post<T>(path:string,data:unknown,idem:boolean|string=false):Promise<T>{
+  const key=typeof idem==='string'?idem:idem?crypto.randomUUID():null;
   return (await request(path,{method:'POST',headers:{
-    'Content-Type':'application/json',...(idem?{'Idempotency-Key':crypto.randomUUID()}:{})
+    'Content-Type':'application/json',...(key?{'Idempotency-Key':key}:{})
   },body:JSON.stringify(data)})).json() as Promise<T>;
 }
 export async function multipart<T>(path:string,body:FormData,idem=false):Promise<T>{
