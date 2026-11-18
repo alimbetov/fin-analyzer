@@ -338,6 +338,15 @@ public class FormDraftService {
     String contentHash=sha("FIN-LIB-CONTENT-V1|"+content);
     String orderHash=sha("FIN-LIB-ROW-ORDER-V1|"+
        prepared.stream().map(r->r.rowPosition()+":"+r.rowId()).toList());
+    // A fresh idempotency key must not create a phantom revision when
+    // neither the financial content nor the explicit row order changed.
+    // A replay of the SAME key was already returned above.
+    if(inst.getCurrentRevisionId()!=null){
+      var current=revisions.findById(inst.getCurrentRevisionId()).orElseThrow();
+      if(contentHash.equals(current.getCanonicalContentSha256())&&
+         orderHash.equals(current.getRowOrderSha256()))
+        throw bad("NO_FINANCIAL_CHANGES");
+    }
     FormRevision revision=new FormRevision();revision.setId(UUID.randomUUID());
     revision.setInstanceId(inst.getId());revision.setRevisionNo(inst.getLatestRevisionNo()+1);
     revision.setFormVersionId(version.getId());revision.setContentMode(version.getContentMode());
