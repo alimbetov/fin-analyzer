@@ -21,6 +21,18 @@ class IndicatorNavigatorCatalogUnitTest {
     assertTrue(catalog.indicators().stream().allMatch(x->
         "CATALOG_UNQUALIFIED".equals(x.qualificationStatus())));
     assertEquals(46,catalog.indicators().stream().map(x->x.code()).distinct().count());
+    assertTrue(catalog.indicators("ru").stream().allMatch(indicator->
+      indicator.explanation()!=null &&
+      "EDITORIAL_DRAFT_NOT_S2".equals(indicator.explanation().reviewStatus()) &&
+      !indicator.explanation().meaning().isBlank() &&
+      !indicator.explanation().helpsDecision().isBlank() &&
+      !indicator.explanation().limitations().isBlank()));
+    assertTrue(catalog.indicators("kk").stream().allMatch(indicator->
+      indicator.explanation().meaning()==null &&
+      indicator.explanation().helpsDecision()==null &&
+      "PENDING_TRANSLATION".equals(indicator.explanation().reviewStatus())));
+    assertEquals("CATALOG_UNQUALIFIED",
+      catalog.indicator("PROJECT_NPV","ru").orElseThrow().qualificationStatus());
   }
 
   @Test
