@@ -186,11 +186,16 @@ async function save(){
 async function download(){
  if(!val("instanceId"))throw Error("Сохраните экземпляр перед экспортом");
  const q=new URLSearchParams({organizationId:val("organizationId"),styleCode:val("style"),locale:val("locale")});
- const blob=await (await call("/drafts/"+encodeURIComponent(val("instanceId"))+"/export.xlsx?"+q)).blob();
+ const response=await call("/drafts/"+encodeURIComponent(val("instanceId"))+"/export.xlsx?"+q);
+ const blob=await response.blob();
+ const header=response.headers.get("Content-Disposition")||"";
+ const match=/filename="([^"]+\\.xlsx)"/i.exec(header);
+ if(!match)throw Error("Сервер не указал имя XLSX в Content-Disposition");
+ const name=match[1];
  const u=URL.createObjectURL(blob),a=document.createElement("a");
- a.href=u;a.download="fin-"+val("formCode")+"-"+val("style")+".xlsx";
+ a.href=u;a.download=name;
  document.body.append(a);a.click();a.remove();URL.revokeObjectURL(u);
- log({event:"EXPORT",bytes:blob.size});
+ log({event:"EXPORT",filename:name,bytes:blob.size});
 }
 async function register(){
  if(!val("instanceId"))throw Error("Сначала сохраните отчёт");
