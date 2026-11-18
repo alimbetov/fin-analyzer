@@ -72,7 +72,7 @@ class FormXlsxCodecUnitTest {
   @Test
   void legitimateValueEditRetainsBindings() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
-    var parsed=FormXlsxCodec.parse(mutate(file,"REPORT",4,1,"150000.25",false),fields());
+    var parsed=FormXlsxCodec.parse(mutate(file,"REPORT",4,2,"150000.25",false),fields());
     assertEquals("150000.25",parsed.values().get("netRevenue"));
     assertEquals("70000",parsed.values().get("cogs"));
   }
@@ -91,7 +91,7 @@ class FormXlsxCodecUnitTest {
   void changingFieldCodeOrInsertingUnboundCellIsRejected() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.CLASSIC),fields());
     // Human labels are intentionally cosmetic and do not define a binding.
-    var renamed=FormXlsxCodec.parse(mutate(file,"REPORT",4,0,"Другой заголовок",false),fields());
+    var renamed=FormXlsxCodec.parse(mutate(file,"REPORT",4,1,"Другой заголовок",false),fields());
     assertEquals("125000.50",renamed.values().get("netRevenue"));
     rejected(mutate(file,"PARAMETERS",14,0,"otherMetric",false),"XLSX_FIELD_BINDING_CHANGED");
     rejected(mutate(file,"REPORT",12,3,"hidden financial value",false),"XLSX_UNBOUND_REPORT_CELL");
@@ -113,15 +113,15 @@ class FormXlsxCodecUnitTest {
       var report=workbook.getSheet("REPORT");
       assertEquals("FIN Form Library — Отчёт о прибылях и убытках",
           report.getRow(0).getCell(0).getStringCellValue());
-      assertEquals("Выручка",report.getRow(4).getCell(0).getStringCellValue());
+      assertEquals("Выручка",report.getRow(4).getCell(1).getStringCellValue());
       assertEquals("125000.50",report.getRow(4).getCell(1).getStringCellValue());
-      assertNull(report.getRow(4).getCell(2));
-      assertEquals("B5",workbook.getSheet("PARAMETERS")
+      assertEquals("1",report.getRow(4).getCell(0).getStringCellValue());
+      assertEquals("C5",workbook.getSheet("PARAMETERS")
           .getRow(14).getCell(1).getStringCellValue());
       assertEquals("ru",workbook.getSheet("PARAMETERS")
           .getRow(9).getCell(1).getStringCellValue());
-      assertNotEquals(report.getRow(4).getCell(1).getCellStyle().getFillForegroundColor(),
-          report.getRow(6).getCell(1).getCellStyle().getFillForegroundColor());
+      assertNotEquals(report.getRow(4).getCell(2).getCellStyle().getFillForegroundColor(),
+          report.getRow(6).getCell(2).getCellStyle().getFillForegroundColor());
     }
     assertEquals("125000.50",FormXlsxCodec.parse(file,fields()).values().get("netRevenue"));
   }
@@ -153,8 +153,9 @@ class FormXlsxCodecUnitTest {
         assertTrue(report.getRow(2).getCell(1).getStringCellValue().contains("MANAGEMENT"));
         assertTrue(report.getRow(2).getCell(1).getStringCellValue().contains("F02-V1"));
         if(style==FormXlsxCodec.Style.EXCEL){
-          assertEquals("Көрсеткіш",report.getRow(3).getCell(0).getStringCellValue());
-          assertEquals("Мәні",report.getRow(3).getCell(1).getStringCellValue());
+          assertEquals("№",report.getRow(3).getCell(0).getStringCellValue());
+          assertEquals("Көрсеткіш",report.getRow(3).getCell(1).getStringCellValue());
+          assertEquals("Мәні",report.getRow(3).getCell(2).getStringCellValue());
         }
         var params=book.getSheet("PARAMETERS");
         assertEquals("periodType",params.getRow(11).getCell(0).getStringCellValue());
@@ -175,9 +176,62 @@ class FormXlsxCodecUnitTest {
   }
 
   @Test
+  void sequentialMetricNumbersAreCenteredAndProtectedInAllStyles() throws Exception {
+    for(var style:FormXlsxCodec.Style.values()){
+      byte[] file=FormXlsxCodec.export(envelope(style),fields());
+      try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(file))){
+        var report=book.getSheet("REPORT");
+        int[][] cellPositions=style==FormXlsxCodec.Style.DASHBOARD
+            ?new int[][]{{4,0,1,2},{4,4,5,6},{5,0,1,2}}
+            :new int[][]{{4,0,1,2},{5,0,1,2},{6,0,1,2}};
+        for(int i=0;i<cellPositions.length;i++){
+          int[] pos=cellPositions[i];
+          var number=report.getRow(pos[0]).getCell(pos[1]);
+          assertEquals(Integer.toString(i+1),number.getStringCellValue());
+          assertEquals(HorizontalAlignment.CENTER,number.getCellStyle().getAlignment());
+          assertEquals(fields().get(i).key(),
+            report.getRow(pos[0]).getCell(pos[2]).getStringCellValue());
+          assertEquals(fields().get(i).value(),
+            report.getRow(pos[0]).getCell(pos[3]).getStringCellValue());
+        }
+        assertEquals("FIN-FORM-XLSX-V3",book.getSheet("PARAMETERS")
+          .getRow(0).getCell(1).getStringCellValue());
+      }
+      assertEquals(fields().size(),FormXlsxCodec.parse(file,fields()).values().size());
+      rejected(mutate(file,"REPORT",4,0,"99",false),"XLSX_ROW_NUMBER_CHANGED");
+    }
+  }
+
+  @Test
+  void oldV2ExportsRemainImportableWithTheirOriginalCellCoordinates() throws Exception {
+    byte[] newFile=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
+    try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(newFile));
+        ByteArrayOutputStream output=new ByteArrayOutputStream()){
+      var report=book.getSheet("REPORT");
+      for(int index=0;index<fields().size();index++){
+        var row=report.getRow(index+4);
+        String label=row.getCell(1).getStringCellValue();
+        String value=row.getCell(2).getStringCellValue();
+        row.removeCell(row.getCell(2));
+        row.getCell(1).setCellValue(value);
+        row.getCell(0).setCellValue(label);
+      }
+      report.getRow(3).getCell(0).setCellValue("Field key");
+      report.getRow(3).getCell(1).setCellValue("Value");
+      report.getRow(3).removeCell(report.getRow(3).getCell(2));
+      var params=book.getSheet("PARAMETERS");
+      params.getRow(0).getCell(1).setCellValue("FIN-FORM-XLSX-V2");
+      for(int i=0;i<fields().size();i++)
+        params.getRow(14+i).getCell(1).setCellValue("B"+(i+5));
+      book.write(output);
+      assertEquals(fields().size(),FormXlsxCodec.parse(output.toByteArray(),fields()).values().size());
+    }
+  }
+
+  @Test
   void rejectsExcelFormulasInsteadOfEvaluatingThem() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
-    rejected(mutate(file,"REPORT",4,1,"SUM(1,2)",true),"XLSX_TEXT_CELL_REQUIRED");
+    rejected(mutate(file,"REPORT",4,2,"SUM(1,2)",true),"XLSX_TEXT_CELL_REQUIRED");
   }
 
   @Test
