@@ -24,8 +24,12 @@ public class IndicatorNavigatorCatalog {
   public record Goal(String code,String title,String translationStatus,String audience,
       String deliverable,String version,String qualificationStatus,
       List<Model> models,List<FormLink> forms) {}
+  /** Editorial interpretation only; NOT an approved metric formula or an execution grant. */
+  public record IndicatorHelp(String meaning,String helpsDecision,String limitations,
+      String reviewStatus,String source) {}
   public record Indicator(String code,String metricKind,String qualificationStatus,
-      List<Model> models,List<String> inputFormCodes,List<String> goalCodes) {}
+      List<Model> models,List<String> inputFormCodes,List<String> goalCodes,
+      IndicatorHelp explanation) {}
   public record FormUsage(String formCode,List<String> goalCodes,List<String> modelCodes,
       String qualificationStatus) {}
 
@@ -35,6 +39,7 @@ public class IndicatorNavigatorCatalog {
   private final Map<String,Model> models;
   private final Map<String,List<FormLink>> goalForms;
   private final Map<String,Indicator> indicators;
+  private final Map<String,IndicatorHelp> ruExplanations;
   private final Map<String,FormUsage> formUsages;
 
   public IndicatorNavigatorCatalog(){
@@ -98,6 +103,21 @@ public class IndicatorNavigatorCatalog {
     if(indicatorModels.size()!=46)
       throw invalid("OUTPUT_METRIC_COUNT_DRIFT:"+indicatorModels.size());
 
+    // Independent editorial explanation rows. Enforce full coverage and exact
+    // output metric identity, but never upgrade CATALOG_UNQUALIFIED.
+    var explanationRows=new LinkedHashMap<String,IndicatorHelp>();
+    for(var line:rows("catalog/indicator-explanations-r1.tsv",5)){
+      if(!indicatorModels.containsKey(line[0]))throw invalid("ORPHAN_EXPLANATION:"+line[0]);
+      if(Arrays.stream(line).anyMatch(String::isBlank)||
+          !"EDITORIAL_DRAFT_NOT_S2".equals(line[4]))
+        throw invalid("UNREVIEWED_EXPLANATION_STATUS:"+line[0]);
+      var help=new IndicatorHelp(line[1],line[2],line[3],line[4],
+          "catalog/indicator-explanations-r1.tsv");
+      if(explanationRows.putIfAbsent(line[0],help)!=null)
+        throw invalid("DUPLICATE_EXPLANATION:"+line[0]);
+    }
+    if(explanationRows.size()!=indicatorModels.size())
+      throw invalid("EXPLANATION_COVERAGE_DRIFT:"+explanationRows.size());
     var resultIndicators=new LinkedHashMap<String,Indicator>();
     for(var entry:indicatorModels.entrySet()){
       var associated=entry.getValue();
@@ -109,7 +129,7 @@ public class IndicatorNavigatorCatalog {
           .map(GoalSource::code).toList();
       resultIndicators.put(entry.getKey(),new Indicator(entry.getKey(),
           "ANALYTICAL_OUTPUT","CATALOG_UNQUALIFIED",List.copyOf(associated),
-          List.copyOf(inputForms),List.copyOf(usedBy)));
+          List.copyOf(inputForms),List.copyOf(usedBy),explanationRows.get(entry.getKey())));
     }
 
     var usages=new LinkedHashMap<String,FormUsage>();
@@ -130,6 +150,7 @@ public class IndicatorNavigatorCatalog {
     goalForms=gf.entrySet().stream().collect(Collectors.toUnmodifiableMap(
         Map.Entry::getKey,e->List.copyOf(e.getValue())));
     indicators=Collections.unmodifiableMap(resultIndicators);
+    ruExplanations=Collections.unmodifiableMap(explanationRows);
     formUsages=Collections.unmodifiableMap(usages);
   }
 
@@ -142,11 +163,22 @@ public class IndicatorNavigatorCatalog {
     var source=goals.get(code);
     return source==null?Optional.empty():Optional.of(goal(source,locale));
   }
-  public List<Indicator> indicators(){
-    return List.copyOf(indicators.values());
+  public List<Indicator> indicators(){return indicators("ru");}
+  public List<Indicator> indicators(String locale){
+    requireLocale(locale);
+    return indicators.values().stream().map(x->localized(x,locale)).toList();
   }
-  public Optional<Indicator> indicator(String code){
-    return Optional.ofNullable(indicators.get(code));
+  public Optional<Indicator> indicator(String code){return indicator(code,"ru");}
+  public Optional<Indicator> indicator(String code,String locale){
+    requireLocale(locale);
+    return Optional.ofNullable(indicators.get(code)).map(x->localized(x,locale));
+  }
+  private Indicator localized(Indicator source,String locale){
+    IndicatorHelp help="ru".equals(locale)?ruExplanations.get(source.code()):
+      new IndicatorHelp(null,null,null,"PENDING_TRANSLATION",
+          "catalog/indicator-explanations-r1.tsv");
+    return new Indicator(source.code(),source.metricKind(),source.qualificationStatus(),
+        source.models(),source.inputFormCodes(),source.goalCodes(),help);
   }
   public Optional<FormUsage> formUsage(String code){
     return Optional.ofNullable(formUsages.get(code));
