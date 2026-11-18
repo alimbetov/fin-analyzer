@@ -83,3 +83,33 @@ The Testcontainers test uses an isolated temporary database and **does not touch
 - **`pwsh` not found:** install PowerShell 7 and restart your terminal; built-in Windows PowerShell 5.1 cannot use the script's multipart `-Form` invocation.
 
 **Security:** `FIN/FIN` and unprotected Backend endpoints are strictly for localhost development. Neither the smoke test nor the `X-FIN-UAT-Token` is authentication.
+
+## Troubleshooting: PostgreSQL migration rejected CLOB (2026-11-18)
+
+If Spring Boot connects to PostgreSQL 16 but Liquibase fails on `001-lib-schema.sql`
+with `ERROR: type "clob" does not exist`, the local working copy predates
+the PostgreSQL TEXT mapping fix. Pull the current
+`feat/fin-form-library-standalone` branch or re-download it if the folder
+was extracted from a GitHub ZIP. The fix covers **all five** SQL columns:
+`typed_params`, `values_json` (revision and row), `metadata_json`,
+and import-profile `binding_json` in `017`. Four corresponding JPA fields
+no longer use `@Lob`, which maps Strings to PostgreSQL OID large objects.
+
+From the project root, after updating the code:
+
+```powershell
+cd form-library
+mvn -Dtest=PostgresqlMigrationTextCompatibilityUnitTest test
+mvn clean package -DskipTests
+mvn spring-boot:run
+```
+
+Do **not** disable Liquibase, use Hibernate `ddl-auto=update`, drop the
+Docker volume, or create a global PostgreSQL domain called `CLOB`.
+The original failed changeset was not committed to
+`public.databasechangelog` (`Previously run: 0` in that log), so
+a clean PostgreSQL transaction can retry it with the fixed SQL while
+preserving the database. On a database where the original migrations were
+already successfully applied (e.g., H2), modifying a Liquibase changeset
+can cause checksum validation to fail: that environment requires separate
+migration planning; do not clear checksums blindly.
