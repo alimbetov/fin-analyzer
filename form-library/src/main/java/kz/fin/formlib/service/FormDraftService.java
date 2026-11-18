@@ -134,6 +134,47 @@ public class FormDraftService {
     return result;
   }
 
+  /**
+   * No-write preview validator for the R19 XLSX workflow. Uses the same
+   * canonical field/value normalizer as save(). The commit revalidates everything.
+   * Caller must already have pinned instance scope and form version.
+   */
+  @Transactional(readOnly=true)
+  public void validateImportCandidate(DraftRequest req,UUID pinnedFormVersionId) {
+    if(req==null||pinnedFormVersionId==null)throw bad("IMPORT_CONTEXT_REQUIRED");
+    var currency=currencies.findById(required(req.currency(),"CURRENCY"))
+      .filter(x->"ACTIVE".equals(x.getStatus()))
+      .orElseThrow(()->bad("UNSUPPORTED_CURRENCY"));
+    try{PeriodResolver.resolve(req.periodType(),req.periodCode());}
+    catch(IllegalArgumentException e){throw bad("INVALID_PERIOD");}
+    var form=forms.findByFormCode(required(req.formCode(),"FORM_CODE"))
+      .orElseThrow(()->bad("FORM_NOT_FOUND"));
+    var version=versions.findById(pinnedFormVersionId)
+      .orElseThrow(()->bad("FORM_VERSION_NOT_FOUND"));
+    if(!version.getFormId().equals(form.getId()))
+      throw bad("FORM_VERSION_CONTEXT_MISMATCH");
+    if(!"TYPED_DRAFT".equals(form.getLegacyCaptureMode())&&
+        !"F02".equals(form.getFormCode()))throw bad("CAPTURE_SCHEMA_NOT_APPROVED");
+    if(!contractGuard.matches(req.formCode(),pinnedFormVersionId))
+      throw bad("FIELD_METRIC_CONTRACT_STALE");
+    boolean single="SINGLE_RECORD".equals(version.getContentMode());
+    canonical(pinnedFormVersionId,req.values(),single,currency.getMinorUnits());
+    var sourceRows=req.rows()==null?List.<RowInput>of():req.rows();
+    if((single&&!sourceRows.isEmpty())||(!single&&
+        (sourceRows.isEmpty()||sourceRows.size()>200)))
+      throw bad("INVALID_ROW_COUNT");
+    if(!single){
+      Set<UUID> ids=new HashSet<>();
+      Set<Integer> positions=new HashSet<>();
+      for(var row:sourceRows){
+        if(row==null||row.rowId()==null||!ids.add(row.rowId())
+            ||row.rowPosition()<1||!positions.add(row.rowPosition()))
+          throw bad("INVALID_IMPORT_ROW");
+        canonical(pinnedFormVersionId,row.values(),true,currency.getMinorUnits());
+      }
+    }
+  }
+
   @Transactional
   public DraftReceipt save(DraftRequest req,String idempotencyKey) {
     if(req==null) throw bad("REQUEST_REQUIRED");
