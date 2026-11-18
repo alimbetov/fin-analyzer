@@ -43,7 +43,18 @@ class IndicatorNavigatorApiIntegrationTest {
       }
     }
     assertEquals(101,links);
-    assertEquals(46,fetch("/api/v1/indicator-catalog/indicators").size());
+    var ruIndicators=fetch("/api/v1/indicator-catalog/indicators?locale=ru");
+    assertEquals(46,ruIndicators.size());
+    for(JsonNode metric:ruIndicators){
+      assertEquals("CATALOG_UNQUALIFIED",metric.path("qualificationStatus").asText());
+      assertEquals("EDITORIAL_DRAFT_NOT_S2",
+        metric.path("explanation").path("reviewStatus").asText());
+      assertTrue(metric.path("explanation").path("meaning").asText().length()>12);
+    }
+    var kkIndicators=fetch("/api/v1/indicator-catalog/indicators?locale=kk");
+    assertTrue(kkIndicators.stream().allMatch(metric->
+      metric.path("explanation").path("meaning").isNull() &&
+      "PENDING_TRANSLATION".equals(metric.path("explanation").path("reviewStatus").asText())));
     assertEquals(before,jdbc.queryForObject(
       "SELECT count(*) FROM fin_intake.lib_form_revision",Integer.class));
   }
