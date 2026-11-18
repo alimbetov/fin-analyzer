@@ -52,7 +52,7 @@ public final class FormXlsxCodec {
   private static int[] location(Style style,int index) {
     return switch(style){
       case CLASSIC -> new int[]{4+index,0,1};
-      case EXCEL -> new int[]{4+index,0,2};
+      case EXCEL -> new int[]{4+index,0,1};
       case DASHBOARD -> new int[]{4+index/2,(index%2)*3,(index%2)*3+1};
     };
   }
@@ -61,9 +61,6 @@ public final class FormXlsxCodec {
   }
   private static String cellRef(int[] position) {
     return new org.apache.poi.ss.util.CellReference(position[0],position[2]).formatAsString();
-  }
-  private static String canonicalColumn(int[] position) {
-    return Integer.toString(position[2]);
   }
   private static List<String> metadata(Envelope e,int count) {
     return List.of(MAGIC,e.instanceId().toString(),e.organizationId().toString(),
@@ -85,27 +82,53 @@ public final class FormXlsxCodec {
       text.setDataFormat(book.createDataFormat().getFormat("@"));
       Font font=book.createFont();font.setBold(true);
       CellStyle bold=book.createCellStyle();bold.setFont(font);
+      CellStyle title=book.createCellStyle();
+      title.setFont(font);
+      title.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+      title.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+      Font white=book.createFont();white.setBold(true);white.setColor(IndexedColors.WHITE.getIndex());
+      title.setFont(white);
+      CellStyle mandatory=book.createCellStyle();
+      mandatory.cloneStyleFrom(text);
+      mandatory.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
+      mandatory.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+      mandatory.setBorderBottom(BorderStyle.THIN);
+      mandatory.setBottomBorderColor(IndexedColors.GOLD.getIndex());
+      CellStyle optional=book.createCellStyle();
+      optional.cloneStyleFrom(text);
+      optional.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
+      optional.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+      optional.setBorderBottom(BorderStyle.THIN);
+      optional.setBottomBorderColor(IndexedColors.GREY_25_PERCENT.getIndex());
+      CellStyle keyStyle=book.createCellStyle();
+      keyStyle.setFont(font);
+      keyStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+      keyStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+      CellStyle metadataStyle=book.createCellStyle();
+      metadataStyle.cloneStyleFrom(text);
+      metadataStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+      metadataStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-      write(report,0,0,"FIN Form Library — "+envelope.formCode(),bold);
+      write(report,0,0,"FIN Form Library — "+envelope.formCode(),title);
       write(report,1,0,"Style: "+envelope.style()+", revision: "+envelope.revision(),null);
-      write(report,2,0,"Edit text cells only; do not change field codes.",null);
+      write(report,2,0,"Input cells are highlighted; change values only. PARAMETERS is read-only.",null);
       if(envelope.style()==Style.EXCEL){
-        write(report,3,0,"Field key",bold);write(report,3,2,"Value",bold);
+        write(report,3,0,"Field key",title);write(report,3,1,"Value",title);
       }
       List<String> metadata=metadata(envelope,entries.size());
       String[] metaKeys={"contractFormat","instanceId","organizationId","formVersionId",
         "formCode","expectedRevision","contentSha256","styleCode","fieldCount"};
       for(int i=0;i<metaKeys.length;i++){
         write(params,i,0,metaKeys[i],bold);
-        write(params,i,1,metadata.get(i),text);
+        write(params,i,1,metadata.get(i),metadataStyle);
       }
       String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
-      for(int i=0;i<columns.length;i++)write(params,FIRST_FIELD_ROW-1,i,columns[i],bold);
+      for(int i=0;i<columns.length;i++)write(params,FIRST_FIELD_ROW-1,i,columns[i],title);
       for(int i=0;i<entries.size();i++){
         Entry e=entries.get(i);
         int[] p=location(envelope.style(),i);
-        write(report,p[0],p[1],e.key(),bold);
-        write(report,p[0],p[2],e.value(),text);
+        write(report,p[0],p[1],e.key(),keyStyle);
+        write(report,p[0],p[2],e.value(),e.required()?mandatory:optional);
         int row=FIRST_FIELD_ROW+i;
         write(params,row,0,e.key(),text);
         write(params,row,1,cellRef(p),text);
@@ -114,9 +137,14 @@ public final class FormXlsxCodec {
         write(params,row,4,Boolean.toString(e.required()),text);
         write(params,row,5,"CANONICAL_TEXT",text);
       }
-      report.setColumnWidth(0,12000);report.setColumnWidth(1,10500);
-      report.setColumnWidth(2,10500);
-      report.setColumnWidth(3,12000);report.setColumnWidth(4,10500);
+      report.setColumnWidth(0,12000);report.setColumnWidth(1,11500);
+      if(envelope.style()==Style.DASHBOARD){
+        report.setColumnWidth(2,1600);
+        report.setColumnWidth(3,12000);
+        report.setColumnWidth(4,11500);
+      }
+      report.createFreezePane(1,4);
+      report.setDisplayGridlines(false);
       params.setColumnWidth(0,11000);params.setColumnWidth(1,13000);
       params.setColumnWidth(2,7500);params.setColumnWidth(3,7500);
       book.write(output);
@@ -152,7 +180,7 @@ public final class FormXlsxCodec {
       expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
       if(style==Style.EXCEL){
         expect(read(report,3,0),"Field key","XLSX_HEADER_MISMATCH");
-        expect(read(report,3,2),"Value","XLSX_HEADER_MISMATCH");
+        expect(read(report,3,1),"Value","XLSX_HEADER_MISMATCH");
       }
       String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
       for(int i=0;i<columns.length;i++)
