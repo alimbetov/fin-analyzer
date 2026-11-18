@@ -101,6 +101,15 @@ class ReactLocalPostgresIntegrationTest {
     assertEquals("125000.5",old.path("values").path("netRevenue").asText());
     assertEquals("130000.5",current.path("values").path("netRevenue").asText());
     assertEquals(receipt2.path("contentSha256").asText(),current.path("sha256").asText());
+    // React must be able to reconstruct the exact pinned slot from REST,
+    // not invent fresh scope UUIDs when reopening a report created via MVC.
+    assertEquals(org.toString(),current.path("organizationId").asText());
+    assertEquals(entity.toString(),current.path("economicEntityId").asText());
+    assertEquals(business.toString(),current.path("businessScopeId").asText());
+    assertEquals(project.toString(),current.path("projectId").asText());
+    assertEquals("PERIOD_ONLY",current.path("coverage").asText());
+    assertEquals("MANAGEMENT",current.path("reportingBasis").asText());
+    assertEquals("SYNTHETIC",current.path("dataSpace").asText());
 
     mvc.perform(post("/api/v1/drafts")
       .header("Idempotency-Key","pg-stale-"+org)
