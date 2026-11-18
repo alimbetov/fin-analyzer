@@ -24,6 +24,12 @@ test('approved typed F02 is editable for new and matching current revision',()=>
  assert.equal(canEditForm(form(),'F02',null).allowed,true);
  assert.equal(canEditForm(form(),'F02',draft()).allowed,true);
 });
+test('catalog TYPED_DRAFT hints for F03 do not authorize writes',()=>{
+ const candidate=form({formCode:'F03',captureMode:'TYPED_DRAFT',contentMode:'SINGLE_RECORD'});
+ const result=canEditForm(candidate,'F03',null);
+ assert.equal(result.allowed,false);
+ assert.equal(result.reason,'CAPTURE_SCHEMA_NOT_APPROVED');
+});
 test('a stale loaded FormDetail never enables saves for newly selected code',()=>{
  assert.equal(canEditForm(form(),'F03',null).reason,'FORM_LOADING');
  assert.equal(canEditForm(form(),'F03',draft({formCode:'F03'})).allowed,false);
