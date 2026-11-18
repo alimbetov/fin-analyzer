@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
-import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,History,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
+import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,History,Eye,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Style} from './api';
 import {exportXlsx,get,multipart,post} from './api';
 import './styles.css';
@@ -112,8 +112,10 @@ export default function App(){
     if(!plain.includes('\t')&&!plain.includes('\n'))return;
     e.preventDefault();
     const lines=plain.replace(/\r/g,'').trimEnd().split('\n');
-    const parts=lines.length===1?lines[0].split('\t'):
-      lines.map(line=>{const cols=line.split('\t');return cols[cols.length-1]});
+    const parts=lines.length===1
+      ?(()=>{const cols=lines[0].split('\t');
+          return cols.length>=3&&/^\\d+$/.test(cols[0].trim())?[cols[cols.length-1]]:cols;})()
+      :lines.map(line=>{const cols=line.split('\t');return cols[cols.length-1]});
     setValues(old=>{
       const next={...old};
       parts.forEach((raw,n)=>{const field=fields[index+n];if(field)next[field.fieldCode]=normalize(raw,field.fieldType);});
@@ -310,8 +312,8 @@ export default function App(){
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
                 <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null)}}/>
                 <div className="import-tools">
-                  <button disabled={!file||!draft||busy} onClick={doPreview}><FileSpreadsheet size={16}/> Preview</button>
-                  <button disabled={!preview||busy} onClick={doCommit}><Check size={16}/> Commit</button>
+                  <Tool label="Предпросмотр XLSX без записи" disabled={!file||!draft||busy} onClick={doPreview}><Eye size={18}/></Tool>
+                  <Tool label="Подтвердить импорт новой ревизии" disabled={!preview||busy} onClick={doCommit}><Check size={18}/></Tool>
                   <span>{file?.name??'Файл не выбран'}</span></div>
               </div>
             </div>
