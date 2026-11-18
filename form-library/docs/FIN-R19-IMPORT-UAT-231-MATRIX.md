@@ -14,10 +14,10 @@ The test uses fresh `F02` instances with `dataSpace=SYNTHETIC`, not real reports
 1. Create draft revision 1 through `POST /api/v1/drafts` with a unique organization/project/scope/actor.
 2. Resolve and assert canonical type/code and date range using `PeriodResolver`.
 3. Read revision 1 and confirm selected accounting currency and original values.
-4. Export the chosen style and locale to FIN XLSX V3 (`REPORT` + `PARAMETERS`).
-5. Check the **№** index column is centered, the XLSX schema version is V3, and the value address in `PARAMETERS` points at `C5` for the first field. V3 layout:
-   - CLASSIC / EXCEL: A = centered row number, B = localized indicator, C = editable value.
-   - DASHBOARD: A/B/C and E/F/G two side-by-side numbered blocks with column D as spacer.
+4. Export the chosen style and locale to FIN XLSX V4 (`REPORT` + `PARAMETERS`).
+5. Check the **№** index column is centered, the XLSX schema version is V4, and the value address in `PARAMETERS` points at `D5` for the first field. V4 layout:
+   - CLASSIC / EXCEL: A = wide report metadata gutter (30 characters), B = centered row number, C = localized indicator, D = editable value.
+   - DASHBOARD: B/C/D and F/G/H two side-by-side numbered blocks with column E as spacer.
 6. Edit the XLSX financial value: `1500,25` for 2-minor-unit currencies, `1500` for 0-minor-unit currencies. Decimal comma is normalized only at the import boundary.
 7. Register/pin R19 profile, Preview without persistence and assert `fin_intake` revision count remains 1.
 8. Commit exact SHA-bound file, assert new immutable revision 2, and a changed canonical content SHA.
@@ -79,12 +79,12 @@ Open `http://127.0.0.1:8086/uat/form-editor`. Select one of the seven types, cho
 
 **Never change the period/currency of an already-saved report by editing Excel or switching the UAT controls**: source context is immutable. Create another F02 instance for a new period/currency.
 
-## XLSX V3 compatibility policy
+## XLSX V4 compatibility policy
 
-- V3 adds centered report line numbers and moves the values to column C; `PARAMETERS.valueCell` is updated deterministically.
-- The importer accepts prior FIN XLSX **V2** according to its old coordinate mapping. It does not reinterpret a V2 sheet using V3 positions. Supported V2 classic/Excel/dashboard labels are preserved; legacy Excel headers `Field key/Value` also remain recognized.
+- V4 preserves centered report line numbers and shifts the table one column right (value cells start at D5) to reserve a wide A column for period/date metadata. `PARAMETERS.valueCell` is updated deterministically.
+- The importer accepts prior FIN XLSX **V2** and **V3** according to their own coordinate mappings. It never silently interprets one layout version as another. Supported V2 classic/Excel/dashboard labels are preserved; legacy Excel headers `Field key/Value` also remain recognized.
 - A manual edit of the numeric index column causes `XLSX_ROW_NUMBER_CHANGED` (422), not an accidental financial data update.
-- Both workbook versions still require matching instance, organization, form version, exact source financial SHA and revision. Old workbook after a new commit is stale.
+- All workbook versions still require matching instance, organization, form version, exact source financial SHA and revision. Old workbook after a new commit is stale.
 
 ## Negative and release gates
 
