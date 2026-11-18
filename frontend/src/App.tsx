@@ -3,6 +3,7 @@ import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
 import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,History,Eye,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Style} from './api';
 import {exportXlsx,get,multipart,post} from './api';
+import {parseExcelPaste} from './clipboard';
 import './styles.css';
 
 const periodExamples:Record<string,string>={D:'2026-11-18',W:'2026-W47',DEC:'2026-11-2',M:'2026-11',Q:'2026-Q4',H:'2026-H2',Y:'2026'};
@@ -59,6 +60,9 @@ export default function App(){
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [showScope,setShowScope]=useState(false);
   const [range,setRange]=useState('');
+  const inFlight=useRef(false);
+  const [dirty,setDirty]=useState(false);
+  const [commitUncertain,setCommitUncertain]=useState(false);
 
   useEffect(()=>{localStorage.setItem(storageKey,JSON.stringify(scope));},[scope]);
   useEffect(()=>{
@@ -90,7 +94,11 @@ export default function App(){
   },[periodType,periodCode]);
 
   const fields=useMemo(()=>(form?.fields??[]).filter(f=>f.inputMode==='MANUAL').sort((a,b)=>a.displayOrder-b.displayOrder),[form]);
-  const editable=form?.form.contentMode==='SINGLE_RECORD';
+  // The catalog is not an approval to write. Backend only accepts qualified
+  // typed schemas; F02 is the explicit current pilot.
+  const editable=form?.form.contentMode==='SINGLE_RECORD' &&
+    (form.form.captureMode==='TYPED_DRAFT'||formCode==='F02') &&
+    (!draft||draft.workflowStatus==='DRAFT') && fields.length>0;
   const roots=(tree?.categories??[]).filter(c=>c.type==='ROOT');
   const filtered=useMemo(()=>{
     const included=new Set<string>();
@@ -106,22 +114,32 @@ export default function App(){
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
   const isLocked=Boolean(draft);
 
-  function setValue(code:string,value:string){setValues(old=>({...old,[code]:value}));setPreview(null);}
+  function setValue(code:string,value:string){
+    setValues(old=>({...old,[code]:value}));
+    setDirty(true);
+    setPreview(null);
+  }
   function pasteRange(e:ClipboardEvent<HTMLInputElement>,index:number){
     const plain=e.clipboardData.getData('text/plain');
-    if(!plain.includes('\t')&&!plain.includes('\n'))return;
+    if(!plain.includes('\\t')&&!plain.includes('\\n'))return;
     e.preventDefault();
-    const lines=plain.replace(/\r/g,'').trimEnd().split('\n');
-    const parts=lines.length===1
-      ?(()=>{const cols=lines[0].split('\t');
-          return cols.length>=3&&/^\d+$/.test(cols[0].trim())?[cols[cols.length-1]]:cols;})()
-      :lines.map(line=>{const cols=line.split('\t');return cols[cols.length-1]});
-    setValues(old=>{
-      const next={...old};
-      parts.forEach((raw,n)=>{const field=fields[index+n];if(field)next[field.fieldCode]=normalize(raw,field.fieldType);});
-      return next;
-    });
-    setPreview(null);setMessage('Вставлено '+Math.min(parts.length,fields.length-index)+' значений из Excel; сохранение требуется отдельно');
+    try{
+      const pasted=parseExcelPaste(plain,index,fields);
+      setValues(old=>{
+        const next={...old};
+        pasted.forEach((raw,n)=>{
+          const field=fields[index+n];
+          next[field.fieldCode]=normalize(raw,field.fieldType);
+        });
+        return next;
+      });
+      setDirty(true);
+      setPreview(null);
+      setError('');
+      setMessage('Проверено и вставлено '+pasted.length+' значений; для сохранения создайте ревизию');
+    }catch(error){
+      setError(error instanceof Error?error.message:String(error));
+    }
   }
   function nextCell(e:KeyboardEvent<HTMLInputElement>,index:number){
     if(e.key==='Enter'||e.key==='ArrowDown'||e.key==='ArrowUp'){
@@ -131,12 +149,24 @@ export default function App(){
     }
   }
   async function execute(job:()=>Promise<void>){
+    if(inFlight.current)return;
+    inFlight.current=true;
     setBusy(true);setError('');
     try{await job()}catch(e){setError(e instanceof Error?e.message:String(e))}
-    finally{setBusy(false)}
+    finally{inFlight.current=false;setBusy(false)}
+  }
+  function confirmDiscard():boolean {
+    return !dirty||window.confirm('Есть несохранённые значения. Продолжить без сохранения?');
+  }
+  function switchForm(code:string){
+    if(code===formCode||!confirmDiscard())return;
+    setFormCode(code);setDashboard(false);setDirty(false);setCommitUncertain(false);
   }
   const save=()=>execute(async()=>{
-    if(!form||!editable)throw new Error('Эта форма требует другого режима ввода. Сохранение ROWS пока отключено.');
+    if(!form||!editable)throw new Error('Запись разрешена только для DRAFT с утверждённым типизированным SINGLE_RECORD контрактом.');
+    if(!draft&&!dirty&&Object.keys(values).length===0)throw new Error('Сначала заполните отчёт');
+    if(draft&&!dirty)throw new Error('Нет изменений для сохранения');
+    if(range==='Неверный период')throw new Error('Некорректный учётный период');
     for(const f of fields)if(f.required&&!values[f.fieldCode]?.trim())
       throw new Error('Обязательное поле: '+f.title+' ('+f.fieldCode+')');
     const cleaned=Object.fromEntries(fields.filter(f=>values[f.fieldCode]!==undefined)
@@ -151,14 +181,17 @@ export default function App(){
     },true);
     const snapshot=await get<Draft>('/drafts/'+receipt.instanceId+'?organizationId='+scope.organizationId);
     setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setPreview(null);
+    setDirty(false);setCommitUncertain(false);
     setMessage('Сохранено: ревизия '+snapshot.revisionNo+' · SHA '+snapshot.sha256.slice(0,12));
   });
   const open=()=>execute(async()=>{
+    if(!confirmDiscard())return;
     if(!instanceId)throw new Error('Укажите UUID экземпляра');
     const snapshot=await get<Draft>('/drafts/'+instanceId+'?organizationId='+scope.organizationId);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
     setDraft(snapshot);setValues(snapshot.values);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
-    setCurrency(snapshot.currency);setPreview(null);setMessage('Открыта ревизия '+snapshot.revisionNo);
+    setCurrency(snapshot.currency);setPreview(null);setDirty(false);setCommitUncertain(false);
+    setMessage('Открыта ревизия '+snapshot.revisionNo);
   });
   const download=()=>execute(async()=>{
     if(!draft)throw new Error('Сначала сохраните отчёт');
@@ -169,6 +202,8 @@ export default function App(){
   });
   const doPreview=()=>execute(async()=>{
     if(!draft||!file)throw new Error('Откройте отчёт и выберите XLSX');
+    if(dirty)throw new Error('Есть несохранённые изменения React; сначала сохраните их либо откройте отчёт заново');
+    if(file.size>2_000_000)throw new Error('XLSX превышает лимит Backend 2 MB');
     let id=profileId;
     if(!id){
       const version=await get<{formVersionId:string}>('/uat-helper/drafts/'+draft.instanceId+
@@ -181,7 +216,10 @@ export default function App(){
     body.append('reason','React Excel Preview');
     const ticket=await multipart<PreviewTicket>('/import-profiles/'+id+'/preview',body);
     const current=await get<Draft>('/drafts/'+draft.instanceId+'?organizationId='+scope.organizationId);
-    if(current.revisionNo!==draft.revisionNo)throw new Error('Ревизия изменилась во время Preview');
+    if(current.revisionNo!==draft.revisionNo||current.sha256!==draft.sha256)
+      throw new Error('Ревизия или SHA изменились во время Preview');
+    if(ticket.expectedRevision!==draft.revisionNo)
+      throw new Error('Preview относится к другой ревизии');
     setPrevious(current);setPreview(ticket);
     setMessage('Preview OK: '+Object.keys(ticket.values).length+' полей · без записи в fin_intake');
   });
@@ -190,16 +228,25 @@ export default function App(){
     const body=new FormData();body.append('file',file);body.append('instanceId',draft.instanceId);
     body.append('organizationId',scope.organizationId);body.append('actor','react-local-uat');
     body.append('reason','React Excel Commit');
+    // Commit is a mutating request. Once it returns, avoid blind retries if
+    // read-back fails: the database may already contain the new revision.
     const receipt=await multipart<Receipt>('/import-profiles/previews/'+preview.previewId+'/commit',body,true);
+    setCommitUncertain(true);
+    setPreview(null);
     const current=await get<Draft>('/drafts/'+draft.instanceId+'?organizationId='+scope.organizationId);
-    const mismatch=Object.entries(preview.values).filter(([code,v])=>current.values[code]!==v);
+    const mismatch=Object.entries(preview.values).filter(([code,v)=>current.values[code]!==v);
     if(mismatch.length||current.sha256!==receipt.contentSha256||
       current.revisionNo!==previous.revisionNo+1)
-      throw new Error('Commit сохранён, но сверка не прошла. Перезагрузите ревизию.');
-    setDraft(current);setValues(current.values);setPreview(null);setFile(null);
+      throw new Error('Commit выполнен, но сверка не прошла. Обновите экземпляр; не повторяйте Commit вслепую.');
+    setDraft(current);setValues(current.values);setFile(null);
+    setDirty(false);setCommitUncertain(false);
     setMessage('Commit '+current.revisionNo+' · SHA '+current.sha256.slice(0,12)+' · проверено '+Object.keys(preview.values).length+' полей');
   });
-  const reset=()=>{setDraft(null);setInstanceId('');setValues({});setProfileId('');setPreview(null);setFile(null);setMessage('Новый черновик');};
+  const reset=()=>{
+    if(!confirmDiscard())return;
+    setDraft(null);setInstanceId('');setValues({});setProfileId('');
+    setPreview(null);setFile(null);setDirty(false);setCommitUncertain(false);setMessage('Новый черновик');
+  };
 
   function renderRow(field:Field,index:number){
     return <tr key={field.fieldCode}><td className="seq">{index+1}</td>
@@ -260,7 +307,7 @@ export default function App(){
             <label className="search-box"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Код или название..." /></label>
             <div className="form-list">
               {filtered.map(f=><button key={f.formCode} className={'form-list-item '+(f.formCode===formCode?'active':'')}
-                onClick={()=>{setFormCode(f.formCode);setDashboard(false)}}>
+                onClick={()=>switchForm(f.formCode)}>
                 <span className="form-icon"><FileSpreadsheet size={18}/></span>
                 <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode}</small></span><ChevronRight size={16}/></button>)}
               {!filtered.length&&<p className="empty">Формы не найдены</p>}
@@ -272,10 +319,10 @@ export default function App(){
               <p>{draft?'Редакция '+draft.revisionNo+' · '+draft.workflowStatus:'Новая форма · заполнение с нуля'}</p></div>
               <div className="toolbar">
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
-                <Tool label="Сохранить ревизию" disabled={busy||!editable} onClick={save}>{busy?<LoaderCircle className="spin" size={18}/>:<Save size={18}/>}</Tool>
+                <Tool label="Сохранить ревизию" disabled={busy||!editable||!dirty||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={18}/>:<Save size={18}/>}</Tool>
                 <Tool label="Открыть по UUID" disabled={busy} onClick={open}><History size={18}/></Tool>
                 <Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>
-                <Tool label="Загрузить XLSX" disabled={busy||!draft} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>
+                <Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>
                 <Tool label="Контекст организации" onClick={()=>setShowScope(v=>!v)}><Settings2 size={18}/></Tool>
               </div></div>
             <div className="editor-body">
@@ -295,7 +342,9 @@ export default function App(){
                 <button onClick={()=>{setScope(newScope());reset()}}>Новая организация UAT</button>
                 <label>Instance UUID<input value={instanceId} onChange={e=>setInstanceId(e.target.value)} /></label>
               </div>}
-              {!editable&&form&&<div className="warning"><AlertTriangle size={17}/> Форма {form.form.contentMode} требует табличного контракта. Запись в этом редакторе отключена.</div>}
+              {!editable&&form&&<div className="warning"><AlertTriangle size={17}/> Запись отключена: нет утверждённого типизированного SINGLE_RECORD контракта или отчёт не в DRAFT. Каталог сам по себе не разрешает ввод.</div>}
+              {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
+              {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
               <div className="sheet-head"><div><b>Показатели отчёта</b><p>Вставка из Excel: Ctrl+V · Enter / ↓ для следующего поля</p></div>
                 <span className="total-badge">{fields.length} показателей</span></div>
               {style==='EXCEL'?<div className="sheet-scroll"><table className="sheet"><thead><tr><th>№</th><th>Показатель</th><th>Значение</th></tr></thead>
@@ -313,7 +362,7 @@ export default function App(){
                 <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null)}}/>
                 <div className="import-tools">
                   <Tool label="Предпросмотр XLSX без записи" disabled={!file||!draft||busy} onClick={doPreview}><Eye size={18}/></Tool>
-                  <Tool label="Подтвердить импорт новой ревизии" disabled={!preview||busy} onClick={doCommit}><Check size={18}/></Tool>
+                  <Tool label="Подтвердить импорт новой ревизии" disabled={!preview||busy||commitUncertain} onClick={doCommit}><Check size={18}/></Tool>
                   <span>{file?.name??'Файл не выбран'}</span></div>
               </div>
             </div>
