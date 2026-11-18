@@ -222,10 +222,10 @@ class FormXlsxCodecUnitTest {
       report.getRow(3).removeCell(report.getRow(3).getCell(2));
       report.getRow(3).removeCell(report.getRow(3).getCell(3));
       // Recreate V2 metadata positioning (A/B) from current V4 (A/C).
-      report.getRow(1).getCell(1).setCellValue(
+      report.getRow(1).createCell(1,CellType.STRING).setCellValue(
         report.getRow(1).getCell(2).getStringCellValue());
       report.getRow(1).removeCell(report.getRow(1).getCell(2));
-      report.getRow(2).getCell(1).setCellValue(
+      report.getRow(2).createCell(1,CellType.STRING).setCellValue(
         report.getRow(2).getCell(2).getStringCellValue());
       report.getRow(2).removeCell(report.getRow(2).getCell(2));
       var params=book.getSheet("PARAMETERS");
