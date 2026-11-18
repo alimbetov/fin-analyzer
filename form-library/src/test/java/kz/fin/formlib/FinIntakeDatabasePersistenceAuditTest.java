@@ -50,6 +50,56 @@ class FinIntakeDatabasePersistenceAuditTest {
    return success(get(url).param("organizationId",org.toString()));
  }
 
+ @Test void existingFinancialSlotRequiresExplicitRevisionAndCanBeRecoveredByScope()
+     throws Exception {
+   UUID org=UUID.randomUUID(),project=UUID.randomUUID();
+   var request=req(null,org,project,"F02",0,Map.of(
+       "netRevenue","100","cogs","30","operatingExpenses","10"),List.of());
+   JsonNode initial=saveDraft(request,"slot-initial-"+org);
+   UUID id=UUID.fromString(initial.get("instanceId").asText());
+   assertEquals(1,initial.get("revisionNo").asInt());
+
+   // A new idempotency key does NOT authorize a second financial instance.
+   http.perform(post("/api/v1/drafts")
+     .header("Idempotency-Key","slot-duplicate-"+org)
+     .contentType(MediaType.APPLICATION_JSON).content(json(request)))
+     .andExpect(status().isConflict())
+     .andExpect(jsonPath("$.code").value("REPORT_SLOT_ALREADY_EXISTS"));
+
+   JsonNode existing=success(get("/api/v1/drafts/slot")
+     .param("organizationId",org.toString())
+     .param("economicEntityId","00000000-0000-0000-0000-000000000002")
+     .param("businessScopeId","00000000-0000-0000-0000-000000000003")
+     .param("projectId",project.toString())
+     .param("formCode","F02").param("periodType","M")
+     .param("periodCode","2026-11").param("coverage","PERIOD_ONLY")
+     .param("currency","KZT").param("reportingBasis","MANAGEMENT")
+     .param("dataSpace","SYNTHETIC"));
+   assertEquals(id.toString(),existing.get("instanceId").asText());
+   assertEquals(1,existing.get("revisionNo").asInt());
+
+   // Changing even one scoping dimension must never leak another slot.
+   http.perform(get("/api/v1/drafts/slot")
+     .param("organizationId",UUID.randomUUID().toString())
+     .param("economicEntityId","00000000-0000-0000-0000-000000000002")
+     .param("businessScopeId","00000000-0000-0000-0000-000000000003")
+     .param("projectId",project.toString())
+     .param("formCode","F02").param("periodType","M")
+     .param("periodCode","2026-11").param("coverage","PERIOD_ONLY")
+     .param("currency","KZT").param("reportingBasis","MANAGEMENT")
+     .param("dataSpace","SYNTHETIC")).andExpect(status().isNotFound());
+
+   var second=req(id,org,project,"F02",1,Map.of(
+       "netRevenue","200","cogs","30","operatingExpenses","10"),List.of());
+   JsonNode updated=saveDraft(second,"slot-revision-2-"+org);
+   assertEquals(id.toString(),updated.get("instanceId").asText());
+   assertEquals(2,updated.get("revisionNo").asInt());
+   assertEquals(1,number("SELECT count(*) FROM fin_intake.lib_form_instance WHERE id=?",id));
+   assertEquals(2,number("SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",id));
+   assertEquals("100",readDraft(id,org,1).get("values").get("netRevenue").asText());
+   assertEquals("200",readDraft(id,org,2).get("values").get("netRevenue").asText());
+ }
+
  @Test void f02StoredValueShaProjectRevisionAndIdempotencyAreVisibleInDatabase()
      throws Exception {
    UUID org=UUID.randomUUID(),project=UUID.randomUUID();
