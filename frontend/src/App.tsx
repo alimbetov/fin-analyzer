@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
-import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,FolderOpen,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
+import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
@@ -53,7 +53,7 @@ function Tool({label,onClick,disabled,children}:{label:string;onClick:()=>void;d
 
 export default function App(){
   const [language,setLanguage]=useState<Locale>('ru');
-  const [style,setStyle]=useState<Style>('EXCEL');
+  const [style,setStyle]=useState<Style>('CLASSIC');
   const [navigation,setNavigation]=useState<Navigation|null>(null);
   const [tree,setTree]=useState<CategoryTree|null>(null);
   const [form,setForm]=useState<FormDetail|null>(null);
