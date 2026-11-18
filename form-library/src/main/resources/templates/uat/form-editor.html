@@ -22,7 +22,7 @@ button.secondary{background:#e8f0fa;color:#164e84}button:disabled{opacity:.5}
 #editor.excel{display:block}
 #editor.dashboard{grid-template-columns:repeat(2,minmax(0,1fr))}
 #editor label{border:1px solid #e0e7f0;border-radius:6px;padding:9px}
-table{border-collapse:collapse;width:100%}th,td{border:1px solid #d9e2ed;text-align:left;padding:8px}th{background:#edf3fa}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #d9e2ed;text-align:left;padding:8px}th{background:#edf3fa}.num{text-align:center;width:45px;min-width:45px;font-weight:700;color:#345171}.indicator-card{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:start;gap:7px}.indicator-card .num{background:#eef3f9;border-radius:4px;padding:8px 0}.indicator-card label{min-width:0}
 @media(max-width:700px){.grid,#editor.dashboard{grid-template-columns:1fr}}
 </style>
 </head>
@@ -103,15 +103,23 @@ function render(){
  const fields=data.fields.filter(f=>f.inputMode==="MANUAL");
  if(val("style")==="EXCEL"){
    const table=document.createElement("table"),head=document.createElement("tr");
-   for(const t of ["Код","Тип","Значение"]){const th=document.createElement("th");th.textContent=t;head.append(th);}
-   table.append(head);
-   for(const f of fields){
-     const tr=document.createElement("tr"),k=document.createElement("td"),type=document.createElement("td"),v=document.createElement("td");
-     k.textContent=f.fieldCode+(f.required?" *":"");type.textContent=f.fieldType;
-     v.append(input(f).lastChild);tr.append(k,type,v);table.append(tr);
+   for(const t of ["№","Код показателя","Тип","Значение"]){
+     const th=document.createElement("th");th.textContent=t;head.append(th);
    }
+   table.append(head);
+   fields.forEach((f,i)=>{
+     const tr=document.createElement("tr"),num=document.createElement("td"),
+       k=document.createElement("td"),type=document.createElement("td"),v=document.createElement("td");
+     num.className="num";num.textContent=String(i+1);
+     k.textContent=f.title||f.fieldCode;type.textContent=f.fieldType;
+     v.append(input(f).lastChild);tr.append(num,k,type,v);table.append(tr);
+   });
    host.append(table);
- }else for(const f of fields)host.append(input(f));
+ }else fields.forEach((f,i)=>{
+   const card=document.createElement("div");card.className="indicator-card";
+   const num=document.createElement("span");num.className="num";num.textContent=String(i+1);
+   card.append(num,input(f));host.append(card);
+ });
 }
 const examplePeriod={D:"2026-11-18",W:"2026-W47",DEC:"2026-11-2",
   M:"2026-11",Q:"2026-Q4",H:"2026-H2",Y:"2026"};
