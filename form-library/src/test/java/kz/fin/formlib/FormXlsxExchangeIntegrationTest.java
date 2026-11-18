@@ -149,7 +149,7 @@ class FormXlsxExchangeIntegrationTest {
     }
     // Even changing both the visible header and PARAMETERS cannot change
     // the already persisted reporting currency or accounting period.
-    byte[] changed=changeCell(original,4,1,"600");
+    byte[] changed=changeCell(original,4,2,"600");
     try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(changed));
         ByteArrayOutputStream out=new ByteArrayOutputStream()) {
       book.getSheet("REPORT").getRow(1).getCell(1).setCellValue("Валюта: USD");
@@ -172,7 +172,7 @@ class FormXlsxExchangeIntegrationTest {
     Saved saved=create("F02",Map.of("netRevenue","500",
         "cogs","200","operatingExpenses","100"),List.of());
     byte[] original=export(saved,"EXCEL");
-    upload(saved,changeCell(original,4,1,"700"),"first-"+saved.org());
+    upload(saved,changeCell(original,4,2,"700"),"first-"+saved.org());
     var file=new MockMultipartFile("file","old.xlsx",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",original);
     http.perform(multipart("/api/v1/drafts/"+saved.id()+"/import.xlsx")
