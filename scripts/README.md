@@ -173,3 +173,25 @@ full locale translations, 166 PRIMARY form links, SHA manifest and repeatable
 idempotent bootstrap. This is catalog/navigation seed data. It is **not**
 synthetic financial fact data; the opt-in F02 end-to-end test creates those
 only in its own temporary Testcontainers PostgreSQL.
+
+## Docker Engine 29 + Testcontainers 1.21.3 (Windows IntelliJ)
+
+If `ReactLocalPostgresIntegrationTest` compiles but fails before the
+Spring context with `NpipeSocketClientProviderStrategy: Status 400` and
+empty `ServerVersion`, check `docker version` for Docker Engine 29.
+This is a known client-API incompatibility with Testcontainers 1.21.3.
+Both `org.testcontainers:postgresql` and `org.testcontainers:junit-jupiter`
+have been upgraded to `1.21.4`, which addresses Docker 29 compatibility
+without migrating to Testcontainers 2.x APIs.
+
+```powershell
+docker version
+docker ps
+cd form-library
+mvn -U clean test "-Dtest=ReactLocalPostgresIntegrationTest" "-Dfin.postgres.uat.enabled=true"
+```
+
+Use a Maven reload in IntelliJ after downloading the new branch. If Docker
+CLI itself cannot connect, repair Docker Desktop/Linux engine first. An
+unrelated Docker failure should not be masked by disabling Testcontainers;
+do not delete the persistent PostgreSQL volume.
