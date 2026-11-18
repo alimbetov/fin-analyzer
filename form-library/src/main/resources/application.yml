@@ -5,10 +5,10 @@ spring:
   application:
     name: fin-form-library
   datasource:
-    url: jdbc:h2:mem:finformlib;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
+    url: ${FIN_FORM_DB_URL:jdbc:h2:mem:finformlib;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE}
+    driver-class-name: ${FIN_FORM_DB_DRIVER:org.h2.Driver}
+    username: ${FIN_FORM_DB_USER:sa}
+    password: ${FIN_FORM_DB_PASSWORD:}
   jpa:
     open-in-view: false
     properties:
