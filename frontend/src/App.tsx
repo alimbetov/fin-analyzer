@@ -1,11 +1,12 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
-import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,FolderOpen,Eye,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
+import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,FolderOpen,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
 import FinancialGoalsNavigator from './FinancialGoalsNavigator';
+import type {DecisionContext} from './decisionTree';
 import './styles.css';
 
 const periodExamples:Record<string,string>={D:'2026-11-18',W:'2026-W47',DEC:'2026-11-2',M:'2026-11',Q:'2026-Q4',H:'2026-H2',Y:'2026'};
@@ -70,6 +71,7 @@ export default function App(){
   const [message,setMessage]=useState('Подключение к Backend...');
   const [sidebar,setSidebar]=useState(()=>window.innerWidth>920);
   const [navigator,setNavigator]=useState(true);
+  const [decisionContext,setDecisionContext]=useState<DecisionContext|null>(null);
   const [dashboard,setDashboard]=useState(false);
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [showScope,setShowScope]=useState(false);
@@ -187,15 +189,25 @@ export default function App(){
         'Перед продолжением проверьте текущую ревизию. Всё равно выйти?');
     return !dirty||window.confirm('Есть несохранённые значения. Продолжить без сохранения?');
   }
-  function switchForm(code:string){
-    if(code===formCode){setNavigator(false);setDashboard(false);return;}
-    if(!confirmDiscard())return;
+  function switchForm(code:string):boolean{
+    if(code===formCode){
+      setNavigator(false);setDashboard(false);setDecisionContext(null);
+      return true;
+    }
+    if(!confirmDiscard())return false;
     // Reset synchronously with the form selection, not after the REST response:
     // an in-flight render must never show old fieldCode under a new formCode.
     setForm(null);setDraft(null);setInstanceId('');setValues({});setRowEntries([]);
     setProfileId('');setPrevious(null);setPreview(null);setFile(null);
     setFormCode(code);setNavigator(false);setDashboard(false);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
+    setDecisionContext(null);
+    return true;
+  }
+  function openFromFlow(code:string,context:DecisionContext){
+    // Keep the original decision context if the editor refuses a navigation
+    // because it contains unsaved values or an uncertain write.
+    if(switchForm(code))setDecisionContext(context);
   }
   const save=()=>execute(async()=>{
     if(!form||!editable)throw new Error('Запись разрешена только для DRAFT с утверждённым типизированным SINGLE_RECORD контрактом.');
@@ -448,10 +460,23 @@ export default function App(){
           <p className="subtitle">{navigator?'От финансового вопроса к показателям и необходимым отчётам':'Единый контракт данных · 166 форм · immutable revisions · Excel round-trip'}</p></div>
           <span className="mode-pill">LOCAL DEVELOPMENT</span></div>
         {error&&<div className="error" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={()=>setError('')} aria-label="Закрыть">×</button></div>}
-        {navigator&&<FinancialGoalsNavigator locale={language}
-          forms={navigation?.allForms??[]} onOpenForm={switchForm}
-          onOpenLibrary={()=>{setNavigator(false);setDashboard(false)}}/>}
+        <div hidden={!navigator}>
+          <FinancialGoalsNavigator locale={language}
+            forms={navigation?.allForms??[]} onOpenForm={openFromFlow}
+            onOpenLibrary={()=>{setNavigator(false);setDashboard(false)}}/>
+        </div>
         {!navigator&&<>
+        {decisionContext?.formCode===formCode&&<div className="decision-context">
+          <div>
+            <span>ОТ ВОПРОСА — К НУЖНЫМ ДАННЫМ</span>
+            <strong>{decisionContext.goalTitle??decisionContext.goalCode}</strong>
+            <small>{decisionContext.metricCode} → {decisionContext.modelCode??'рекомендация задачи'} → {formCode}</small>
+            <small>Связь: {decisionContext.linkKind}. Черновые метаданные — не допуск к расчёту.</small>
+          </div>
+          <button type="button" onClick={()=>{setNavigator(true);setDashboard(false)}}>
+            <GitBranch size={16}/> К дереву задачи
+          </button>
+        </div>}
         <div className="stats">
           <div className="stat"><span>Формы</span><strong>{navigation?.totalForms??'—'}</strong><small>В каталоге Backend</small></div>
           <div className="stat"><span>Категории</span><strong>{tree?.categories.length??'—'}</strong><small>Реальный fin_lib</small></div>
