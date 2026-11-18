@@ -69,3 +69,24 @@ mvn -f form-library/pom.xml clean verify
 ```
 
 **Release state remains HOLD until a real Maven/CI GREEN on the same commit SHA.**
+
+## R18.2 — accounting context in XLSX
+
+The previous CLASSIC/EXCEL/DASHBOARD screenshots showed a title and values but not enough context to interpret the report. The three renderers now show in the first three rows:
+
+- Localized report title (from `fin_lib`).
+- Accounting period code and localized period type (day/week/decade/month/quarter/half-year/year).
+- Accounting/reporting currency from the persisted `fin_intake` instance.
+- Inclusive reporting date range (stored `periodStart`, converted display of `periodEndExclusive - 1 day`).
+- Reporting basis, form version label and current workflow status.
+- DASHBOARD also displays separate type/coverage and revision metadata.
+
+The EXCEL style's column titles are also localized into `ru`, `kk`, `en`, `zh-Hans`. Input cells remain at the previous deterministic addresses (`B5`, `B6`, `B7` for simple EXCEL/CLASSIC), so the previous FIN XLSX V2 cell mapping is not shifted.
+
+Additional `PARAMETERS` entries (rows 12 and 13, counting from 1) contain `periodType`, `periodCode`, `periodStart`, `periodEndExclusive`, `currency`, `reportingBasis`, `coverage`, `dataSpace`, `formVersionLabel`, `workflowStatus`. These are source assertions, not authorization. The import service rechecks the entire context against the persisted report and rejects edits with `XLSX_REPORT_CONTEXT_CHANGED`. Edited visible period/currency headers are also rejected.
+
+Older FIN XLSX V2 files without the additional context rows remain readable by the compatible parser, with the original strict revision/instance/version/content SHA checks; they do not acquire this additional context validation. Exporting a new file is recommended before changing input.
+
+**Future enhancements, not implemented here:** organization and legal entity display names (from trusted identity/entity catalog), explicit scale (units vs thousands vs millions), document author and export timestamp, auditor sign-off, evidence attachments, frozen publication manifest, localized financial disclosure footnotes, and print layout. These should not be invented or used to alter financial input values.
+
+**Verification:** `FormXlsxCodecUnitTest`, `FormXlsxExchangeIntegrationTest` and `VersionedImportProfileIntegrationTest`, plus complete `mvn -f form-library/pom.xml clean verify`. As of this commit no CI GREEN is recorded.
