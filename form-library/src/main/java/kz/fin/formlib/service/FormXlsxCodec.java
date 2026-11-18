@@ -20,8 +20,18 @@ public final class FormXlsxCodec {
   private static final int FIRST_FIELD_ROW=14;
   public enum Style { CLASSIC, EXCEL, DASHBOARD }
 
-  public record Entry(String key,String value,String type,String unit,boolean required) {
-    public Entry(String key,String value) { this(key,value,"STRING","",false); }
+  public record Entry(String key,String value,String type,String unit,boolean required,String label) {
+    public Entry(String key,String value) { this(key,value,"STRING","",false,key); }
+    public Entry(String key,String value,String type,String unit,boolean required) {
+      this(key,value,type,unit,required,key);
+    }
+  }
+  public record Display(String locale,String reportTitle) {
+    public Display {
+      if(!Set.of("ru","kk","en","zh-Hans").contains(locale))
+        throw invalid("XLSX_LOCALE_UNSUPPORTED");
+      if(reportTitle==null||reportTitle.isBlank())throw invalid("XLSX_REPORT_TITLE_REQUIRED");
+    }
   }
   public record Envelope(UUID instanceId,UUID organizationId,UUID formVersionId,
                          String formCode,int revision,String contentSha256,Style style) {}
@@ -69,6 +79,10 @@ public final class FormXlsxCodec {
   }
 
   public static byte[] export(Envelope envelope,List<Entry> entries) {
+    return export(envelope,entries,new Display("ru",envelope.formCode()));
+  }
+
+  public static byte[] export(Envelope envelope,List<Entry> entries,Display display) {
     if(envelope==null||entries==null||entries.isEmpty()||entries.size()>MAX_CELLS)
       throw invalid("XLSX_FIELD_COUNT_INVALID");
     Set<String> names=new HashSet<>();
@@ -109,7 +123,7 @@ public final class FormXlsxCodec {
       metadataStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
       metadataStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-      write(report,0,0,"FIN Form Library — "+envelope.formCode(),title);
+      write(report,0,0,"FIN Form Library — "+display.reportTitle(),title);
       write(report,1,0,"Style: "+envelope.style()+", revision: "+envelope.revision(),null);
       write(report,2,0,"Input cells are highlighted; change values only. PARAMETERS is read-only.",null);
       if(envelope.style()==Style.EXCEL){
@@ -122,12 +136,16 @@ public final class FormXlsxCodec {
         write(params,i,0,metaKeys[i],bold);
         write(params,i,1,metadata.get(i),metadataStyle);
       }
+      write(params,9,0,"displayLocale",bold);
+      write(params,9,1,display.locale(),metadataStyle);
+      write(params,10,0,"reportTitle",bold);
+      write(params,10,1,display.reportTitle(),metadataStyle);
       String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
       for(int i=0;i<columns.length;i++)write(params,FIRST_FIELD_ROW-1,i,columns[i],title);
       for(int i=0;i<entries.size();i++){
         Entry e=entries.get(i);
         int[] p=location(envelope.style(),i);
-        write(report,p[0],p[1],e.key(),keyStyle);
+        write(report,p[0],p[1],e.label(),keyStyle);
         write(report,p[0],p[2],e.value(),e.required()?mandatory:optional);
         int row=FIRST_FIELD_ROW+i;
         write(params,row,0,e.key(),text);
@@ -176,7 +194,9 @@ public final class FormXlsxCodec {
       Style style=style(read(params,7,1));
       int count=Integer.parseInt(read(params,8,1));
       if(count!=expected.size())throw invalid("XLSX_FIELD_COUNT_MISMATCH");
-      expect(read(report,0,0),"FIN Form Library — "+code,"XLSX_HEADER_MISMATCH");
+      expect(read(params,9,0),"displayLocale","XLSX_PARAMETER_KEY_CHANGED");
+      expect(read(params,10,0),"reportTitle","XLSX_PARAMETER_KEY_CHANGED");
+      new Display(read(params,9,1),read(params,10,1));
       expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
       if(style==Style.EXCEL){
         expect(read(report,3,0),"Field key","XLSX_HEADER_MISMATCH");
@@ -199,7 +219,9 @@ public final class FormXlsxCodec {
         expect(read(params,r,3),e.unit(),"XLSX_UNIT_CHANGED");
         expect(read(params,r,4),Boolean.toString(e.required()),"XLSX_REQUIRED_CHANGED");
         expect(read(params,r,5),"CANONICAL_TEXT","XLSX_PARSER_CHANGED");
-        expect(read(report,p[0],p[1]),e.key(),"XLSX_REPORT_KEY_CHANGED");
+        // Display labels are presentation only: use server-pinned fieldKey and
+        // valueCell from PARAMETERS for identity, not translated human captions.
+        if(read(report,p[0],p[1]).isBlank())throw invalid("XLSX_DISPLAY_LABEL_REQUIRED");
         allowed.add(p[0]+":"+p[1]);allowed.add(p[0]+":"+p[2]);
         values.put(e.key(),read(report,p[0],p[2]));
         for(int c=0;c<columns.length;c++)allowedParams.add(r+":"+c);
@@ -216,7 +238,7 @@ public final class FormXlsxCodec {
       for(Row row:params){
         for(Cell c:row){
           int r=row.getRowNum(),col=c.getColumnIndex();
-          boolean fixed=r<keys.length && col<=1;
+          boolean fixed=(r<keys.length || r==9 || r==10) && col<=1;
           boolean header=r==FIRST_FIELD_ROW-1 && col<columns.length;
           boolean binding=allowedParams.contains(r+":"+col);
           if(c.getCellType()!=CellType.BLANK && !(fixed||header||binding))
