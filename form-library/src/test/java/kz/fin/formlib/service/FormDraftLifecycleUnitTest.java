@@ -5,6 +5,7 @@ import kz.fin.formlib.domain.*;
 import kz.fin.formlib.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -107,7 +108,7 @@ class FormDraftLifecycleUnitTest {
     assertEquals(1,saved.revisionNo());
     assertEquals("UNQUALIFIED_DRAFT",saved.result());
     assertNotNull(saved.instanceId());
-    var capture=org.mockito.ArgumentCaptor.forClass(FormRevision.class);
+    var capture=ArgumentCaptor.forClass(FormRevision.class);
     verify(revisions).saveAndFlush(capture.capture());
     assertEquals(saved.instanceId(),capture.getValue().getInstanceId());
     assertEquals(versionId,capture.getValue().getFormVersionId());
@@ -136,7 +137,7 @@ class FormDraftLifecycleUnitTest {
     var receipt=editor.save(request(id,1,Map.of("netRevenue","200","comment","kept")),"edit-2");
     assertEquals(id,receipt.instanceId());
     assertEquals(2,receipt.revisionNo());
-    var capture=org.mockito.ArgumentCaptor.forClass(FormRevision.class);
+    var capture=ArgumentCaptor.forClass(FormRevision.class);
     verify(revisions).saveAndFlush(capture.capture());
     assertEquals(2,capture.getValue().getRevisionNo());
     assertEquals(versionId,capture.getValue().getFormVersionId());
