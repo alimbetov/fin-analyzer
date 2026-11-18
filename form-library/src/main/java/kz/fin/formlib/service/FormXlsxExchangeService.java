@@ -71,12 +71,16 @@ public class FormXlsxExchangeService {
     if("SINGLE_RECORD".equals(view.contentMode())){
       for(FormField field:current.fields())
         output.add(new FormXlsxCodec.Entry(field.getFieldCode(),
-          view.values().getOrDefault(field.getFieldCode(),"")));
+          view.values().getOrDefault(field.getFieldCode(),""),
+          field.getFieldType(),field.getUnitCode()==null?"":field.getUnitCode(),
+          Boolean.TRUE.equals(field.getRequired())));
     }else{
       for(var row:view.rows())
         for(FormField field:current.fields())
           output.add(new FormXlsxCodec.Entry(row.rowId()+"|"+field.getFieldCode(),
-            row.values().getOrDefault(field.getFieldCode(),"")));
+            row.values().getOrDefault(field.getFieldCode(),""),
+            field.getFieldType(),field.getUnitCode()==null?"":field.getUnitCode(),
+            Boolean.TRUE.equals(field.getRequired())));
     }
     return output;
   }
