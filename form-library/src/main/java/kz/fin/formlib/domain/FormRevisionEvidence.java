@@ -13,8 +13,7 @@ public class FormRevisionEvidence {
 @Column(name="raw_sha256",nullable=false) private String rawSha256;
 @Column(name="media_type",nullable=false) private String mediaType;
 @Column(name="size_bytes",nullable=false) private Long sizeBytes;
-@Lob
-@Column(name="metadata_json") private String metadataJson;
+@Column(name="metadata_json",columnDefinition="text") private String metadataJson;
 public FormRevisionEvidence(){}
 public UUID getId(){return id;}
 public void setId(UUID value){this.id=value;}
