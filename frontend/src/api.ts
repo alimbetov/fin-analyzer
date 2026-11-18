@@ -16,6 +16,18 @@ export type Receipt = {instanceId:string;revisionNo:number;contentSha256:string;
 export type Profile = {id:string};
 export type PreviewTicket = {previewId:string;expectedRevision:number;values:Record<string,string>};
 
+export class ApiHttpError extends Error {
+  constructor(readonly status:number,readonly detail:string){
+    super('HTTP '+status+': '+detail);
+    this.name='ApiHttpError';
+  }
+}
+
+export function isDefiniteRejection(error:unknown):boolean {
+  return error instanceof ApiHttpError &&
+    [400,401,403,404,409,413,415,422].includes(error.status);
+}
+
 const tokenKey='fin-demo-correlation';
 export const demoToken=()=>{
   let value=sessionStorage.getItem(tokenKey);
@@ -33,7 +45,7 @@ export async function request(path:string,options:RequestInit={}):Promise<Respon
     try{const data=JSON.parse(raw) as {code?:string;message?:string;detail?:string;error?:string};
       detail=data.code||data.message||data.detail||data.error||raw;
     }catch{/* keep raw */}
-    throw new Error('HTTP '+response.status+': '+detail.slice(0,450));
+    throw new ApiHttpError(response.status,detail.slice(0,450));
   }
   return response;
 }
