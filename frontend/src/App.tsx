@@ -109,7 +109,8 @@ export default function App(){
   // typed schemas; F02 is the explicit current pilot.
   const editable=form?.form.contentMode==='SINGLE_RECORD' &&
     (form.form.captureMode==='TYPED_DRAFT'||formCode==='F02') &&
-    (!draft||draft.workflowStatus==='DRAFT') && fields.length>0;
+    (!draft||(draft.workflowStatus==='DRAFT'&&draft.formVersion===form.form.version)) &&
+    fields.length>0;
   const roots=(tree?.categories??[]).filter(c=>c.type==='ROOT');
   const filtered=useMemo(()=>{
     const included=new Set<string>();
@@ -192,10 +193,16 @@ export default function App(){
     let receipt:Receipt;
     try{
       receipt=await post<Receipt>('/drafts',{
-        instanceId:draft?.instanceId??null,...scope,formCode,
+        instanceId:draft?.instanceId??null,
+        organizationId:scope.organizationId,
+        economicEntityId:draft?.economicEntityId??scope.economicEntityId,
+        businessScopeId:draft?.businessScopeId??scope.businessScopeId,
+        projectId:draft?.projectId??scope.projectId,
+        formCode,
         periodType:draft?.periodType??periodType,periodCode:draft?.periodCode??periodCode,
-        currency:draft?.currency??currency,coverage:'PERIOD_ONLY',
-        reportingBasis:'MANAGEMENT',dataSpace:'SYNTHETIC',
+        currency:draft?.currency??currency,coverage:draft?.coverage??'PERIOD_ONLY',
+        reportingBasis:draft?.reportingBasis??'MANAGEMENT',
+        dataSpace:draft?.dataSpace??'SYNTHETIC',
         expectedRevision:draft?.revisionNo??0,values:cleaned,rows:[],
         createdBy:'react-local-uat',changeReason:'React editor input'
       },saveKeyRef.current);
@@ -220,7 +227,10 @@ export default function App(){
     const snapshot=await get<Draft>('/drafts/'+instanceId+'?organizationId='+scope.organizationId);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
     setDraft(snapshot);setValues(snapshot.values);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
-    setCurrency(snapshot.currency);setPreview(null);setDirty(false);
+    setCurrency(snapshot.currency);setScope({
+      organizationId:snapshot.organizationId,economicEntityId:snapshot.economicEntityId,
+      businessScopeId:snapshot.businessScopeId,projectId:snapshot.projectId
+    });setPreview(null);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
     setMessage('Открыта ревизия '+snapshot.revisionNo);
   });
@@ -383,7 +393,7 @@ export default function App(){
                 <button onClick={()=>{setScope(newScope());reset()}}>Новая организация UAT</button>
                 <label>Instance UUID<input value={instanceId} onChange={e=>setInstanceId(e.target.value)} /></label>
               </div>}
-              {!editable&&form&&<div className="warning"><AlertTriangle size={17}/> Запись отключена: нет утверждённого типизированного SINGLE_RECORD контракта или отчёт не в DRAFT. Каталог сам по себе не разрешает ввод.</div>}
+              {!editable&&form&&<div className="warning"><AlertTriangle size={17}/> Запись отключена: нет утверждённого типизированного SINGLE_RECORD контракта, отчёт не в DRAFT или ревизия использует другую версию формы. Каталог сам по себе не разрешает ввод.</div>}
               {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
               {saveUncertain&&<div className="warning"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Повторите сохранение с тем же Idempotency-Key; значения заблокированы до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
