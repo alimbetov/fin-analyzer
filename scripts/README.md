@@ -149,3 +149,27 @@ git clone --branch feat/fin-form-library-standalone --single-branch https://gith
 
 Keep the existing Docker volume; updating and rebuilding the Backend does not
 require deleting PostgreSQL data.
+
+## PostgreSQL category seed: Instant JDBC binding (2026-11-18)
+
+If Liquibase succeeds (all 19 changesets) but application startup fails in
+`CatalogCategoryBootstrap.run` while inserting `lib_catalog_seed_manifest`
+with `Can't infer the SQL type to use for an instance of java.time.Instant`,
+update the working branch. The bootstrap now binds `seeded_at TIMESTAMP WITH TIME ZONE`
+as `OffsetDateTime.now(ZoneOffset.UTC)` instead of an untyped `Instant`.
+There is no Liquibase schema change, and **do not delete/reset the FIN database**.
+The original failed `@Transactional` seed attempt rolls back its category inserts;
+on retry the same loader can initialize 47 categories, 188 translations,
+389 associations and the SHA manifest.
+
+```powershell
+# In form-library of the UPDATED branch; Docker Desktop required for Testcontainers
+mvn -Dtest=ReactLocalPostgresIntegrationTest -Dfin.postgres.uat.enabled=true test
+mvn spring-boot:run
+```
+
+The integration test independently verifies 7 root/40 leaf categories, four
+full locale translations, 166 PRIMARY form links, SHA manifest and repeatable
+idempotent bootstrap. This is catalog/navigation seed data. It is **not**
+synthetic financial fact data; the opt-in F02 end-to-end test creates those
+only in its own temporary Testcontainers PostgreSQL.
