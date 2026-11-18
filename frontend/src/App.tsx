@@ -234,7 +234,7 @@ export default function App(){
     setCommitUncertain(true);
     setPreview(null);
     const current=await get<Draft>('/drafts/'+draft.instanceId+'?organizationId='+scope.organizationId);
-    const mismatch=Object.entries(preview.values).filter(([code,v)=>current.values[code]!==v);
+    const mismatch=Object.entries(preview.values).filter(([code,v])=>current.values[code]!==v);
     if(mismatch.length||current.sha256!==receipt.contentSha256||
       current.revisionNo!==previous.revisionNo+1)
       throw new Error('Commit выполнен, но сверка не прошла. Обновите экземпляр; не повторяйте Commit вслепую.');
