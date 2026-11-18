@@ -30,3 +30,8 @@ fin:
     cache:
       ttl: ${FIN_CATALOG_CACHE_TTL:PT5M}
       max-entries: ${FIN_CATALOG_CACHE_MAX_ENTRIES:512}
+
+# Temporary UAT page; disable/remove it after acceptance.
+  uat:
+    editor:
+      enabled: ${FIN_FORM_UAT_EDITOR_ENABLED:false}
