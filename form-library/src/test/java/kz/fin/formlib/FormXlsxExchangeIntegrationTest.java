@@ -88,7 +88,7 @@ class FormXlsxExchangeIntegrationTest {
         assertEquals(2,book.getNumberOfSheets());
         assertEquals("MONEY",book.getSheet("PARAMETERS").getRow(14).getCell(2).getStringCellValue());
       }
-      int column=style.equals("EXCEL")?2:1;
+      int column=1;
       JsonNode receipt=upload(saved,changeCell(file,4,column,"150000.25"),
          "xlsx-import-"+style+"-"+saved.org());
       assertEquals(2,receipt.get("revisionNo").asInt());
@@ -105,7 +105,7 @@ class FormXlsxExchangeIntegrationTest {
     Saved saved=create("F02",Map.of("netRevenue","500",
         "cogs","200","operatingExpenses","100"),List.of());
     byte[] original=export(saved,"EXCEL");
-    upload(saved,changeCell(original,4,2,"700"),"first-"+saved.org());
+    upload(saved,changeCell(original,4,1,"700"),"first-"+saved.org());
     var file=new MockMultipartFile("file","old.xlsx",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",original);
     http.perform(multipart("/api/v1/drafts/"+saved.id()+"/import.xlsx")
