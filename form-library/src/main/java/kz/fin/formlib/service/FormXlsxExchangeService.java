@@ -23,12 +23,17 @@ public class FormXlsxExchangeService {
   private final FormRevisionRepository revisions;
   private final FormFieldRepository fields;
   private final FormStylePreferenceService preferences;
+  private final FormFieldTranslationRepository fieldTranslations;
+  private final LibFormTranslationRepository formTranslations;
 
   public FormXlsxExchangeService(FormDraftService drafts,FormInstanceRepository instances,
       FormRevisionRepository revisions,FormFieldRepository fields,
-      FormStylePreferenceService preferences) {
+      FormStylePreferenceService preferences,
+      FormFieldTranslationRepository fieldTranslations,
+      LibFormTranslationRepository formTranslations) {
     this.drafts=drafts;this.instances=instances;this.revisions=revisions;
     this.fields=fields;this.preferences=preferences;
+    this.fieldTranslations=fieldTranslations;this.formTranslations=formTranslations;
   }
 
   private static ResponseStatusException conflict(String code) {
@@ -85,8 +90,44 @@ public class FormXlsxExchangeService {
     return output;
   }
 
+  private static boolean translated(String title,String status){
+    return title!=null&&!title.isBlank()&&!"PENDING_TRANSLATION".equals(status);
+  }
+
+  private String localizedTitle(Current current,String locale) {
+    return formTranslations.findByFormVersionId(current.revision().getFormVersionId())
+      .stream().filter(t->locale.equals(t.getLocale())&&
+        translated(t.getTitle(),t.getReviewStatus()))
+      .map(LibFormTranslation::getTitle).findFirst()
+      .orElse(current.view().formCode());
+  }
+
+  private List<FormXlsxCodec.Entry> localizedEntries(Current current,String locale){
+    // Translation is display-only; binding remains the immutable field key.
+    Map<String,String> labels=new HashMap<>();
+    for(var t:fieldTranslations.findByFormVersionId(current.revision().getFormVersionId())){
+      if("FIELD".equals(t.getSubjectType())&&locale.equals(t.getLocale())&&
+         translated(t.getTitle(),t.getReviewStatus()))
+        labels.putIfAbsent(t.getSubjectCode(),t.getTitle());
+    }
+    var result=new ArrayList<FormXlsxCodec.Entry>();
+    for(var entry:entries(current)){
+      String code=entry.key();
+      int separator=code.indexOf('|');
+      String fieldCode=separator<0?code:code.substring(separator+1);
+      result.add(new FormXlsxCodec.Entry(entry.key(),entry.value(),entry.type(),
+        entry.unit(),entry.required(),labels.getOrDefault(fieldCode,fieldCode)));
+    }
+    return result;
+  }
+
   @Transactional(readOnly=true)
   public byte[] export(UUID instanceId,UUID organizationId,String styleCode,UUID userId){
+    return export(instanceId,organizationId,styleCode,userId,"ru");
+  }
+
+  @Transactional(readOnly=true)
+  public byte[] export(UUID instanceId,UUID organizationId,String styleCode,UUID userId,String locale){
     Current current=current(instanceId,organizationId);
     String selected=styleCode;
     if(selected==null||selected.isBlank())
@@ -96,7 +137,9 @@ public class FormXlsxExchangeService {
       current.revision().getFormVersionId(),current.view().formCode(),
       current.revision().getRevisionNo(),current.revision().getCanonicalContentSha256(),
       FormXlsxCodec.style(selected));
-    return FormXlsxCodec.export(envelope,entries(current));
+    var resolved=FormXlsxCodec.export(envelope,localizedEntries(current,locale),
+      new FormXlsxCodec.Display(locale,localizedTitle(current,locale)));
+    return resolved;
   }
 
   public record ImportPreview(UUID instanceId,UUID organizationId,UUID formVersionId,
