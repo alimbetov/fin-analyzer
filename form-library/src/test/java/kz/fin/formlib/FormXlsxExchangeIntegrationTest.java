@@ -88,7 +88,7 @@ class FormXlsxExchangeIntegrationTest {
         assertEquals(2,book.getNumberOfSheets());
         assertEquals("MONEY",book.getSheet("PARAMETERS").getRow(14).getCell(2).getStringCellValue());
       }
-      int column=1;
+      int column=3;
       JsonNode receipt=upload(saved,changeCell(file,4,column,"150000.25"),
          "xlsx-import-"+style+"-"+saved.org());
       assertEquals(2,receipt.get("revisionNo").asInt());
@@ -144,15 +144,15 @@ class FormXlsxExchangeIntegrationTest {
     try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(original))) {
       var report=book.getSheet("REPORT");
       assertTrue(report.getRow(1).getCell(0).getStringCellValue().contains("2026-11"));
-      assertTrue(report.getRow(1).getCell(1).getStringCellValue().contains("KZT"));
+      assertTrue(report.getRow(1).getCell(2).getStringCellValue().contains("KZT"));
       assertTrue(report.getRow(2).getCell(0).getStringCellValue().contains("2026-11-30"));
     }
     // Even changing both the visible header and PARAMETERS cannot change
     // the already persisted reporting currency or accounting period.
-    byte[] changed=changeCell(original,4,2,"600");
+    byte[] changed=changeCell(original,4,3,"600");
     try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(changed));
         ByteArrayOutputStream out=new ByteArrayOutputStream()) {
-      book.getSheet("REPORT").getRow(1).getCell(1).setCellValue("Валюта: USD");
+      book.getSheet("REPORT").getRow(1).getCell(2).setCellValue("Валюта: USD");
       book.getSheet("PARAMETERS").getRow(11).getCell(9).setCellValue("USD");
       book.write(out);
       changed=out.toByteArray();
