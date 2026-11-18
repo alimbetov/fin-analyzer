@@ -99,9 +99,16 @@ public class FormXlsxExchangeService {
     return FormXlsxCodec.export(envelope,entries(current));
   }
 
-  @Transactional
-  public FormDraftService.DraftReceipt importFile(UUID instanceId,UUID organizationId,
-      byte[] upload,String idempotencyKey,String actor,String reason){
+  public record ImportPreview(UUID instanceId,UUID organizationId,UUID formVersionId,
+                              String formCode,int expectedRevision,
+                              String originalContentSha256,int inputCellCount,
+                              Map<String,String> values) {}
+
+  private record Prepared(FormDraftService.DraftRequest request,
+                          ImportPreview preview) {}
+
+  private Prepared prepare(UUID instanceId,UUID organizationId,byte[] upload,
+      String actor,String reason) {
     if(actor==null||actor.isBlank()||reason==null||reason.isBlank())
       throw invalid("IMPORT_AUDIT_METADATA_REQUIRED");
     Current current=current(instanceId,organizationId);
@@ -120,7 +127,7 @@ public class FormXlsxExchangeService {
     Map<String,String> values=new LinkedHashMap<>();
     List<FormDraftService.RowInput> rows=new ArrayList<>();
     if("SINGLE_RECORD".equals(current.view().contentMode())){
-      for(FormField field:current.fields()) {
+      for(FormField field:current.fields()){
         String code=field.getFieldCode();
         String value=parsed.values().get(code);
         if(!value.isEmpty()||current.view().values().containsKey(code))
@@ -143,8 +150,23 @@ public class FormXlsxExchangeService {
       current.view().formCode(),i.getPeriodType(),i.getPeriodCode(),
       i.getCurrency(),i.getCoverage(),i.getReportingBasis(),i.getDataSpace(),
       metadata.revision(),values,rows,actor,reason);
-    // Only existing transactional writer performs canonicalization, finance guard,
-    // idempotency, required-field validation and immutable revision creation.
-    return drafts.save(request,idempotencyKey);
+    drafts.validateImportCandidate(request,metadata.formVersionId());
+    return new Prepared(request,new ImportPreview(instanceId,organizationId,
+      metadata.formVersionId(),metadata.formCode(),metadata.revision(),
+      metadata.contentSha256(),parsed.values().size(),Map.copyOf(parsed.values())));
+  }
+
+  @Transactional(readOnly=true)
+  public ImportPreview preview(UUID instanceId,UUID organizationId,
+      byte[] upload,String actor,String reason) {
+    return prepare(instanceId,organizationId,upload,actor,reason).preview();
+  }
+
+  @Transactional
+  public FormDraftService.DraftReceipt importFile(UUID instanceId,UUID organizationId,
+      byte[] upload,String idempotencyKey,String actor,String reason) {
+    // Re-parse and revalidate at commit: preview never authorizes a write.
+    Prepared prepared=prepare(instanceId,organizationId,upload,actor,reason);
+    return drafts.save(prepared.request(),idempotencyKey);
   }
 }
