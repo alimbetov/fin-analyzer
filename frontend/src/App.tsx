@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
-import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,History,Eye,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
+import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,FolderOpen,Eye,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste} from './clipboard';
@@ -352,6 +352,16 @@ export default function App(){
           <div className="stat"><span>Заполнено полей</span><strong>{filled}/{fields.length}</strong><small>Текущая форма</small></div>
           <div className="stat"><span>Ревизия</span><strong>{draft?.revisionNo??'—'}</strong><small>{draft?.sha256.slice(0,12)??'Новый черновик'}</small></div>
         </div>
+        {dashboard&&<section className="dashboard-overview">
+          <div className="overview-title"><b>Начать с рекомендованной формы</b>
+            <span>Рекомендация — не разрешение на ввод. Квалификация указана у каждой формы.</span></div>
+          <div className="overview-grid">{(navigation?.recommended??[]).slice(0,4).map(f=>
+            <button key={f.formCode} onClick={()=>switchForm(f.formCode)} className="overview-card">
+              <FileSpreadsheet size={20}/>
+              <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.qualificationState}</small></span>
+              <ChevronRight size={16}/>
+            </button>)}</div>
+        </section>}
         <div className="two-panel">
           <section className="catalog-panel">
             <div className="panel-head"><div><h2>Библиотека форм</h2><p>{filtered.length} результатов</p></div><FolderTree size={19}/></div>
@@ -360,18 +370,19 @@ export default function App(){
               {filtered.map(f=><button key={f.formCode} className={'form-list-item '+(f.formCode===formCode?'active':'')}
                 onClick={()=>switchForm(f.formCode)}>
                 <span className="form-icon"><FileSpreadsheet size={18}/></span>
-                <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode}</small></span><ChevronRight size={16}/></button>)}
+                <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode} · {f.qualificationState}</small></span><ChevronRight size={16}/></button>)}
               {!filtered.length&&<p className="empty">Формы не найдены</p>}
             </div>
           </section>
           <section className="editor-panel">
             <div className="panel-head editor-head"><div><p className="eyebrow">{formCode} · {form?.form.version||'—'}</p>
               <h2>{form?.form.title||'Загрузка формы'}</h2>
-              <p>{draft?'Редакция '+draft.revisionNo+' · '+draft.workflowStatus:'Новая форма · заполнение с нуля'}</p></div>
+              <p>{draft?'Редакция '+draft.revisionNo+' · '+draft.workflowStatus:'Новая форма · заполнение с нуля'}</p>
+              <p className="editor-qualification">{form?.form.captureMode??'—'} · {form?.form.qualificationState??'—'}</p></div>
               <div className="toolbar">
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
                 <Tool label="Сохранить ревизию" disabled={busy||!editable||!dirty||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={18}/>:<Save size={18}/>}</Tool>
-                <Tool label="Открыть по UUID (сверить ревизию)" disabled={busy} onClick={open}><History size={18}/></Tool>
+                <Tool label="Открыть по UUID (сверить ревизию)" disabled={busy} onClick={open}><FolderOpen size={18}/></Tool>
                 <Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>
                 <Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain||saveUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>
                 <Tool label="Контекст организации" onClick={()=>setShowScope(v=>!v)}><Settings2 size={18}/></Tool>
