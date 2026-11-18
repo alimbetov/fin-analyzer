@@ -5,21 +5,24 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
 
 /**
- * XLSX UI transport only. The server generates coordinate bindings from the pinned
- * field contract; imported workbook cells never invent field/metric identifiers.
- * Data remains text: Excel NUMERIC cells are rejected to avoid 15-digit truncation.
+ * FIN XLSX V2: REPORT (human-facing) + PARAMETERS (machine-readable).
+ * Parameters are untrusted assertions and must equal server-pinned field metadata.
+ * The workbook never grants authorization or replaces canonical validators.
  */
 public final class FormXlsxCodec {
   private FormXlsxCodec() {}
   public static final int MAX_BYTES=2_000_000, MAX_CELLS=20_000;
+  private static final String MAGIC="FIN-FORM-XLSX-V2";
+  private static final int FIRST_FIELD_ROW=14;
   public enum Style { CLASSIC, EXCEL, DASHBOARD }
-  public record Entry(String key,String value) {}
+
+  public record Entry(String key,String value,String type,String unit,boolean required) {
+    public Entry(String key,String value) { this(key,value,"STRING","",false); }
+  }
   public record Envelope(UUID instanceId,UUID organizationId,UUID formVersionId,
                          String formCode,int revision,String contentSha256,Style style) {}
   public record Parsed(Envelope envelope,Map<String,String> values) {}
@@ -31,130 +34,170 @@ public final class FormXlsxCodec {
     try {return Style.valueOf(code.toUpperCase(Locale.ROOT));}
     catch(RuntimeException e){throw invalid("UNSUPPORTED_XLSX_STYLE");}
   }
-  private static void write(Sheet sheet,int row,int column,String value,CellStyle format) {
+  private static void write(Sheet sheet,int row,int column,String value,CellStyle style) {
     Row r=sheet.getRow(row);
-    if(r==null) r=sheet.createRow(row);
+    if(r==null)r=sheet.createRow(row);
     Cell c=r.createCell(column,CellType.STRING);
     c.setCellValue(value==null?"":value);
-    if(format!=null)c.setCellStyle(format);
+    if(style!=null)c.setCellStyle(style);
   }
-  private static String cell(Sheet sheet,int row,int column) {
+  private static String read(Sheet sheet,int row,int col) {
     Row r=sheet.getRow(row);
     if(r==null)return "";
-    Cell c=r.getCell(column,Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
-    if(c==null)return "";
-    if(c.getCellType()!=CellType.STRING)throw invalid("XLSX_TEXT_CELL_REQUIRED");
-    return c.getStringCellValue();
+    Cell cell=r.getCell(col,Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+    if(cell==null)return "";
+    if(cell.getCellType()!=CellType.STRING)throw invalid("XLSX_TEXT_CELL_REQUIRED");
+    return cell.getStringCellValue();
   }
-  private static int[] position(Style style,int index) {
-    return switch(style) {
+  private static int[] location(Style style,int index) {
+    return switch(style){
       case CLASSIC -> new int[]{4+index,0,1};
       case EXCEL -> new int[]{4+index,0,2};
       case DASHBOARD -> new int[]{4+index/2,(index%2)*3,(index%2)*3+1};
     };
   }
+  private static void expect(String actual,String expected,String reason) {
+    if(!Objects.equals(actual,expected))throw invalid(reason);
+  }
+  private static String cellRef(int[] position) {
+    return new org.apache.poi.ss.util.CellReference(position[0],position[2]).formatAsString();
+  }
+  private static String canonicalColumn(int[] position) {
+    return Integer.toString(position[2]);
+  }
+  private static List<String> metadata(Envelope e,int count) {
+    return List.of(MAGIC,e.instanceId().toString(),e.organizationId().toString(),
+      e.formVersionId().toString(),e.formCode(),Integer.toString(e.revision()),
+      e.contentSha256(),e.style().name(),Integer.toString(count));
+  }
 
   public static byte[] export(Envelope envelope,List<Entry> entries) {
-    if(entries.isEmpty()||entries.size()>MAX_CELLS)throw invalid("XLSX_FIELD_COUNT_INVALID");
-    Set<String> keys=new HashSet<>();
+    if(envelope==null||entries==null||entries.isEmpty()||entries.size()>MAX_CELLS)
+      throw invalid("XLSX_FIELD_COUNT_INVALID");
+    Set<String> names=new HashSet<>();
     for(Entry entry:entries)
-      if(entry.key()==null||entry.key().isBlank()||!keys.add(entry.key()))
+      if(entry==null||entry.key()==null||entry.key().isBlank()||!names.add(entry.key()))
         throw invalid("XLSX_DUPLICATE_BINDING");
-    try(XSSFWorkbook workbook=new XSSFWorkbook();
-        ByteArrayOutputStream buffer=new ByteArrayOutputStream()) {
-      Sheet report=workbook.createSheet("Report");
-      Sheet meta=workbook.createSheet("_FIN_META");
-      CellStyle text=workbook.createCellStyle();
-      text.setDataFormat(workbook.createDataFormat().getFormat("@"));
-      Font bold=workbook.createFont();bold.setBold(true);
-      CellStyle heading=workbook.createCellStyle();heading.setFont(bold);
-      write(report,0,0,"FIN Form Library — "+envelope.formCode(),heading);
+    try(XSSFWorkbook book=new XSSFWorkbook();ByteArrayOutputStream output=new ByteArrayOutputStream()){
+      Sheet report=book.createSheet("REPORT");
+      Sheet params=book.createSheet("PARAMETERS");
+      CellStyle text=book.createCellStyle();
+      text.setDataFormat(book.createDataFormat().getFormat("@"));
+      Font font=book.createFont();font.setBold(true);
+      CellStyle bold=book.createCellStyle();bold.setFont(font);
+
+      write(report,0,0,"FIN Form Library — "+envelope.formCode(),bold);
       write(report,1,0,"Style: "+envelope.style()+", revision: "+envelope.revision(),null);
-      write(report,2,0,"Editable text values. Do not move rows, rename keys or enter formulas.",null);
-      if(envelope.style()==Style.EXCEL) {
-        write(report,3,0,"Field key",heading);
-        write(report,3,2,"Value",heading);
+      write(report,2,0,"Edit text cells only; do not change field codes.",null);
+      if(envelope.style()==Style.EXCEL){
+        write(report,3,0,"Field key",bold);write(report,3,2,"Value",bold);
       }
+      List<String> metadata=metadata(envelope,entries.size());
+      String[] metaKeys={"contractFormat","instanceId","organizationId","formVersionId",
+        "formCode","expectedRevision","contentSha256","styleCode","fieldCount"};
+      for(int i=0;i<metaKeys.length;i++){
+        write(params,i,0,metaKeys[i],bold);
+        write(params,i,1,metadata.get(i),text);
+      }
+      String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
+      for(int i=0;i<columns.length;i++)write(params,FIRST_FIELD_ROW-1,i,columns[i],bold);
       for(int i=0;i<entries.size();i++){
-        Entry entry=entries.get(i);
-        int[] p=position(envelope.style(),i);
-        write(report,p[0],p[1],entry.key(),heading);
-        write(report,p[0],p[2],entry.value(),text);
+        Entry e=entries.get(i);
+        int[] p=location(envelope.style(),i);
+        write(report,p[0],p[1],e.key(),bold);
+        write(report,p[0],p[2],e.value(),text);
+        int row=FIRST_FIELD_ROW+i;
+        write(params,row,0,e.key(),text);
+        write(params,row,1,cellRef(p),text);
+        write(params,row,2,e.type(),text);
+        write(params,row,3,e.unit(),text);
+        write(params,row,4,Boolean.toString(e.required()),text);
+        write(params,row,5,"CANONICAL_TEXT",text);
       }
-      report.setColumnWidth(0,12000);
-      report.setColumnWidth(1,9500);
-      if(envelope.style()==Style.EXCEL)report.setColumnWidth(2,11000);
-      if(envelope.style()==Style.DASHBOARD){
-        report.setColumnWidth(3,12000);
-        report.setColumnWidth(4,9500);
-      }
-      List<String> attributes=List.of("FIN-FORM-XLSX-V1",envelope.instanceId().toString(),
-        envelope.organizationId().toString(),envelope.formVersionId().toString(),
-        envelope.formCode(),Integer.toString(envelope.revision()),
-        envelope.contentSha256(),envelope.style().name(),
-        Integer.toString(entries.size()));
-      for(int i=0;i<attributes.size();i++)write(meta,i,0,attributes.get(i),null);
-      workbook.setSheetHidden(workbook.getSheetIndex(meta),true);
-      workbook.write(buffer);
-      if(buffer.size()>MAX_BYTES)throw invalid("XLSX_EXPORT_TOO_LARGE");
-      return buffer.toByteArray();
+      report.setColumnWidth(0,12000);report.setColumnWidth(1,10500);
+      report.setColumnWidth(2,10500);
+      report.setColumnWidth(3,12000);report.setColumnWidth(4,10500);
+      params.setColumnWidth(0,11000);params.setColumnWidth(1,13000);
+      params.setColumnWidth(2,7500);params.setColumnWidth(3,7500);
+      book.write(output);
+      if(output.size()>MAX_BYTES)throw invalid("XLSX_EXPORT_TOO_LARGE");
+      return output.toByteArray();
     }catch(IOException e){throw invalid("XLSX_EXPORT_FAILED");}
   }
 
-  public static Parsed parse(byte[] content,List<Entry> expected) {
-    if(content==null||content.length==0||content.length>MAX_BYTES)throw invalid("XLSX_FILE_SIZE_INVALID");
-    if(expected.isEmpty()||expected.size()>MAX_CELLS)throw invalid("XLSX_FIELD_COUNT_INVALID");
-    try(Workbook workbook=WorkbookFactory.create(new ByteArrayInputStream(content))){
-      if(workbook.getNumberOfSheets()!=2||workbook.getSheet("Report")==null
-          ||workbook.getSheet("_FIN_META")==null)throw invalid("XLSX_SHEETS_INVALID");
-      Sheet meta=workbook.getSheet("_FIN_META"), report=workbook.getSheet("Report");
-      if(!workbook.isSheetHidden(workbook.getSheetIndex(meta)))throw invalid("XLSX_METADATA_NOT_HIDDEN");
-      if(!"FIN-FORM-XLSX-V1".equals(cell(meta,0,0)))throw invalid("XLSX_MAGIC_INVALID");
-      UUID instance=UUID.fromString(cell(meta,1,0));
-      UUID organization=UUID.fromString(cell(meta,2,0));
-      UUID version=UUID.fromString(cell(meta,3,0));
-      String formCode=cell(meta,4,0);
-      int revision=Integer.parseInt(cell(meta,5,0));
-      String contentSha=cell(meta,6,0);
-      Style style=style(cell(meta,7,0));
-      int count=Integer.parseInt(cell(meta,8,0));
+  public static Parsed parse(byte[] bytes,List<Entry> expected) {
+    if(bytes==null||bytes.length==0||bytes.length>MAX_BYTES)
+      throw invalid("XLSX_FILE_SIZE_INVALID");
+    if(expected==null||expected.isEmpty()||expected.size()>MAX_CELLS)
+      throw invalid("XLSX_FIELD_COUNT_INVALID");
+    try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+      if(book.getNumberOfSheets()!=2||book.getSheet("REPORT")==null||
+          book.getSheet("PARAMETERS")==null)throw invalid("XLSX_SHEETS_INVALID");
+      Sheet params=book.getSheet("PARAMETERS");
+      Sheet report=book.getSheet("REPORT");
+      String[] keys={"contractFormat","instanceId","organizationId","formVersionId",
+          "formCode","expectedRevision","contentSha256","styleCode","fieldCount"};
+      for(int i=0;i<keys.length;i++)expect(read(params,i,0),keys[i],"XLSX_PARAMETER_KEY_CHANGED");
+      expect(read(params,0,1),MAGIC,"XLSX_MAGIC_INVALID");
+      UUID instance=UUID.fromString(read(params,1,1));
+      UUID organization=UUID.fromString(read(params,2,1));
+      UUID version=UUID.fromString(read(params,3,1));
+      String code=read(params,4,1);
+      int revision=Integer.parseInt(read(params,5,1));
+      String sha=read(params,6,1);
+      Style style=style(read(params,7,1));
+      int count=Integer.parseInt(read(params,8,1));
       if(count!=expected.size())throw invalid("XLSX_FIELD_COUNT_MISMATCH");
-      if(!cell(report,0,0).equals("FIN Form Library — "+formCode))
-        throw invalid("XLSX_HEADER_MISMATCH");
-      if(!cell(report,1,0).equals("Style: "+style+", revision: "+revision))
-        throw invalid("XLSX_HEADER_MISMATCH");
-      if(style==Style.EXCEL&&(!"Field key".equals(cell(report,3,0))
-            ||!"Value".equals(cell(report,3,2))))throw invalid("XLSX_HEADER_MISMATCH");
-      Map<String,String> values=new LinkedHashMap<>();
-      Set<String> validCoords=new HashSet<>();
-      for(int i=0;i<expected.size();i++) {
-        Entry binding=expected.get(i);
-        int[] p=position(style,i);
-        if(!binding.key().equals(cell(report,p[0],p[1])))
-          throw invalid("XLSX_BINDING_CHANGED");
-        String address=p[0]+":"+p[2];
-        if(!validCoords.add(address))throw invalid("XLSX_BINDING_OVERLAP");
-        values.put(binding.key(),cell(report,p[0],p[2]));
+      expect(read(report,0,0),"FIN Form Library — "+code,"XLSX_HEADER_MISMATCH");
+      expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
+      if(style==Style.EXCEL){
+        expect(read(report,3,0),"Field key","XLSX_HEADER_MISMATCH");
+        expect(read(report,3,2),"Value","XLSX_HEADER_MISMATCH");
       }
-      // Imported cells may only occupy the exact deterministic template coordinates.
-      // No unnoticed extra values, formulas, hidden rows or injected columns.
+      String[] columns={"fieldKey","valueCell","fieldType","unitCode","required","parser"};
+      for(int i=0;i<columns.length;i++)
+        expect(read(params,FIRST_FIELD_ROW-1,i),columns[i],"XLSX_PARAMETER_COLUMNS_CHANGED");
+
+      Map<String,String> values=new LinkedHashMap<>();
+      Set<String> allowed=new HashSet<>();
+      Set<String> allowedParams=new HashSet<>();
+      for(int i=0;i<expected.size();i++){
+        Entry e=expected.get(i);
+        int[] p=location(style,i);
+        int r=FIRST_FIELD_ROW+i;
+        expect(read(params,r,0),e.key(),"XLSX_FIELD_BINDING_CHANGED");
+        expect(read(params,r,1),cellRef(p),"XLSX_CELL_MAPPING_CHANGED");
+        expect(read(params,r,2),e.type(),"XLSX_FIELD_TYPE_CHANGED");
+        expect(read(params,r,3),e.unit(),"XLSX_UNIT_CHANGED");
+        expect(read(params,r,4),Boolean.toString(e.required()),"XLSX_REQUIRED_CHANGED");
+        expect(read(params,r,5),"CANONICAL_TEXT","XLSX_PARSER_CHANGED");
+        expect(read(report,p[0],p[1]),e.key(),"XLSX_REPORT_KEY_CHANGED");
+        allowed.add(p[0]+":"+p[1]);allowed.add(p[0]+":"+p[2]);
+        values.put(e.key(),read(report,p[0],p[2]));
+        for(int c=0;c<columns.length;c++)allowedParams.add(r+":"+c);
+      }
+      // Reject cells outside the server-generated value/label positions.
       for(Row row:report){
         if(row.getRowNum()<4)continue;
         for(Cell c:row){
-          if(c.getCellType()==CellType.BLANK)continue;
-          String key=row.getRowNum()+":"+c.getColumnIndex();
-          boolean label=false;
-          for(int i=0;i<expected.size();i++){
-            int[] p=position(style,i);
-            if(p[0]==row.getRowNum()&&p[1]==c.getColumnIndex()){label=true;break;}
-          }
-          if(!validCoords.contains(key)&&!label)throw invalid("XLSX_UNBOUND_CELL");
+          if(c.getCellType()!=CellType.BLANK &&
+              !allowed.contains(row.getRowNum()+":"+c.getColumnIndex()))
+            throw invalid("XLSX_UNBOUND_REPORT_CELL");
         }
       }
-      // Meta is NOT a trust boundary; service compares these values to fin_intake.
-      return new Parsed(new Envelope(instance,organization,version,formCode,
-        revision,contentSha,style),Collections.unmodifiableMap(values));
-    }catch(ResponseStatusException e){throw e;}
-     catch(Exception e){throw invalid("XLSX_INVALID_OR_CORRUPT");}
+      for(Row row:params){
+        for(Cell c:row){
+          int r=row.getRowNum(),col=c.getColumnIndex();
+          boolean fixed=r<keys.length && col<=1;
+          boolean header=r==FIRST_FIELD_ROW-1 && col<columns.length;
+          boolean binding=allowedParams.contains(r+":"+col);
+          if(c.getCellType()!=CellType.BLANK && !(fixed||header||binding))
+            throw invalid("XLSX_UNBOUND_PARAMETER_CELL");
+        }
+      }
+      return new Parsed(new Envelope(instance,organization,version,code,revision,sha,style),
+          Collections.unmodifiableMap(values));
+    }catch(ResponseStatusException ex){throw ex;}
+     catch(Exception ex){throw invalid("XLSX_INVALID_OR_CORRUPT");}
   }
 }
