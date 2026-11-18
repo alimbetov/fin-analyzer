@@ -105,3 +105,28 @@ To qualify PostgreSQL persistence, use a separate Testcontainers PostgreSQL data
 7. Repeat for period/currency/style variations. `ROWS` reports are **not writable** in React yet.
 
 Release state is **HOLD** until real local `npm run build`, Maven and PostgreSQL end-to-end test evidence is available.
+
+## R0.1 hardening review
+
+See [FIN React R0.1 Review](docs/FIN-REACT-R0-1-HARDENING-REVIEW.md). The hardening addresses five integrity invariants that were not guaranteed by the initial UI:
+
+- Only backend-approved typed `SINGLE_RECORD` report contracts can be written; a form appearing in the 166-form catalog does **not** imply input qualification.
+- Clipboard paste binds by exact indicator identity when labels/numbers are included, refuses ambiguous ranges, and never silently clips values.
+- Uncertain financial Save/Commit outcomes are treated as **possibly persisted**. Save can be retried using the same idempotency key and unchanged payload; Import Commit requires explicit read-back reconciliation.
+- React reads persisted project/economic entity/scope and accounting basis from `DraftView`, so an existing MVC report isn't rewritten with new browser-generated UUIDs.
+- React refuses to edit historical revisions whose pinned form version differs from the current catalog form version.
+
+Use this abbreviated check sequence after pulling the latest branch:
+
+```powershell
+# from frontend/
+npm install
+npm run check
+# from form-library/
+mvn clean verify
+mvn -Dtest=ReactLocalPostgresIntegrationTest -Dfin.postgres.uat.enabled=true test
+```
+
+The PostgreSQL Testcontainers qualifier needs a working Docker Desktop. For a focused browser acceptance, start the three services and open **http://127.0.0.1:5173**. Previous MVC UAT at port 8086 is a separate application surface.
+
+**Known open items:** `ROWS` financial input remains disabled; native React report-history browsing and historical field-schema rendering are not yet implemented; a committed npm lockfile and observed CI/Windows browser GREEN are required for release.
