@@ -11,8 +11,7 @@ public class FormValidationRule {
 @Column(name="rule_code",nullable=false) private String ruleCode;
 @Column(name="rule_version",nullable=false) private String ruleVersion;
 @Column(name="rule_kind",nullable=false) private String ruleKind;
-@Lob
-@Column(name="typed_params") private String typedParams;
+@Column(name="typed_params",columnDefinition="text") private String typedParams;
 @Column(name="severity",nullable=false) private String severity;
 public FormValidationRule(){}
 public UUID getId(){return id;}
