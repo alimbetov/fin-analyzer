@@ -6,6 +6,7 @@ import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
 import SavedReports from './SavedReports';
+import RevisionDrawer from './RevisionDrawer';
 import type {SavedReport} from './SavedReports';
 import FinancialGoalsNavigator from './FinancialGoalsNavigator';
 import type {DecisionContext} from './decisionTree';
@@ -85,6 +86,7 @@ export default function App(){
   const [showScope,setShowScope]=useState(false);
   const [showReports,setShowReports]=useState(true);
   const [showCategories,setShowCategories]=useState(false);
+  const [historyOpen,setHistoryOpen]=useState(false);
   const [reports,setReports]=useState<SavedReport[]|null>(null);
   const [reportsError,setReportsError]=useState('');
   const [reportsRefresh,setReportsRefresh]=useState(0);
@@ -166,6 +168,7 @@ export default function App(){
   const evidence=form?.form.contentMode==='EVIDENCE';
   const filled=rowset?rowEntries.reduce((n,r)=>n+fields.filter(f=>r.values[f.fieldCode]?.trim()).length,0):fields.filter(f=>values[f.fieldCode]?.trim()).length;
   const fieldCapacity=fields.length*(rowset?rowEntries.length:1);
+  const completion=fieldCapacity>0?Math.round(filled/fieldCapacity*100):0;
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
   const isLocked=Boolean(draft)||dirty||saveUncertain||commitUncertain;
 
@@ -218,6 +221,7 @@ export default function App(){
   }
   function switchForm(code:string):boolean{
     if(inFlight.current||!confirmDiscard())return false;
+    setHistoryOpen(false);
     if(code!==formCode){
       setForm(null);
       setFormCode(code);
@@ -313,6 +317,7 @@ export default function App(){
     const query=new URLSearchParams({organizationId:scope.organizationId});
     const snapshot=await get<Draft>('/drafts/'+encodeURIComponent(id)+'?'+query);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
+    setHistoryOpen(false);
     setDraft(snapshot);setValues(snapshot.values);setRowEntries(snapshot.rows);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
     setCurrency(snapshot.currency);setScope({
       organizationId:snapshot.organizationId,economicEntityId:snapshot.economicEntityId,
@@ -391,6 +396,7 @@ export default function App(){
     setMessage('Commit '+current.revisionNo+' · SHA '+current.sha256.slice(0,12)+' · проверено '+Object.keys(preview.values).length+' полей');
   });
   const resetEditor=()=>{
+    setHistoryOpen(false);
     setDraft(null);setInstanceId('');setValues({});setRowEntries([]);setProfileId('');
     setPreview(null);setFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
     setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
@@ -445,7 +451,7 @@ export default function App(){
         onPaste={e=>pasteRange(e,index)} onKeyDown={e=>nextCell(e,index)}
         placeholder={field.fieldType==='MONEY'?'0.00':'—'} aria-label={field.title||field.fieldCode}/></td></tr>;
   }
-  return <div className={'shell'+(!sidebar?' collapsed':'')}>
+  return <div className={'shell'+(!sidebar?' collapsed':'')+(!navigator&&!dashboard&&!showReports?' editor-focus':'')}>
     <aside className="sidebar">
       <div className="logo"><div className="logo-mark"><Activity size={21}/></div><div><b>FIN</b><small>FORM STUDIO</small></div></div>
       <div className="side-overline">НАВИГАЦИЯ</div>
@@ -524,8 +530,8 @@ export default function App(){
               <ChevronRight size={16}/>
             </button>)}</div>
         </section>}
-        <div className="two-panel">
-          <section className="catalog-panel">
+        <div className={"two-panel"+(!showReports?" editor-only":"")}>
+          {showReports&&<section className="catalog-panel">
             <div className="panel-head"><div><h2>Выбрать форму</h2><p>Доступно: {filtered.length}</p></div><FolderTree size={19}/></div>
             <label className="search-box"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Код или название..." /></label>
             <div className="form-list">
@@ -535,7 +541,7 @@ export default function App(){
                 <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode==='EVIDENCE'?'Документ':f.contentMode==='ROWSET'?'Таблица':'Форма'}</small></span><ChevronRight size={16}/></button>)}
               {!filtered.length&&<p className="empty">Формы не найдены</p>}
             </div>
-          </section>
+          </section>}
           {showReports?<SavedReports title={form?.form.title??formCode} formCode={formCode}
             reports={reports} error={reportsError} busy={busy} canCreate={editable}
             formReady={form?.form.formCode===formCode}
@@ -548,12 +554,13 @@ export default function App(){
               <p>{draft?'Редакция '+draft.revisionNo+' · '+draft.workflowStatus:'Новая форма · заполнение с нуля'}</p>
               </div>
               <div className="toolbar">
-                <Tool label="Сохранённые отчёты" disabled={busy} onClick={()=>{
+                <Tool label="Вернуться к списку отчётов" disabled={busy} onClick={()=>{
                   if(confirmDiscard()){
                     resetEditor();setShowReports(true);
                   }
                 }}><FolderTree size={18}/></Tool>
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
+                {draft&&<button className="history-trigger" type="button" disabled={busy} onClick={()=>setHistoryOpen(true)}><GitBranch size={16}/> История · {draft.revisionNo}</button>}
                 <button className="primary-save" type="button" disabled={busy||!editable||!dirty||commitUncertain||saveUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} Сохранить</button>
 
                 {!evidence&&<Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>}
@@ -561,6 +568,7 @@ export default function App(){
 
               </div></div>
             <div className="editor-body">
+              <div className="completion-box" aria-label="Прогресс заполнения"><div className="completion-heading"><strong>Заполнение отчёта</strong><span>{filled} из {fieldCapacity} полей · {completion}%</span></div><progress value={filled} max={Math.max(fieldCapacity,1)} aria-label="Заполненные поля"/><small>Прогресс показывает заполненность, а не финансовую корректность данных.</small></div>
               <div className="filters">
                 <label>Тип периода<select value={periodType} disabled={isLocked} onChange={e=>{setPeriodType(e.target.value);setPeriodCode(periodExamples[e.target.value]||'')}}>
                   {periodOptions.map(p=><option key={p.code} value={p.code}>{p.title} ({p.code})</option>)}</select></label>
@@ -643,9 +651,11 @@ export default function App(){
               </div></details>}
             </div>
             <div className="editor-footer"><span className="dot"/> {message}<span className="footer-sha">{draft?'SHA256 '+draft.sha256.slice(0,16):'Unsaved'}</span></div>
+            <div className="editor-sticky-actions"><span className={dirty?"unsaved-indicator":"saved-indicator"}>{dirty?"Не сохранено":draft?"Сохранено · редакция "+draft.revisionNo:"Новый отчёт"}</span><span className="sticky-progress">{completion}% заполнено</span><button type="button" className="primary-save" disabled={busy||!editable||!dirty||saveUncertain||commitUncertain} onClick={save}><Save size={16}/> Сохранить изменения</button></div>
           </section>}
         </div>
         </>}
+        {historyOpen&&draft&&<RevisionDrawer instanceId={draft.instanceId} organizationId={draft.organizationId} projectId={draft.projectId} latestRevision={draft.revisionNo} fields={fields} onClose={()=>setHistoryOpen(false)}/>}
         <footer className="disclaimer"><AlertTriangle size={15}/> Локальный стенд. Backend без Security: не публикуйте порт 8086 в сеть и не используйте реальные финансовые данные.</footer>
       </main>
     </div>
