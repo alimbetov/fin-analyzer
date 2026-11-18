@@ -112,6 +112,14 @@ public class VersionedImportProfileService {
 
   @Transactional
   public Profile register(UUID versionId){
+    // Serialize version allocation per form contract. Concurrent profile
+    // registrations must not race on the (form_version, code, version) key.
+    if(versionId==null)throw invalid("FORM_VERSION_REQUIRED");
+    List<UUID> locked=db.query("""
+      SELECT id FROM fin_lib.lib_form_version WHERE id=? FOR UPDATE
+      """,(rs,n)->rs.getObject(1,UUID.class),versionId);
+    if(locked.isEmpty())throw new ResponseStatusException(
+      HttpStatus.NOT_FOUND,"FORM_VERSION_NOT_FOUND");
     String descriptor=descriptor(versionId);
     String sha=digest(descriptor);
     Profile latest=db.query("""
