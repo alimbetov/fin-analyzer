@@ -1,5 +1,5 @@
-import {useEffect,useMemo,useState} from 'react';
-import type {ClipboardEvent,KeyboardEvent} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
 import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,History,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Style} from './api';
 import {exportXlsx,get,multipart,post} from './api';
@@ -24,7 +24,7 @@ const normalize=(s:string,type:string)=>{
   if(/^-?\d+(?:[.,]\d{1,2})?$/.test(v))return v.replace(',','.');
   return v; // invalid and ambiguous financial values are rejected by Backend
 };
-function Tool({label,onClick,disabled,children}:{label:string;onClick:()=>void;disabled?:boolean;children:React.ReactNode}){
+function Tool({label,onClick,disabled,children}:{label:string;onClick:()=>void;disabled?:boolean;children:ReactNode}){
   return <button className="tool" type="button" title={label} aria-label={label} onClick={onClick} disabled={disabled}>{children}</button>;
 }
 
@@ -34,6 +34,7 @@ export default function App(){
   const [navigation,setNavigation]=useState<Navigation|null>(null);
   const [tree,setTree]=useState<CategoryTree|null>(null);
   const [form,setForm]=useState<FormDetail|null>(null);
+  const lastForm=useRef('F02');
   const [currencyOptions,setCurrencyOptions]=useState<Currency[]>([]);
   const [periodOptions,setPeriodOptions]=useState<PeriodType[]>([]);
   const [category,setCategory]=useState('ALL');
@@ -76,7 +77,7 @@ export default function App(){
   useEffect(()=>{
     let active=true;
     get<FormDetail>('/catalog/forms/'+encodeURIComponent(formCode)+'?locale='+language)
-      .then(v=>{if(active){setForm(v);setDraft(null);setInstanceId('');setValues({});setProfileId('');setPreview(null);}})
+      .then(v=>{if(active){setForm(v);if(lastForm.current!==formCode){lastForm.current=formCode;setDraft(null);setInstanceId('');setValues({});setProfileId('');setPreview(null);}}})
       .catch(e=>{if(active)setError(String(e))});
     return()=>{active=false};
   },[formCode,language]);
