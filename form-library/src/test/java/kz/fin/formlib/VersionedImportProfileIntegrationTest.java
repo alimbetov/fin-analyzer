@@ -30,7 +30,7 @@ class VersionedImportProfileIntegrationTest {
   @Autowired FormDefinitionRepository forms;
   @Autowired JdbcTemplate jdbc;
 
-  private JsonNode response(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder req)
+  private JsonNode response(org.springframework.test.web.servlet.RequestBuilder req)
       throws Exception {
     return json.readTree(http.perform(req).andExpect(status().isOk())
       .andReturn().getResponse().getContentAsString());
