@@ -10,8 +10,7 @@ public class FormRevisionRow {
 @Column(name="revision_id",nullable=false) private UUID revisionId;
 @Column(name="row_id",nullable=false) private UUID rowId;
 @Column(name="row_position",nullable=false) private Integer rowPosition;
-@Lob
-@Column(name="values_json") private String valuesJson;
+@Column(name="values_json",columnDefinition="text") private String valuesJson;
 public FormRevisionRow(){}
 public UUID getId(){return id;}
 public void setId(UUID value){this.id=value;}
