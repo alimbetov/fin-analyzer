@@ -1,4 +1,25 @@
 export type Locale = 'ru' | 'kk' | 'en' | 'zh-Hans';
+
+// FIN-KPI-R0. All relationships are candidate-only reference metadata,
+// NOT permission to calculate, write, or access project financial facts.
+export type IndicatorModel = {
+  code:string;pack:string;title:string;titleReviewStatus:string;
+  qualificationStatus:string;inputFormCodes:string[];outputMetricCodes:string[]
+};
+export type GoalFormLink = {formCode:string;role:'CORE'|'SUPPORTING'|'EVIDENCE';priority:number};
+export type IndicatorGoal = {
+  code:string;title:string|null;translationStatus:string;audience:string;
+  deliverable:string;version:string;qualificationStatus:string;
+  models:IndicatorModel[];forms:GoalFormLink[]
+};
+export type IndicatorDefinition = {
+  code:string;metricKind:string;qualificationStatus:string;
+  models:IndicatorModel[];inputFormCodes:string[];goalCodes:string[]
+};
+export type IndicatorFormUsage = {
+  formCode:string;goalCodes:string[];modelCodes:string[];qualificationStatus:string
+};
+
 export type Style = 'EXCEL' | 'CLASSIC' | 'DASHBOARD';
 export type Category = {code:string;parentCode:string|null;type:string;sortOrder:number;title:string;translationStatus:string};
 export type CategoryLink = {categoryCode:string;formCode:string;role:string;sortOrder:number};
