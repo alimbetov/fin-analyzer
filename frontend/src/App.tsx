@@ -9,6 +9,16 @@ import './styles.css';
 
 const periodExamples:Record<string,string>={D:'2026-11-18',W:'2026-W47',DEC:'2026-11-2',M:'2026-11',Q:'2026-Q4',H:'2026-H2',Y:'2026'};
 const languages:Locale[]=['ru','kk','en','zh-Hans'];
+const editorBlockReason:Record<string,string>={
+  FORM_NOT_LOADED:'Загрузка контракта формы ещё не завершена.',
+  FORM_LOADING:'Ожидаем контракт выбранной формы.',
+  UNSUPPORTED_CONTENT_MODE:'Данная форма не поддерживает ввод одного финансового отчёта (SINGLE_RECORD).',
+  CAPTURE_SCHEMA_NOT_APPROVED:'Для этой формы ещё не утверждён типизированный контракт записи. Сейчас открыт только пилот F02.',
+  NO_MANUAL_FIELDS:'В контракте формы отсутствуют поля ручного ввода.',
+  DRAFT_FORM_MISMATCH:'Открытый отчёт относится к другой форме. Выберите форму, соответствующую отчёту.',
+  REPORT_NOT_EDITABLE:'Отчёт больше не в статусе DRAFT. Существующие ревизии доступны только для чтения.',
+  PINNED_FORM_VERSION_MISMATCH:'Отчёт закреплён за другой версией формы. Автоматическое перепривязывание запрещено.'
+};
 type Scope={organizationId:string;economicEntityId:string;businessScopeId:string;projectId:string};
 const newScope=():Scope=>({organizationId:crypto.randomUUID(),economicEntityId:crypto.randomUUID(),businessScopeId:crypto.randomUUID(),projectId:crypto.randomUUID()});
 const storageKey='fin-local-scope';
@@ -423,7 +433,7 @@ export default function App(){
                 }}>Новая организация UAT</button>
                 <label>Instance UUID<input value={instanceId} onChange={e=>setInstanceId(e.target.value)} /></label>
               </div>}
-              {!editable&&form&&<div className="warning"><AlertTriangle size={17}/> Запись отключена: нет утверждённого типизированного SINGLE_RECORD контракта, отчёт не в DRAFT или ревизия использует другую версию формы. Каталог сам по себе не разрешает ввод.</div>}
+              {!editable&&form&&<div className="warning" role="status"><AlertTriangle size={17}/> Запись отключена: {editorBlockReason[eligibility.reason??'']??'Контракт формы не позволяет изменение.'} Каталог не даёт разрешения на запись. Код: {eligibility.reason??'UNKNOWN'}.</div>}
               {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
               {saveUncertain&&<div className="warning"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Повторите сохранение с тем же Idempotency-Key; значения заблокированы до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
