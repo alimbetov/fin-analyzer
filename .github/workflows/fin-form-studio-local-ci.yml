@@ -1,0 +1,57 @@
+name: FIN Form Studio — React and Backend Regression
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - frontend/**
+      - form-library/**
+      - compose.local.yml
+      - .github/workflows/fin-form-studio-local-ci.yml
+  pull_request:
+    paths:
+      - frontend/**
+      - form-library/**
+      - compose.local.yml
+      - .github/workflows/fin-form-studio-local-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: React typecheck, clipboard tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript and Excel paste regression
+        run: npm run check
+
+  backend:
+    name: Spring Boot / REST / H2 regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Backend regression and Liquibase smoke (test datasource)
+        run: mvn -B -ntp -f form-library/pom.xml clean verify
+
+  # PostgreSQL persistence/UAT still requires its own qualified end-to-end gate.
+  # H2 passing is not a production PostgreSQL acceptance certificate.
