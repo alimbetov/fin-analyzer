@@ -35,7 +35,7 @@ public final class FormXlsxCodec {
   }
   public record Envelope(UUID instanceId,UUID organizationId,UUID formVersionId,
                          String formCode,int revision,String contentSha256,Style style) {}
-  public record Parsed(Envelope envelope,Map<String,String> values) {}
+  public record Parsed(Envelope envelope,Map<String,String> values,String displayLocale) {}
 
   private static ResponseStatusException invalid(String reason) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,reason);
@@ -196,7 +196,8 @@ public final class FormXlsxCodec {
       if(count!=expected.size())throw invalid("XLSX_FIELD_COUNT_MISMATCH");
       expect(read(params,9,0),"displayLocale","XLSX_PARAMETER_KEY_CHANGED");
       expect(read(params,10,0),"reportTitle","XLSX_PARAMETER_KEY_CHANGED");
-      new Display(read(params,9,1),read(params,10,1));
+      String locale=read(params,9,1);
+      new Display(locale,read(params,10,1));
       expect(read(report,1,0),"Style: "+style+", revision: "+revision,"XLSX_HEADER_MISMATCH");
       if(style==Style.EXCEL){
         expect(read(report,3,0),"Field key","XLSX_HEADER_MISMATCH");
@@ -246,7 +247,7 @@ public final class FormXlsxCodec {
         }
       }
       return new Parsed(new Envelope(instance,organization,version,code,revision,sha,style),
-          Collections.unmodifiableMap(values));
+          Collections.unmodifiableMap(values),locale);
     }catch(ResponseStatusException ex){throw ex;}
      catch(Exception ex){throw invalid("XLSX_INVALID_OR_CORRUPT");}
   }
