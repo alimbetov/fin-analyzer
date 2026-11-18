@@ -72,7 +72,7 @@ class FormXlsxCodecUnitTest {
   @Test
   void legitimateValueEditRetainsBindings() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
-    var parsed=FormXlsxCodec.parse(mutate(file,"REPORT",4,2,"150000.25",false),fields());
+    var parsed=FormXlsxCodec.parse(mutate(file,"REPORT",4,1,"150000.25",false),fields());
     assertEquals("150000.25",parsed.values().get("netRevenue"));
     assertEquals("70000",parsed.values().get("cogs"));
   }
@@ -99,7 +99,7 @@ class FormXlsxCodecUnitTest {
   @Test
   void rejectsExcelFormulasInsteadOfEvaluatingThem() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
-    rejected(mutate(file,"REPORT",4,2,"SUM(1,2)",true),"XLSX_TEXT_CELL_REQUIRED");
+    rejected(mutate(file,"REPORT",4,1,"SUM(1,2)",true),"XLSX_TEXT_CELL_REQUIRED");
   }
 
   @Test
