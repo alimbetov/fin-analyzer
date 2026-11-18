@@ -37,6 +37,7 @@ jobs:
           path: |
             target/fin-r1/form-contract-audit.json
             target/fin-r1/form-contract-matrix.csv
+            target/fin-r1/field-metric-contract-matrix.csv
 
   frontend:
     name: React typecheck, clipboard tests and build
