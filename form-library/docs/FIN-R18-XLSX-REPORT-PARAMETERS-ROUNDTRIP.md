@@ -90,3 +90,32 @@ Older FIN XLSX V2 files without the additional context rows remain readable by t
 **Future enhancements, not implemented here:** organization and legal entity display names (from trusted identity/entity catalog), explicit scale (units vs thousands vs millions), document author and export timestamp, auditor sign-off, evidence attachments, frozen publication manifest, localized financial disclosure footnotes, and print layout. These should not be invented or used to alter financial input values.
 
 **Verification:** `FormXlsxCodecUnitTest`, `FormXlsxExchangeIntegrationTest` and `VersionedImportProfileIntegrationTest`, plus complete `mvn -f form-library/pom.xml clean verify`. As of this commit no CI GREEN is recorded.
+
+## R18.4 — deterministic descriptive export filenames
+
+XLSX downloads use a server-generated ASCII-safe filename that carries the actual **persisted** accounting context (not mutable browser controls).
+
+```text
+FIN_<FORM>_<PERIOD_TYPE>-<PERIOD_CODE>_<CURRENCY>_<STYLE>_<LOCALE>_<FORM_VERSION>_r<REVISION>_<SHA12>.xlsx
+```
+
+Example:
+
+```text
+FIN_F02_M-2026-11_KZT_EXCEL_ru_FIN-FORM-V2_r0003_abcdef123456.xlsx
+```
+
+- `FORM`: stable form code, such as `F02`.
+- `PERIOD_TYPE` and `PERIOD_CODE`: canonical accounting period from `fin_intake`, such as `M-2026-11`, `W-2026-W47`, `Q-2026-Q4` or `Y-2026`.
+- `CURRENCY`: stored ISO currency, such as `KZT`, `JPY`, `USD`.
+- `STYLE`: `CLASSIC`, `EXCEL`, `DASHBOARD`.
+- `LOCALE`: `ru`, `kk`, `en`, `zh-Hans`.
+- `FORM_VERSION`: pinned immutable form schema version label.
+- `r0003`: financial revision number (minimum four digits, leading zeros).
+- `SHA12`: first 12 characters of canonical `contentSha256`. A **visual differentiator only**, never a replacement for full SHA-256, authorization or the `PARAMETERS` integrity checks.
+
+The filename intentionally omits organization UUID, project UUID, employee identity, form title (non-ASCII and possibly sensitive), and accounting amounts. Tokens are sanitized to ASCII `A-Z a-z 0-9 . _ -` and bounded in length; safe for Windows / macOS / Linux downloads. Filenames are **not** trusted on import: field mappings, revision, context and full SHA are always checked from `PARAMETERS` against the server snapshot.
+
+The REST response sets `Content-Disposition: attachment; filename="<name>"`; temporary Thymeleaf UAT uses this header as the browser download attribute instead of overwriting it with `fin-F02-EXCEL.xlsx`. An import commit changes the revision and typically the content hash, so a new export is distinguishable from the previous one.
+
+Tests: `FormXlsxFilenameUnitTest` (file safety, format, dimensions) and `FormXlsxExchangeIntegrationTest` (HTTP header, 3 styles × 4 locales, revision change). Run `mvn clean verify` and the opt-in 231-case R19 matrix for acceptance. CI status is not implied by the commit.
