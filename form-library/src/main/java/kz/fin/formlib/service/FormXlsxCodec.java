@@ -348,8 +348,12 @@ public final class FormXlsxCodec {
       String valueTitle=heading(locale,"Значение","Мәні","Value","数值");
       if(legacy){
         if(style==Style.EXCEL){
-          expect(read(report,3,0),labelTitle,"XLSX_HEADER_MISMATCH");
-          expect(read(report,3,1),valueTitle,"XLSX_HEADER_MISMATCH");
+          boolean translatedHeaders=labelTitle.equals(read(report,3,0)) &&
+            valueTitle.equals(read(report,3,1));
+          boolean originalHeaders="Field key".equals(read(report,3,0)) &&
+            "Value".equals(read(report,3,1));
+          if(!translatedHeaders&&!originalHeaders)
+            throw invalid("XLSX_HEADER_MISMATCH");
         }
       }else{
         expect(read(report,3,0),"№","XLSX_HEADER_MISMATCH");
