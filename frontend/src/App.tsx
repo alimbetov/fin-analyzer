@@ -5,6 +5,7 @@ import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,Peri
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
+import FinancialGoalsNavigator from './FinancialGoalsNavigator';
 import './styles.css';
 
 const periodExamples:Record<string,string>={D:'2026-11-18',W:'2026-W47',DEC:'2026-11-2',M:'2026-11',Q:'2026-Q4',H:'2026-H2',Y:'2026'};
@@ -68,7 +69,8 @@ export default function App(){
   const [error,setError]=useState('');
   const [message,setMessage]=useState('Подключение к Backend...');
   const [sidebar,setSidebar]=useState(()=>window.innerWidth>920);
-  const [dashboard,setDashboard]=useState(true);
+  const [navigator,setNavigator]=useState(true);
+  const [dashboard,setDashboard]=useState(false);
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [showScope,setShowScope]=useState(false);
   const [range,setRange]=useState('');
@@ -186,12 +188,13 @@ export default function App(){
     return !dirty||window.confirm('Есть несохранённые значения. Продолжить без сохранения?');
   }
   function switchForm(code:string){
-    if(code===formCode||!confirmDiscard())return;
+    if(code===formCode){setNavigator(false);setDashboard(false);return;}
+    if(!confirmDiscard())return;
     // Reset synchronously with the form selection, not after the REST response:
     // an in-flight render must never show old fieldCode under a new formCode.
     setForm(null);setDraft(null);setInstanceId('');setValues({});setRowEntries([]);
     setProfileId('');setPrevious(null);setPreview(null);setFile(null);
-    setFormCode(code);setDashboard(false);setDirty(false);
+    setFormCode(code);setNavigator(false);setDashboard(false);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
   }
   const save=()=>execute(async()=>{
@@ -405,27 +408,35 @@ export default function App(){
     <aside className="sidebar">
       <div className="logo"><div className="logo-mark"><Activity size={21}/></div><div><b>FIN</b><small>FORM STUDIO</small></div></div>
       <div className="side-overline">НАВИГАЦИЯ</div>
-      <button className={'nav-line '+(dashboard?'selected':'')} onClick={()=>setDashboard(true)}><LayoutDashboard size={17}/> Обзор</button>
-      <button className={'nav-line '+(!dashboard?'selected':'')} onClick={()=>setDashboard(false)}><FolderTree size={17}/> Каталог форм <span className="nav-count">{navigation?.totalForms??'—'}</span></button>
+      <button className={'nav-line '+(navigator?'selected':'')}
+        onClick={()=>{setNavigator(true);setDashboard(false)}}>
+        <Activity size={17}/> Финансовые решения</button>
+      <button className={'nav-line '+(!navigator&&dashboard?'selected':'')}
+        onClick={()=>{setNavigator(false);setDashboard(true)}}>
+        <LayoutDashboard size={17}/> Профессиональный обзор</button>
+      <button className={'nav-line '+(!navigator&&!dashboard?'selected':'')}
+        onClick={()=>{setNavigator(false);setDashboard(false)}}>
+        <FolderTree size={17}/> Библиотека форм <span className="nav-count">{navigation?.totalForms??'—'}</span>
+      </button>
       <div className="side-overline space">КАТЕГОРИИ</div>
-      <button className={'nav-line '+(category==='ALL'?'selected':'')} onClick={()=>{setCategory('ALL');setDashboard(false)}}>Все формы</button>
+      <button className={'nav-line '+(category==='ALL'?'selected':'')} onClick={()=>{setCategory('ALL');setNavigator(false);setDashboard(false)}}>Все формы</button>
       {roots.map(root=><div key={root.code}>
         <div className={'nav-line group '+(category===root.code?'selected':'')}>
-          <button className="group-select" onClick={()=>{setCategory(root.code);setDashboard(false)}}>{root.title}</button>
+          <button className="group-select" onClick={()=>{setCategory(root.code);setNavigator(false);setDashboard(false)}}>{root.title}</button>
           <button className="expand" title="Подкатегории" onClick={()=>setExpanded(o=>({...o,[root.code]:!o[root.code]}))}>
             {expanded[root.code]?<ChevronDown size={15}/>:<ChevronRight size={15}/>}
           </button>
         </div>
         {expanded[root.code]&&(tree?.categories??[]).filter(c=>c.parentCode===root.code).map(c=>
           <button key={c.code} className={'nav-line sub '+(category===c.code?'selected':'')}
-            onClick={()=>{setCategory(c.code);setDashboard(false)}}>{c.title}</button>)}
+            onClick={()=>{setCategory(c.code);setNavigator(false);setDashboard(false)}}>{c.title}</button>)}
       </div>)}
       <div className="sidebar-footer"><span className="dot"/> Только localhost · без IAM</div>
     </aside>
     <div className="workspace">
       <header className="topbar">
         <div className="top-left"><Tool label={sidebar?'Скрыть меню':'Открыть меню'} onClick={()=>setSidebar(v=>!v)}>{sidebar?<PanelLeftClose size={19}/>:<PanelLeftOpen size={19}/>}</Tool>
-        <span className="breadcrumb">Рабочая область <ChevronRight size={14}/> {dashboard?'Обзор':'Формы'} <ChevronRight size={14}/> <b>{formCode}</b></span></div>
+        <span className="breadcrumb">Рабочая область <ChevronRight size={14}/> {navigator?'Финансовые решения':dashboard?'Профессиональный обзор':'Библиотека форм'} {!navigator&&<><ChevronRight size={14}/> <b>{formCode}</b></>}</span></div>
         <div className="top-right"><span className="local-state"><span className="dot"/> LOCAL</span>
           <select value={language} onChange={e=>setLanguage(e.target.value as Locale)} aria-label="Язык">
             {languages.map(l=><option key={l} value={l}>{l==='ru'?'Русский':l==='kk'?'Қазақша':l==='en'?'English':'中文'}</option>)}
@@ -433,10 +444,14 @@ export default function App(){
       </header>
       <main className="content">
         <div className="intro"><div><p className="eyebrow">FINANCIAL REPORTING WORKSPACE</p>
-          <h1>{dashboard?'Финансовая рабочая область':'Каталог и редактор форм'}</h1>
-          <p className="subtitle">Единый контракт данных · 166 форм · immutable revisions · Excel round-trip</p></div>
+          <h1>{navigator?'Навигатор финансовых решений':dashboard?'Финансовая рабочая область':'Каталог и редактор форм'}</h1>
+          <p className="subtitle">{navigator?'От финансового вопроса к показателям и необходимым отчётам':'Единый контракт данных · 166 форм · immutable revisions · Excel round-trip'}</p></div>
           <span className="mode-pill">LOCAL DEVELOPMENT</span></div>
         {error&&<div className="error" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={()=>setError('')} aria-label="Закрыть">×</button></div>}
+        {navigator&&<FinancialGoalsNavigator locale={language}
+          forms={navigation?.allForms??[]} onOpenForm={switchForm}
+          onOpenLibrary={()=>{setNavigator(false);setDashboard(false)}}/>}
+        {!navigator&&<>
         <div className="stats">
           <div className="stat"><span>Формы</span><strong>{navigation?.totalForms??'—'}</strong><small>В каталоге Backend</small></div>
           <div className="stat"><span>Категории</span><strong>{tree?.categories.length??'—'}</strong><small>Реальный fin_lib</small></div>
@@ -559,6 +574,7 @@ export default function App(){
             <div className="editor-footer"><span className="dot"/> {message}<span className="footer-sha">{draft?'SHA256 '+draft.sha256.slice(0,16):'Unsaved'}</span></div>
           </section>
         </div>
+        </>}
         <footer className="disclaimer"><AlertTriangle size={15}/> Локальный стенд. Backend без Security: не публикуйте порт 8086 в сеть и не используйте реальные финансовые данные.</footer>
       </main>
     </div>
