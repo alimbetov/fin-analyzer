@@ -78,12 +78,13 @@ export default function App(){
   const [error,setError]=useState('');
   const [message,setMessage]=useState('Подключение к Backend...');
   const [sidebar,setSidebar]=useState(()=>window.innerWidth>920);
-  const [navigator,setNavigator]=useState(true);
+  const [navigator,setNavigator]=useState(false);
   const [decisionContext,setDecisionContext]=useState<DecisionContext|null>(null);
   const [dashboard,setDashboard]=useState(false);
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [showScope,setShowScope]=useState(false);
-  const [showReports,setShowReports]=useState(false);
+  const [showReports,setShowReports]=useState(true);
+  const [showCategories,setShowCategories]=useState(false);
   const [reports,setReports]=useState<SavedReport[]|null>(null);
   const [reportsError,setReportsError]=useState('');
   const [reportsRefresh,setReportsRefresh]=useState(0);
@@ -458,8 +459,8 @@ export default function App(){
         onClick={()=>{setNavigator(false);setDashboard(false)}}>
         <FolderTree size={17}/> Библиотека форм <span className="nav-count">{navigation?.totalForms??'—'}</span>
       </button>
-      <div className="side-overline space">КАТЕГОРИИ</div>
-      <button className={'nav-line '+(category==='ALL'?'selected':'')} onClick={()=>{setCategory('ALL');setNavigator(false);setDashboard(false)}}>Все формы</button>
+      <button className="nav-line sidebar-categories-toggle" type="button" aria-expanded={showCategories} onClick={()=>setShowCategories(v=>!v)}><FolderTree size={17}/> Категории {showCategories?<ChevronDown size={15}/>:<ChevronRight size={15}/>}</button>
+      {showCategories&&<div className="sidebar-categories"><button className={'nav-line '+(category==='ALL'?'selected':'')} onClick={()=>{setCategory('ALL');setNavigator(false);setDashboard(false)}}>Все формы</button>
       {roots.map(root=><div key={root.code}>
         <div className={'nav-line group '+(category===root.code?'selected':'')}>
           <button className="group-select" onClick={()=>{setCategory(root.code);setNavigator(false);setDashboard(false)}}>{root.title}</button>
@@ -471,6 +472,7 @@ export default function App(){
           <button key={c.code} className={'nav-line sub '+(category===c.code?'selected':'')}
             onClick={()=>{setCategory(c.code);setNavigator(false);setDashboard(false)}}>{c.title}</button>)}
       </div>)}
+      </div>}
       <div className="sidebar-footer"><span className="dot"/> Только localhost · без IAM</div>
     </aside>
     <div className="workspace">
@@ -484,8 +486,8 @@ export default function App(){
       </header>
       <main className="content">
         <div className="intro"><div><p className="eyebrow">FINANCIAL REPORTING WORKSPACE</p>
-          <h1>{navigator?'От вопроса — к нужным данным':dashboard?'Финансовая рабочая область':'Каталог и редактор форм'}</h1>
-          <p className="subtitle">{navigator?'От финансового вопроса к показателям и необходимым отчётам':'Единый контракт данных · 166 форм · immutable revisions · Excel round-trip'}</p></div>
+          <h1>{navigator?'От вопроса — к нужным данным':dashboard?'Обзор отчётности':'Мои отчёты'}</h1>
+          <p className="subtitle">{navigator?'Выберите задачу, чтобы найти нужную форму':'Выберите отчёт, укажите период и заполните данные. Все изменения сохраняются в редакциях.'}</p></div>
           <span className="mode-pill">LOCAL DEVELOPMENT</span></div>
         {error&&<div className="error" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={()=>setError('')} aria-label="Закрыть">×</button></div>}
         <div hidden={!navigator}>
@@ -506,12 +508,12 @@ export default function App(){
             <GitBranch size={16}/> К дереву задачи
           </button>
         </div>}
-        <div className="stats">
+        {dashboard&&<div className="stats">
           <div className="stat"><span>Формы</span><strong>{navigation?.totalForms??'—'}</strong><small>В каталоге Backend</small></div>
           <div className="stat"><span>Категории</span><strong>{tree?.categories.length??'—'}</strong><small>Реальный fin_lib</small></div>
           <div className="stat"><span>Заполнено полей</span><strong>{filled}/{fieldCapacity}</strong><small>Текущая форма</small></div>
           <div className="stat"><span>Ревизия</span><strong>{draft?.revisionNo??'—'}</strong><small>{draft?.sha256.slice(0,12)??'Новый черновик'}</small></div>
-        </div>
+        </div>}
         {dashboard&&<section className="dashboard-overview">
           <div className="overview-title"><b>Начать с рекомендованной формы</b>
             <span>Рекомендация — не разрешение на ввод. Квалификация указана у каждой формы.</span></div>
@@ -524,13 +526,13 @@ export default function App(){
         </section>}
         <div className="two-panel">
           <section className="catalog-panel">
-            <div className="panel-head"><div><h2>Библиотека форм</h2><p>{filtered.length} результатов</p></div><FolderTree size={19}/></div>
+            <div className="panel-head"><div><h2>Выбрать форму</h2><p>Доступно: {filtered.length}</p></div><FolderTree size={19}/></div>
             <label className="search-box"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Код или название..." /></label>
             <div className="form-list">
               {filtered.map(f=><button key={f.formCode} className={'form-list-item '+(f.formCode===formCode?'active':'')}
                 onClick={()=>switchForm(f.formCode)}>
                 <span className="form-icon"><FileSpreadsheet size={18}/></span>
-                <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode} · {f.qualificationState}</small></span><ChevronRight size={16}/></button>)}
+                <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode==='EVIDENCE'?'Документ':f.contentMode==='ROWSET'?'Таблица':'Форма'}</small></span><ChevronRight size={16}/></button>)}
               {!filtered.length&&<p className="empty">Формы не найдены</p>}
             </div>
           </section>
@@ -544,7 +546,7 @@ export default function App(){
             <div className="panel-head editor-head"><div><p className="eyebrow">{formCode} · {form?.form.version||'—'}</p>
               <h2>{form?.form.title||'Загрузка формы'}</h2>
               <p>{draft?'Редакция '+draft.revisionNo+' · '+draft.workflowStatus:'Новая форма · заполнение с нуля'}</p>
-              <p className="editor-qualification">{form?.form.captureMode??'—'} · {form?.form.qualificationState??'—'}</p></div>
+              </div>
               <div className="toolbar">
                 <Tool label="Сохранённые отчёты" disabled={busy} onClick={()=>{
                   if(confirmDiscard()){
@@ -552,11 +554,11 @@ export default function App(){
                   }
                 }}><FolderTree size={18}/></Tool>
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
-                <Tool label="Сохранить ревизию" disabled={busy||!editable||!dirty||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={18}/>:<Save size={18}/>}</Tool>
-                <Tool label="Открыть по UUID (сверить ревизию)" disabled={busy} onClick={()=>openDraft(instanceId)}><FolderOpen size={18}/></Tool>
+                <button className="primary-save" type="button" disabled={busy||!editable||!dirty||commitUncertain||saveUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} Сохранить</button>
+
                 {!evidence&&<Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>}
                 {!evidence&&<Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain||saveUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>}
-                <Tool label="Контекст организации" onClick={()=>setShowScope(v=>!v)}><Settings2 size={18}/></Tool>
+
               </div></div>
             <div className="editor-body">
               <div className="filters">
@@ -565,9 +567,12 @@ export default function App(){
                 <label>Учётный период<input value={periodCode} disabled={isLocked} onChange={e=>setPeriodCode(e.target.value)}/></label>
                 <label>Валюта<select value={currency} disabled={isLocked} onChange={e=>setCurrency(e.target.value)}>
                   {currencyOptions.map(c=><option key={c.code} value={c.code}>{c.code} · {c.minorUnits}</option>)}</select></label>
-                <label>Стиль<select value={style} onChange={e=>setStyle(e.target.value as Style)}>
-                  <option value="EXCEL">EXCEL</option><option value="CLASSIC">CLASSIC</option><option value="DASHBOARD">DASHBOARD</option></select></label>
               </div>
+              <details className="editor-options"><summary><Settings2 size={16}/> Дополнительные настройки и инструменты</summary>
+                <div className="editor-options-body"><label>Вид редактора<select value={style} onChange={e=>setStyle(e.target.value as Style)}><option value="EXCEL">Таблица</option><option value="CLASSIC">Обычный</option><option value="DASHBOARD">Карточки</option></select></label>
+                  <button type="button" onClick={()=>setShowScope(v=>!v)}>{showScope?'Скрыть контекст UAT':'Контекст организации (UAT)'}</button>
+                  <button type="button" disabled={busy||!instanceId} onClick={()=>openDraft(instanceId)}>Проверить запись по UUID</button></div>
+              </details>
               <p className="period-caption">Период: {range} · Единица: {selectedCurrency?.code||currency}</p>
               {showScope&&<div className="scope-panel">
                 <div><b>Локальный UAT-контекст</b><p>Синтетические UUID; не является авторизацией</p></div>
@@ -586,7 +591,7 @@ export default function App(){
               {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
               {saveUncertain&&<div className="warning"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Повторите сохранение с тем же Idempotency-Key; значения заблокированы до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
-              {evidence&&<p className="period-caption">Сохраняются реквизиты документа. Загрузка файла недоступна.</p>}
+              {evidence&&<div className="warning" role="status"><AlertTriangle size={17}/> Реквизиты документа доступны для сохранения. Прикрепление PDF и изображений через этот экран пока не подключено.</div>}
               <div className="sheet-head"><div><b>Показатели отчёта</b><p>Вставка из Excel: Ctrl+V · Enter / ↓ для следующего поля</p></div>
                 <span className="total-badge">{fields.length} полей{rowset?' на строку · '+rowEntries.length+' строк':''}</span></div>
               {rowset?<div className="sheet-scroll">
@@ -618,7 +623,7 @@ export default function App(){
                       onChange={e=>setValue(f.fieldCode,e.target.value)} onPaste={e=>pasteRange(e,i)}
                       onKeyDown={e=>nextCell(e,i)}/></div>)}
                 </div>}
-              {!evidence&&<div className="import-box">
+              {!evidence&&<details className="import-details"><summary><FileUp size={16}/> Импорт данных из Excel (дополнительно)</summary><div className="import-box">
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
                 <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null)}}/>
                 <div className="import-tools">
@@ -635,7 +640,7 @@ export default function App(){
                   </tbody></table></div>
                   <p>Preview не создаёт ревизию. Commit станет доступен только для этого файла и текущего snapshot.</p>
                 </div>}
-              </div>}
+              </div></details>}
             </div>
             <div className="editor-footer"><span className="dot"/> {message}<span className="footer-sha">{draft?'SHA256 '+draft.sha256.slice(0,16):'Unsaved'}</span></div>
           </section>}
