@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: fin-form-postgres
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: fin_form_library
+      POSTGRES_USER: fin
+      POSTGRES_PASSWORD: ${FIN_FORM_DB_PASSWORD:-fin_local_password}
+    volumes:
+      - fin_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fin -d fin_form_library"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+volumes:
+  fin_pgdata:
