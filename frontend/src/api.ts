@@ -1,0 +1,56 @@
+export type Locale = 'ru' | 'kk' | 'en' | 'zh-Hans';
+export type Style = 'EXCEL' | 'CLASSIC' | 'DASHBOARD';
+export type Category = {code:string;parentCode:string|null;type:string;sortOrder:number;title:string;translationStatus:string};
+export type CategoryLink = {categoryCode:string;formCode:string;role:string;sortOrder:number};
+export type CategoryTree = {categories:Category[];links:CategoryLink[]};
+export type FormItem = {formCode:string;title:string;primaryGroup:string;functionalDomain:string;contentMode:string;qualificationState:string;translationStatus:string};
+export type Navigation = {totalForms:number;allForms:FormItem[];recommended:FormItem[]};
+export type Field = {fieldCode:string;fieldType:string;inputMode:string;required:boolean;displayOrder:number;sectionCode:string;title:string;translationStatus:string;unitPolicy:string};
+export type FormDetail = {form:{formCode:string;version:string;title:string;contentMode:string;qualificationState:string;translationStatus:string};fields:Field[];sections:{sectionCode:string;sectionOrder:number}[]};
+export type Currency = {code:string;title:string|null;minorUnits:number;status:string};
+export type PeriodType = {code:string;title:string};
+export type PeriodRange = {type:string;code:string;startInclusive:string;endExclusive:string};
+export type Row = {rowId:string;rowPosition:number;values:Record<string,string>};
+export type Draft = {instanceId:string;organizationId:string;revisionNo:number;formCode:string;formVersion:string;contentMode:string;values:Record<string,string>;rows:Row[];sha256:string;periodType:string;periodCode:string;currency:string;workflowStatus:string};
+export type Receipt = {instanceId:string;revisionNo:number;contentSha256:string;result:string};
+export type Profile = {id:string};
+export type PreviewTicket = {previewId:string;expectedRevision:number;values:Record<string,string>};
+
+const tokenKey='fin-demo-correlation';
+export const demoToken=()=>{
+  let value=sessionStorage.getItem(tokenKey);
+  if(!value){value=crypto.randomUUID();sessionStorage.setItem(tokenKey,value);}
+  return value;
+};
+
+export async function request(path:string,options:RequestInit={}):Promise<Response>{
+  const headers=new Headers(options.headers);
+  headers.set('X-FIN-UAT-Token',demoToken()); // tracing label only; backend does NOT authenticate it
+  const response=await fetch('/api/v1'+path,{...options,headers,cache:'no-store'});
+  if(!response.ok){
+    const raw=await response.text();
+    let detail=raw;
+    try{const data=JSON.parse(raw) as {code?:string;message?:string;detail?:string;error?:string};
+      detail=data.code||data.message||data.detail||data.error||raw;
+    }catch{/* keep raw */}
+    throw new Error('HTTP '+response.status+': '+detail.slice(0,450));
+  }
+  return response;
+}
+export async function get<T>(path:string):Promise<T>{return (await request(path)).json() as Promise<T>;}
+export async function post<T>(path:string,data:unknown,idem=false):Promise<T>{
+  return (await request(path,{method:'POST',headers:{
+    'Content-Type':'application/json',...(idem?{'Idempotency-Key':crypto.randomUUID()}:{})
+  },body:JSON.stringify(data)})).json() as Promise<T>;
+}
+export async function multipart<T>(path:string,body:FormData,idem=false):Promise<T>{
+  return (await request(path,{method:'POST',headers:idem?{'Idempotency-Key':crypto.randomUUID()}:undefined,body})).json() as Promise<T>;
+}
+export async function exportXlsx(instanceId:string,org:string,style:Style,locale:Locale):Promise<{file:Blob;name:string}>{
+  const params=new URLSearchParams({organizationId:org,styleCode:style,locale});
+  const response=await request('/drafts/'+encodeURIComponent(instanceId)+'/export.xlsx?'+params);
+  const disposition=response.headers.get('Content-Disposition')||'';
+  const match=/filename="([^"]+\.xlsx)"/i.exec(disposition);
+  if(!match)throw new Error('Backend не вернул Content-Disposition filename');
+  return {file:await response.blob(),name:match[1]};
+}
