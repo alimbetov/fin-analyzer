@@ -1,5 +1,6 @@
 package kz.fin.formlib.api;
 
+import kz.fin.formlib.service.CatalogReadCache;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -12,7 +13,10 @@ import java.util.Set;
 @RequestMapping("/api/v1/catalog/category-tree")
 public class CatalogCategoryReadController {
   private final JdbcTemplate jdbc;
-  public CatalogCategoryReadController(JdbcTemplate jdbc){this.jdbc=jdbc;}
+  private final CatalogReadCache cache;
+  public CatalogCategoryReadController(JdbcTemplate jdbc,CatalogReadCache cache){
+    this.jdbc=jdbc;this.cache=cache;
+  }
 
   public record Category(String code,String parentCode,String type,int sortOrder,
                          String title,String translationStatus) {}
