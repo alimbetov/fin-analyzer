@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {canEditForm,matchesPreview} from './editorPolicy.ts';
+import {canEditForm,matchesPreview,verifySavedDraft} from './editorPolicy.ts';
 import type {Draft,FormDetail} from './api';
 
 const form=(overrides:Partial<FormDetail['form']>={}):FormDetail=>({
@@ -53,4 +53,24 @@ test('preview binds exact snapshot revision, tenant and file digest',()=>{
  assert.equal(matchesPreview(ticket,draft({revisionNo:3}),'abc'),false);
  assert.equal(matchesPreview(ticket,draft({organizationId:'other'}),'abc'),false);
  assert.equal(matchesPreview(ticket,draft(),'def'),false);
+});
+
+test('read-after-write qualification checks exact financial values and row identity',()=>{
+ const receipt={instanceId:'i-1',revisionNo:3,contentSha256:'hash',result:'UNQUALIFIED_DRAFT'};
+ const fields=form().fields;
+ const rows=[{rowId:'row-1',rowPosition:10,values:{netRevenue:'120.00'}}];
+ const actual=draft({revisionNo:3,values:{},rows,contentMode:'ROWSET'});
+ assert.equal(verifySavedDraft(receipt,actual,'org-1','F02',2,{},rows,fields),true);
+ assert.equal(verifySavedDraft(receipt,actual,'org-2','F02',2,{},rows,fields),false);
+ assert.equal(verifySavedDraft(receipt,actual,'org-1','F02',1,{},rows,fields),false);
+ assert.equal(verifySavedDraft(receipt,actual,'org-1','F02',2,{},[
+   {...rows[0],rowPosition:20}],fields),false);
+ assert.equal(verifySavedDraft(receipt,actual,'org-1','F02',2,{},[
+   {...rows[0],values:{netRevenue:'999'}}],fields),false);
+ assert.equal(verifySavedDraft(receipt,actual,'org-1','F02',2,{},[
+   {...rows[0],rowId:'row-2'}],fields),false);
+ assert.equal(verifySavedDraft(receipt,draft({revisionNo:3}),'org-1','F02',2,
+   {netRevenue:'100'},[],fields),true);
+ assert.equal(verifySavedDraft(receipt,draft({revisionNo:3}),'org-1','F02',2,
+   {netRevenue:'101'},[],fields),false);
 });
