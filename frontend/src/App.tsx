@@ -1,9 +1,9 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
 import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,FolderOpen,Eye,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
-import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Style} from './api';
+import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
-import {parseExcelPaste} from './clipboard';
+import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview} from './editorPolicy';
 import './styles.css';
 
@@ -12,8 +12,9 @@ const languages:Locale[]=['ru','kk','en','zh-Hans'];
 const editorBlockReason:Record<string,string>={
   FORM_NOT_LOADED:'Загрузка контракта формы ещё не завершена.',
   FORM_LOADING:'Ожидаем контракт выбранной формы.',
-  UNSUPPORTED_CONTENT_MODE:'Данная форма не поддерживает ввод одного финансового отчёта (SINGLE_RECORD).',
-  CAPTURE_SCHEMA_NOT_APPROVED:'Для этой формы ещё не утверждён типизированный контракт записи. Сейчас открыт только пилот F02.',
+  UNSUPPORTED_CONTENT_MODE:'Для этой формы ещё нет поддерживаемого редактора.',
+  EVIDENCE_UPLOAD_NOT_IMPLEMENTED:'Документальные формы требуют защищённой загрузки файлов. Запись пока недоступна.',
+  CAPTURE_SCHEMA_NOT_APPROVED:'Для формы пока нет типизированной схемы ввода. Каталог доступен только для просмотра.',
   NO_MANUAL_FIELDS:'В контракте формы отсутствуют поля ручного ввода.',
   DRAFT_FORM_MISMATCH:'Открытый отчёт относится к другой форме. Выберите форму, соответствующую отчёту.',
   REPORT_NOT_EDITABLE:'Отчёт больше не в статусе DRAFT. Существующие ревизии доступны только для чтения.',
@@ -58,6 +59,7 @@ export default function App(){
   const [instanceId,setInstanceId]=useState('');
   const [draft,setDraft]=useState<Draft|null>(null);
   const [values,setValues]=useState<Record<string,string>>({});
+  const [rowEntries,setRowEntries]=useState<Row[]>([]);
   const [profileId,setProfileId]=useState('');
   const [preview,setPreview]=useState<PreviewTicket|null>(null);
   const [file,setFile]=useState<File|null>(null);
@@ -130,7 +132,9 @@ export default function App(){
     return (navigation?.allForms??[]).filter(f=>(category==='ALL'||included.has(f.formCode))&&
       (f.formCode+' '+f.title+' '+f.functionalDomain).toLowerCase().includes(search.toLowerCase()));
   },[navigation,tree,category,search]);
-  const filled=fields.filter(f=>values[f.fieldCode]?.trim()).length;
+  const rowset=form?.form.contentMode==='ROWSET';
+  const filled=rowset?rowEntries.reduce((n,r)=>n+fields.filter(f=>r.values[f.fieldCode]?.trim()).length,0):fields.filter(f=>values[f.fieldCode]?.trim()).length;
+  const fieldCapacity=fields.length*(rowset?rowEntries.length:1);
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
   const isLocked=Boolean(draft)||dirty||saveUncertain||commitUncertain;
 
@@ -185,20 +189,26 @@ export default function App(){
     if(code===formCode||!confirmDiscard())return;
     // Reset synchronously with the form selection, not after the REST response:
     // an in-flight render must never show old fieldCode under a new formCode.
-    setForm(null);setDraft(null);setInstanceId('');setValues({});
+    setForm(null);setDraft(null);setInstanceId('');setValues({});setRowEntries([]);
     setProfileId('');setPrevious(null);setPreview(null);setFile(null);
     setFormCode(code);setDashboard(false);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
   }
   const save=()=>execute(async()=>{
     if(!form||!editable)throw new Error('Запись разрешена только для DRAFT с утверждённым типизированным SINGLE_RECORD контрактом.');
-    if(!draft&&!dirty&&Object.keys(values).length===0)throw new Error('Сначала заполните отчёт');
+    if(!draft&&!dirty&&Object.keys(values).length===0&&rowEntries.length===0)throw new Error('Сначала заполните отчёт');
     if(draft&&!dirty)throw new Error('Нет изменений для сохранения');
     if(range==='Неверный период')throw new Error('Некорректный учётный период');
-    for(const f of fields)if(f.required&&!values[f.fieldCode]?.trim())
-      throw new Error('Обязательное поле: '+f.title+' ('+f.fieldCode+')');
-    const cleaned=Object.fromEntries(fields.filter(f=>values[f.fieldCode]!==undefined)
+    if(rowset&&(rowEntries.length===0||rowEntries.length>200))
+      throw new Error('Табличная форма требует от 1 до 200 строк');
+    for(const [i,record] of (rowset?rowEntries:[{values}]).entries())
+      for(const f of fields)if(f.required&&!record.values[f.fieldCode]?.trim())
+        throw new Error('Обязательное поле '+f.fieldCode+(rowset?' (строка '+(i+1)+')':''));
+    const cleaned=rowset?{}:Object.fromEntries(fields.filter(f=>values[f.fieldCode]!==undefined)
       .map(f=>[f.fieldCode,normalize(values[f.fieldCode],f.fieldType)]));
+    const preparedRows=rowset?rowEntries.map(r=>({...r,values:Object.fromEntries(
+      fields.filter(f=>r.values[f.fieldCode]!==undefined)
+        .map(f=>[f.fieldCode,normalize(r.values[f.fieldCode],f.fieldType)]))})):[];
     if(!saveKeyRef.current)saveKeyRef.current=crypto.randomUUID();
     // Preserve the exact idempotency key after uncertain network outcomes.
     setSaveUncertain(true);
@@ -215,7 +225,7 @@ export default function App(){
         currency:draft?.currency??currency,coverage:draft?.coverage??'PERIOD_ONLY',
         reportingBasis:draft?.reportingBasis??'MANAGEMENT',
         dataSpace:draft?.dataSpace??'SYNTHETIC',
-        expectedRevision:draft?.revisionNo??0,values:cleaned,rows:[],
+        expectedRevision:draft?.revisionNo??0,values:cleaned,rows:preparedRows,
         createdBy:'react-local-uat',changeReason:'React editor input'
       },saveKeyRef.current);
     }catch(error){
@@ -247,7 +257,7 @@ export default function App(){
     const snapshot=await get<Draft>('/drafts/'+receipt.instanceId+'?organizationId='+scope.organizationId);
     if(snapshot.sha256!==receipt.contentSha256||snapshot.revisionNo!==receipt.revisionNo)
       throw new Error('Сохранение выполнено, но сверка ревизии не прошла. Повторите с тем же ключом.');
-    setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setPreview(null);
+    setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setRowEntries(snapshot.rows);setPreview(null);
     saveKeyRef.current=null;setSaveUncertain(false);
     setDirty(false);setCommitUncertain(false);
     setMessage('Сохранено: ревизия '+snapshot.revisionNo+' · SHA '+snapshot.sha256.slice(0,12));
@@ -257,7 +267,7 @@ export default function App(){
     if(!instanceId)throw new Error('Укажите UUID экземпляра');
     const snapshot=await get<Draft>('/drafts/'+instanceId+'?organizationId='+scope.organizationId);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
-    setDraft(snapshot);setValues(snapshot.values);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
+    setDraft(snapshot);setValues(snapshot.values);setRowEntries(snapshot.rows);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
     setCurrency(snapshot.currency);setScope({
       organizationId:snapshot.organizationId,economicEntityId:snapshot.economicEntityId,
       businessScopeId:snapshot.businessScopeId,projectId:snapshot.projectId
@@ -329,16 +339,53 @@ export default function App(){
     if(mismatch.length||current.sha256!==receipt.contentSha256||
       current.revisionNo!==previous.revisionNo+1)
       throw new Error('Commit выполнен, но сверка не прошла. Обновите экземпляр; не повторяйте Commit вслепую.');
-    setDraft(current);setValues(current.values);setFile(null);
+    setDraft(current);setValues(current.values);setRowEntries(current.rows);setFile(null);
     setDirty(false);setCommitUncertain(false);
     setMessage('Commit '+current.revisionNo+' · SHA '+current.sha256.slice(0,12)+' · проверено '+Object.keys(preview.values).length+' полей');
   });
   const reset=()=>{
     if(!confirmDiscard())return;
-    setDraft(null);setInstanceId('');setValues({});setProfileId('');
+    setDraft(null);setInstanceId('');setValues({});setRowEntries([]);setProfileId('');
     setPreview(null);setFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
     setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
   };
+
+  function appendGridRow(){
+    if(rowEntries.length>=200)return;
+    const rowPosition=rowEntries.length?Math.max(...rowEntries.map(r=>r.rowPosition))+10:10;
+    setRowEntries(old=>[...old,{rowId:crypto.randomUUID(),rowPosition,values:{}}]);
+    setDirty(true);setPreview(null);
+  }
+  function editGridCell(rowId:string,code:string,value:string){
+    setRowEntries(old=>old.map(r=>r.rowId===rowId?
+      {...r,values:{...r.values,[code]:value}}:r));
+    setDirty(true);setPreview(null);
+  }
+  function removeGridRow(rowId:string){
+    setRowEntries(old=>old.filter(r=>r.rowId!==rowId));
+    setDirty(true);setPreview(null);
+  }
+  function pasteGrid(e:ClipboardEvent<HTMLInputElement>,rowIndex:number,columnIndex:number){
+    const plain=e.clipboardData.getData('text/plain');
+    if(!plain.includes('\t')&&!plain.includes('\n'))return;
+    e.preventDefault();
+    try{
+      const matrix=parseRowsetExcelPaste(plain,rowIndex,columnIndex,fields.length);
+      const updated=rowEntries.map(r=>({...r,values:{...r.values}}));
+      while(updated.length<rowIndex+matrix.length){
+        const previous=updated.at(-1)?.rowPosition??0;
+        updated.push({rowId:crypto.randomUUID(),rowPosition:previous+10,values:{}});
+      }
+      for(let i=0;i<matrix.length;i++)
+        for(let j=0;j<matrix[i].length;j++){
+          const field=fields[columnIndex+j];
+          updated[rowIndex+i].values[field.fieldCode]=normalize(matrix[i][j],field.fieldType);
+        }
+      setRowEntries(updated);setDirty(true);setPreview(null);setError('');
+      setMessage('Вставлен диапазон '+matrix.length+' × '+matrix[0].length+
+        ' в табличную форму. Для записи в PostgreSQL нажмите «Сохранить ревизию».');
+    }catch(error){setError(error instanceof Error?error.message:String(error));}
+  }
 
   function renderRow(field:Field,index:number){
     return <tr key={field.fieldCode}><td className="seq">{index+1}</td>
@@ -390,7 +437,7 @@ export default function App(){
         <div className="stats">
           <div className="stat"><span>Формы</span><strong>{navigation?.totalForms??'—'}</strong><small>В каталоге Backend</small></div>
           <div className="stat"><span>Категории</span><strong>{tree?.categories.length??'—'}</strong><small>Реальный fin_lib</small></div>
-          <div className="stat"><span>Заполнено полей</span><strong>{filled}/{fields.length}</strong><small>Текущая форма</small></div>
+          <div className="stat"><span>Заполнено полей</span><strong>{filled}/{fieldCapacity}</strong><small>Текущая форма</small></div>
           <div className="stat"><span>Ревизия</span><strong>{draft?.revisionNo??'—'}</strong><small>{draft?.sha256.slice(0,12)??'Новый черновик'}</small></div>
         </div>
         {dashboard&&<section className="dashboard-overview">
@@ -445,7 +492,7 @@ export default function App(){
                 <button onClick={()=>{
                   if(!confirmDiscard())return;
                   setScope(newScope());setDraft(null);setInstanceId('');
-                  setValues({});setProfileId('');setPreview(null);setPrevious(null);
+                  setValues({});setRowEntries([]);setProfileId('');setPreview(null);setPrevious(null);
                   setFile(null);setDirty(false);setSaveUncertain(false);
                   setCommitUncertain(false);saveKeyRef.current=null;
                   setMessage('Новая локальная организация UAT');
@@ -457,7 +504,26 @@ export default function App(){
               {saveUncertain&&<div className="warning"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Повторите сохранение с тем же Idempotency-Key; значения заблокированы до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
               <div className="sheet-head"><div><b>Показатели отчёта</b><p>Вставка из Excel: Ctrl+V · Enter / ↓ для следующего поля</p></div>
-                <span className="total-badge">{fields.length} показателей</span></div>
+                <span className="total-badge">{fields.length} полей{rowset?' на строку · '+rowEntries.length+' строк':''}</span></div>
+              {rowset?<div className="sheet-scroll">
+                <p className="period-caption">ROWSET · предварительный типизированный черновик. Вставка диапазона Excel: Ctrl+V.</p>
+                <table className="sheet" aria-label="Табличная форма">
+                  <thead><tr><th>№</th>{fields.map(f=><th key={f.fieldCode} title={f.fieldCode}>{f.title||f.fieldCode}{f.required?' *':''}</th>)}<th>Действие</th></tr></thead>
+                  <tbody>{rowEntries.map((row,i)=><tr key={row.rowId}><td className="seq">{i+1}</td>
+                    {fields.map((f,j)=><td key={f.fieldCode}><input
+                      aria-label={'Строка '+(i+1)+' · '+(f.title||f.fieldCode)}
+                      value={row.values[f.fieldCode]??''} disabled={!editable||busy||saveUncertain||commitUncertain}
+                      onChange={e=>editGridCell(row.rowId,f.fieldCode,e.target.value)}
+                      onPaste={e=>pasteGrid(e,i,j)}
+                      onBlur={e=>{const v=normalize(e.target.value,f.fieldType);
+                        if(v!==e.target.value)editGridCell(row.rowId,f.fieldCode,v)}}/></td>)}
+                    <td><button type="button" disabled={!editable||busy||saveUncertain||commitUncertain}
+                      onClick={()=>removeGridRow(row.rowId)}>Удалить</button></td>
+                  </tr>)}</tbody>
+                </table>
+                <button type="button" disabled={!editable||busy||saveUncertain||commitUncertain||rowEntries.length>=200}
+                  onClick={appendGridRow}>Добавить строку ({rowEntries.length}/200)</button>
+              </div>:
               {style==='EXCEL'?<div className="sheet-scroll"><table className="sheet"><thead><tr><th>№</th><th>Показатель</th><th>Значение</th></tr></thead>
                 <tbody>{fields.map(renderRow)}</tbody></table></div>:
                 <div className={style==='DASHBOARD'?'cards-layout':'classic-layout'}>
@@ -467,7 +533,7 @@ export default function App(){
                     <input id={'field-'+f.fieldCode} value={values[f.fieldCode]??''} disabled={!editable||busy||saveUncertain||commitUncertain}
                       onChange={e=>setValue(f.fieldCode,e.target.value)} onPaste={e=>pasteRange(e,i)}
                       onKeyDown={e=>nextCell(e,i)}/></div>)}
-                </div>}
+                </div>}}
               <div className="import-box">
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
                 <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null)}}/>
