@@ -23,6 +23,21 @@ permissions:
   contents: read
 
 jobs:
+  contract-inventory:
+    name: FIN-EDIT-R1 source contract inventory (166 forms)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit source coverage without implicit S2 approval
+        run: python3 scripts/audit-fin-r1-contracts.py --out-dir target/fin-r1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fin-r1-unqualified-contract-matrix
+          path: |
+            target/fin-r1/form-contract-audit.json
+            target/fin-r1/form-contract-matrix.csv
+
   frontend:
     name: React typecheck, clipboard tests and build
     runs-on: ubuntu-latest
