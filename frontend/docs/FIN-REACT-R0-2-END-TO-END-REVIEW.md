@@ -80,3 +80,14 @@ Do not publish the backend port to LAN/Internet: **the correlation header is NOT
 - PostgreSQL XLSX Preview/Commit E2E: **test authored; execution pending**.
 - Windows desktop Browser E2E: **not tested**.
 - Release: **HOLD**.
+
+## Additional R0.2 safeguards
+
+- **HTTP 409 during Import Commit:** could represent a consumed Preview ticket after a prior successful commit whose response was lost. UI keeps the operation uncertain and demands a current revision read-back, rather than unlocking the editor as if every HTTP 409 were a safe rejection.
+- **Render error recovery:** `ErrorBoundary` wraps the React root. Fatal UI render exceptions show a recoverable error screen instead of a blank page. Recovery does not claim financial changes were saved.
+- **Responsive navigation:** category sidebar is scrollable and opens as a mobile overlay at viewport widths <= 920 px. The default mobile state leaves the financial editor visible.
+- **Full XLSX Preview identity:** `PreviewTicket` in TypeScript now includes backend-returned `profileId`, `instanceId`, `organizationId`, `uploadSha256`, expiry and values. A preview whose file digest or context does not match is rejected locally (backend independently rechecks at Commit).
+
+## Future refactoring (not part of the verified implementation)
+
+The current `App.tsx` remains a monolithic component. Only after the R0.2 functional gates pass, split it into `NavigationSidebar`, `DashboardOverview`, `ReportEditor`, `ExcelImportPanel`, and typed hooks for catalog and report commands. Do not perform an aesthetic rewrite while financial persistence is still awaiting green qualification. A genuine ROWS grid should reuse the Backend's existing `/api/v1/report-grids` contracts where appropriate instead of inventing a second intake model.
