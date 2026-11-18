@@ -9,12 +9,13 @@ export type EditorEligibility = {
 export function canEditForm(form:FormDetail|null,code:string,draft:Draft|null):EditorEligibility {
   if(!form)return {allowed:false,reason:'FORM_NOT_LOADED'};
   if(form.form.formCode!==code)return {allowed:false,reason:'FORM_LOADING'};
-  if(form.form.contentMode!=='SINGLE_RECORD')
+  if(form.form.contentMode==='EVIDENCE')
+    return {allowed:false,reason:'EVIDENCE_UPLOAD_NOT_IMPLEMENTED'};
+  if(form.form.contentMode!=='SINGLE_RECORD'&&form.form.contentMode!=='ROWSET')
     return {allowed:false,reason:'UNSUPPORTED_CONTENT_MODE'};
-  // R16: the public catalog is advisory. Only the explicitly reviewed F02
-  // SINGLE_RECORD pilot has a server-enforced writable financial contract.
-  // TYPED_DRAFT alone does not qualify the other catalog candidates.
-  if(code!=='F02')
+  // The server still checks the exact version-pinned FieldMetricContractGuard.
+  // These forms save candidate/unqualified drafts, not approved finance facts.
+  if(form.form.captureMode!=='TYPED_DRAFT'&&code!=='F02')
     return {allowed:false,reason:'CAPTURE_SCHEMA_NOT_APPROVED'};
   if(!form.fields.some(f=>f.inputMode==='MANUAL'))
     return {allowed:false,reason:'NO_MANUAL_FIELDS'};
