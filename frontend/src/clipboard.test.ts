@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseExcelPaste,ClipboardShapeError} from './clipboard.ts';
+import {parseExcelPaste,parseRowsetExcelPaste,ClipboardShapeError} from './clipboard.ts';
 
 const fields=[
   {fieldCode:'netRevenue',title:'Выручка',fieldType:'MONEY'},
@@ -37,4 +37,14 @@ test('fails closed when rectangular range exceeds last field or has irregular sh
 test('single-cell paste remains native and empty buffer is invalid',()=>{
   assert.throws(()=>parseExcelPaste('',0,fields),ClipboardShapeError);
   assert.throws(()=>parseExcelPaste('1',-1,fields),ClipboardShapeError);
+});
+
+test('ROWSET rectangular Excel paste keeps explicit rows and columns',()=>{
+  assert.deepEqual(parseRowsetExcelPaste('100\t200\n300\t400',0,1,3),
+    [['100','200'],['300','400']]);
+});
+test('ROWSET refuses silently truncated Excel pastes',()=>{
+  assert.throws(()=>parseRowsetExcelPaste('100\t200',0,2,3),ClipboardShapeError);
+  assert.throws(()=>parseRowsetExcelPaste('100\n200',199,0,3),ClipboardShapeError);
+  assert.throws(()=>parseRowsetExcelPaste('100\t200\n300',0,0,3),ClipboardShapeError);
 });
