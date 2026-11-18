@@ -51,8 +51,8 @@ class IndicatorNavigatorCatalogUnitTest {
     for(var indicator:catalog.indicators())used.addAll(indicator.inputFormCodes());
     assertEquals(71,used.size());
     assertEquals("NOT_YET_MAPPED",
-        catalog.formUsage("D09").map(IndicatorNavigatorCatalog.FormUsage::qualificationStatus)
-            .orElse("NOT_FOUND")); // only if D09 exists; verify with lookup
+        catalog.formUsage("DF-AST-01").map(IndicatorNavigatorCatalog.FormUsage::qualificationStatus)
+            .orElse("NOT_FOUND"));
     assertFalse(catalog.formUsage("NOT-A-FORM").isPresent());
     assertThrows(IllegalArgumentException.class,()->catalog.goals("fr"));
   }
