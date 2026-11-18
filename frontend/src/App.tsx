@@ -4,7 +4,7 @@ import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
-import {canEditForm,fileSha256,matchesPreview} from './editorPolicy';
+import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
 import './styles.css';
 
 const periodExamples:Record<string,string>={D:'2026-11-18',W:'2026-W47',DEC:'2026-11-2',M:'2026-11',Q:'2026-Q4',H:'2026-H2',Y:'2026'};
@@ -209,6 +209,7 @@ export default function App(){
     const preparedRows=rowset?rowEntries.map(r=>({...r,values:Object.fromEntries(
       fields.filter(f=>r.values[f.fieldCode]!==undefined)
         .map(f=>[f.fieldCode,normalize(r.values[f.fieldCode],f.fieldType)]))})):[];
+    const previousRevision=draft?.revisionNo??0;
     if(!saveKeyRef.current)saveKeyRef.current=crypto.randomUUID();
     // Preserve the exact idempotency key after uncertain network outcomes.
     setSaveUncertain(true);
@@ -255,8 +256,10 @@ export default function App(){
       throw error;
     }
     const snapshot=await get<Draft>('/drafts/'+receipt.instanceId+'?organizationId='+scope.organizationId);
-    if(snapshot.sha256!==receipt.contentSha256||snapshot.revisionNo!==receipt.revisionNo)
-      throw new Error('Сохранение выполнено, но сверка ревизии не прошла. Повторите с тем же ключом.');
+    if(!verifySavedDraft(receipt,snapshot,scope.organizationId,formCode,
+      previousRevision,cleaned,preparedRows,fields))
+      throw new Error('Запись могла завершиться, но полная сверка ревизии, полей и строк не прошла. '+
+        'Не меняйте данные вслепую: откройте сохранённый экземпляр и проверьте результат.');
     setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setRowEntries(snapshot.rows);setPreview(null);
     saveKeyRef.current=null;setSaveUncertain(false);
     setDirty(false);setCommitUncertain(false);
