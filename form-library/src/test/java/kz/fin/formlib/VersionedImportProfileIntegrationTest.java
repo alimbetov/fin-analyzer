@@ -138,6 +138,36 @@ class VersionedImportProfileIntegrationTest {
   }
 
   @Test
+  void previewNormalizesDecimalCommaFromRealisticF02ValuesThenCommits()throws Exception{
+    Created c=create();
+    UUID profile=UUID.fromString(register(c.version()).get("id").asText());
+    byte[] edited=changed(export(c,"EXCEL"),"88,56");
+    JsonNode preview=response(previewRequest(profile,c,edited));
+    assertEquals("88.56",preview.get("values").get("netRevenue").asText());
+    assertEquals(1,revisionCount(c));
+    UUID ticket=UUID.fromString(preview.get("previewId").asText());
+    JsonNode receipt=response(commitRequest(ticket,c,edited,"comma-decimal-"+c.org()));
+    assertEquals(2,receipt.get("revisionNo").asInt());
+    JsonNode current=response(get("/api/v1/drafts/"+c.id())
+      .param("organizationId",c.org().toString()));
+    assertEquals("88.56",current.get("values").get("netRevenue").asText());
+    assertEquals(2,revisionCount(c));
+  }
+
+  @Test
+  void previewReturnsActionableFieldErrorForAmbiguousNumber()throws Exception{
+    Created c=create();
+    UUID profile=UUID.fromString(register(c.version()).get("id").asText());
+    byte[] ambiguous=changed(export(c,"EXCEL"),"1,234");
+    var response=http.perform(previewRequest(profile,c,ambiguous))
+      .andExpect(status().isUnprocessableEntity()).andReturn();
+    JsonNode body=json.readTree(response.getResponse().getContentAsString());
+    assertTrue(body.get("code").asText().contains(
+      "IMPORT_FIELD:netRevenue:AMBIGUOUS_NUMBER"));
+    assertEquals(1,revisionCount(c));
+  }
+
+  @Test
   void previewCannotImportToAnotherOrganization()throws Exception{
     Created c=create();
     UUID profile=UUID.fromString(register(c.version()).get("id").asText());
