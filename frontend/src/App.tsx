@@ -470,6 +470,7 @@ export default function App(){
           <div>
             <span>ОТ ВОПРОСА — К НУЖНЫМ ДАННЫМ</span>
             <strong>{decisionContext.goalTitle??decisionContext.goalCode}</strong>
+            <small>Код задачи: {decisionContext.goalCode}</small>
             <small>{decisionContext.metricCode} → {decisionContext.modelCode??'рекомендация задачи'} → {formCode}</small>
             <small>Связь: {decisionContext.linkKind}. Черновые метаданные — не допуск к расчёту.</small>
           </div>
