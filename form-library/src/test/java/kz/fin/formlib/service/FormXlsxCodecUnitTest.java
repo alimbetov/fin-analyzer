@@ -72,7 +72,7 @@ class FormXlsxCodecUnitTest {
   @Test
   void legitimateValueEditRetainsBindings() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
-    var parsed=FormXlsxCodec.parse(mutate(file,"REPORT",4,2,"150000.25",false),fields());
+    var parsed=FormXlsxCodec.parse(mutate(file,"REPORT",4,3,"150000.25",false),fields());
     assertEquals("150000.25",parsed.values().get("netRevenue"));
     assertEquals("70000",parsed.values().get("cogs"));
   }
@@ -91,7 +91,7 @@ class FormXlsxCodecUnitTest {
   void changingFieldCodeOrInsertingUnboundCellIsRejected() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.CLASSIC),fields());
     // Human labels are intentionally cosmetic and do not define a binding.
-    var renamed=FormXlsxCodec.parse(mutate(file,"REPORT",4,1,"Другой заголовок",false),fields());
+    var renamed=FormXlsxCodec.parse(mutate(file,"REPORT",4,2,"Другой заголовок",false),fields());
     assertEquals("125000.50",renamed.values().get("netRevenue"));
     rejected(mutate(file,"PARAMETERS",14,0,"otherMetric",false),"XLSX_FIELD_BINDING_CHANGED");
     rejected(mutate(file,"REPORT",12,3,"hidden financial value",false),"XLSX_UNBOUND_REPORT_CELL");
@@ -113,15 +113,15 @@ class FormXlsxCodecUnitTest {
       var report=workbook.getSheet("REPORT");
       assertEquals("FIN Form Library — Отчёт о прибылях и убытках",
           report.getRow(0).getCell(0).getStringCellValue());
-      assertEquals("Выручка",report.getRow(4).getCell(1).getStringCellValue());
-      assertEquals("125000.50",report.getRow(4).getCell(2).getStringCellValue());
-      assertEquals("1",report.getRow(4).getCell(0).getStringCellValue());
-      assertEquals("C5",workbook.getSheet("PARAMETERS")
+      assertEquals("Выручка",report.getRow(4).getCell(2).getStringCellValue());
+      assertEquals("125000.50",report.getRow(4).getCell(3).getStringCellValue());
+      assertEquals("1",report.getRow(4).getCell(1).getStringCellValue());
+      assertEquals("D5",workbook.getSheet("PARAMETERS")
           .getRow(14).getCell(1).getStringCellValue());
       assertEquals("ru",workbook.getSheet("PARAMETERS")
           .getRow(9).getCell(1).getStringCellValue());
-      assertNotEquals(report.getRow(4).getCell(2).getCellStyle().getFillForegroundColor(),
-          report.getRow(6).getCell(2).getCellStyle().getFillForegroundColor());
+      assertNotEquals(report.getRow(4).getCell(3).getCellStyle().getFillForegroundColor(),
+          report.getRow(6).getCell(3).getCellStyle().getFillForegroundColor());
     }
     assertEquals("125000.50",FormXlsxCodec.parse(file,fields()).values().get("netRevenue"));
   }
@@ -148,14 +148,14 @@ class FormXlsxCodecUnitTest {
         var report=book.getSheet("REPORT");
         assertTrue(report.getRow(1).getCell(0).getStringCellValue().contains("2026-11"));
         assertTrue(report.getRow(1).getCell(0).getStringCellValue().contains("Ай"));
-        assertTrue(report.getRow(1).getCell(1).getStringCellValue().contains("KZT"));
+        assertTrue(report.getRow(1).getCell(2).getStringCellValue().contains("KZT"));
         assertTrue(report.getRow(2).getCell(0).getStringCellValue().contains("2026-11-30"));
-        assertTrue(report.getRow(2).getCell(1).getStringCellValue().contains("MANAGEMENT"));
-        assertTrue(report.getRow(2).getCell(1).getStringCellValue().contains("F02-V1"));
+        assertTrue(report.getRow(2).getCell(2).getStringCellValue().contains("MANAGEMENT"));
+        assertTrue(report.getRow(2).getCell(2).getStringCellValue().contains("F02-V1"));
         if(style==FormXlsxCodec.Style.EXCEL){
-          assertEquals("№",report.getRow(3).getCell(0).getStringCellValue());
-          assertEquals("Көрсеткіш",report.getRow(3).getCell(1).getStringCellValue());
-          assertEquals("Мәні",report.getRow(3).getCell(2).getStringCellValue());
+          assertEquals("№",report.getRow(3).getCell(1).getStringCellValue());
+          assertEquals("Көрсеткіш",report.getRow(3).getCell(2).getStringCellValue());
+          assertEquals("Мәні",report.getRow(3).getCell(3).getStringCellValue());
         }
         var params=book.getSheet("PARAMETERS");
         assertEquals("periodType",params.getRow(11).getCell(0).getStringCellValue());
@@ -168,7 +168,7 @@ class FormXlsxCodecUnitTest {
       assertEquals("125000.50",parsed.values().get("netRevenue"));
       rejected(mutate(file,"PARAMETERS",11,9,"USD",false),
           "XLSX_CURRENCY_HEADER_CHANGED");
-      rejected(mutate(file,"REPORT",1,1,"USD",false),
+      rejected(mutate(file,"REPORT",1,2,"USD",false),
           "XLSX_CURRENCY_HEADER_CHANGED");
       rejected(mutate(file,"PARAMETERS",11,3,"2026-10",false),
           "XLSX_PERIOD_HEADER_CHANGED");
@@ -182,8 +182,8 @@ class FormXlsxCodecUnitTest {
       try(Workbook book=WorkbookFactory.create(new ByteArrayInputStream(file))){
         var report=book.getSheet("REPORT");
         int[][] cellPositions=style==FormXlsxCodec.Style.DASHBOARD
-            ?new int[][]{{4,0,1,2},{4,4,5,6},{5,0,1,2}}
-            :new int[][]{{4,0,1,2},{5,0,1,2},{6,0,1,2}};
+            ?new int[][]{{4,1,2,3},{4,5,6,7},{5,1,2,3}}
+            :new int[][]{{4,1,2,3},{5,1,2,3},{6,1,2,3}};
         for(int i=0;i<cellPositions.length;i++){
           int[] pos=cellPositions[i];
           var number=report.getRow(pos[0]).getCell(pos[1]);
@@ -194,11 +194,11 @@ class FormXlsxCodecUnitTest {
           assertEquals(fields().get(i).value(),
             report.getRow(pos[0]).getCell(pos[3]).getStringCellValue());
         }
-        assertEquals("FIN-FORM-XLSX-V3",book.getSheet("PARAMETERS")
+        assertEquals("FIN-FORM-XLSX-V4",book.getSheet("PARAMETERS")
           .getRow(0).getCell(1).getStringCellValue());
       }
       assertEquals(fields().size(),FormXlsxCodec.parse(file,fields()).values().size());
-      rejected(mutate(file,"REPORT",4,0,"99",false),"XLSX_ROW_NUMBER_CHANGED");
+      rejected(mutate(file,"REPORT",4,1,"99",false),"XLSX_ROW_NUMBER_CHANGED");
     }
   }
 
@@ -210,8 +210,9 @@ class FormXlsxCodecUnitTest {
       var report=book.getSheet("REPORT");
       for(int index=0;index<fields().size();index++){
         var row=report.getRow(index+4);
-        String label=row.getCell(1).getStringCellValue();
-        String value=row.getCell(2).getStringCellValue();
+        String label=row.getCell(2).getStringCellValue();
+        String value=row.getCell(3).getStringCellValue();
+        row.removeCell(row.getCell(3));
         row.removeCell(row.getCell(2));
         row.getCell(1).setCellValue(value);
         row.getCell(0).setCellValue(label);
@@ -219,6 +220,14 @@ class FormXlsxCodecUnitTest {
       report.getRow(3).getCell(0).setCellValue("Field key");
       report.getRow(3).getCell(1).setCellValue("Value");
       report.getRow(3).removeCell(report.getRow(3).getCell(2));
+      report.getRow(3).removeCell(report.getRow(3).getCell(3));
+      // Recreate V2 metadata positioning (A/B) from current V4 (A/C).
+      report.getRow(1).getCell(1).setCellValue(
+        report.getRow(1).getCell(2).getStringCellValue());
+      report.getRow(1).removeCell(report.getRow(1).getCell(2));
+      report.getRow(2).getCell(1).setCellValue(
+        report.getRow(2).getCell(2).getStringCellValue());
+      report.getRow(2).removeCell(report.getRow(2).getCell(2));
       var params=book.getSheet("PARAMETERS");
       params.getRow(0).getCell(1).setCellValue("FIN-FORM-XLSX-V2");
       for(int i=0;i<fields().size();i++)
@@ -229,9 +238,42 @@ class FormXlsxCodecUnitTest {
   }
 
   @Test
+  void v4ReportKeepsReadableThirtyCharacterMetadataColumnAndCenteredTable()
+      throws Exception {
+    for(var style:FormXlsxCodec.Style.values()){
+      var context=new FormXlsxCodec.ReportContext("M","2026-11","2026-11-01",
+        "2026-12-01","KZT","MANAGEMENT","PERIOD_ONLY","SYNTHETIC",
+        "FIN-FORM-V2","DRAFT");
+      byte[] bytes=FormXlsxCodec.export(envelope(style),fields(),
+        new FormXlsxCodec.Display("ru","Отчёт о прибылях и убытках"),context);
+      try(Workbook workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+        Sheet sheet=workbook.getSheet("REPORT");
+        assertEquals(30*256,sheet.getColumnWidth(0));
+        assertEquals("№",sheet.getRow(3).getCell(1).getStringCellValue());
+        assertEquals("Показатель",sheet.getRow(3).getCell(2).getStringCellValue());
+        assertEquals("Значение",sheet.getRow(3).getCell(3).getStringCellValue());
+        assertEquals("1",sheet.getRow(4).getCell(1).getStringCellValue());
+        assertEquals("125000.50",sheet.getRow(4).getCell(3).getStringCellValue());
+        assertEquals("D5",workbook.getSheet("PARAMETERS").getRow(14)
+          .getCell(1).getStringCellValue());
+        assertTrue(sheet.getRow(1).getCell(0).getStringCellValue().contains("2026-11"));
+        assertTrue(sheet.getRow(1).getCell(2).getStringCellValue().contains("KZT"));
+        assertEquals("FIN-FORM-XLSX-V4",workbook.getSheet("PARAMETERS")
+          .getRow(0).getCell(1).getStringCellValue());
+        if(style==FormXlsxCodec.Style.DASHBOARD) {
+          assertEquals("№",sheet.getRow(3).getCell(5).getStringCellValue());
+          assertEquals("2",sheet.getRow(4).getCell(5).getStringCellValue());
+          assertEquals("70000",sheet.getRow(4).getCell(7).getStringCellValue());
+        }
+      }
+      assertEquals(3,FormXlsxCodec.parse(bytes,fields()).values().size());
+    }
+  }
+
+  @Test
   void rejectsExcelFormulasInsteadOfEvaluatingThem() throws Exception {
     byte[] file=FormXlsxCodec.export(envelope(FormXlsxCodec.Style.EXCEL),fields());
-    rejected(mutate(file,"REPORT",4,2,"SUM(1,2)",true),"XLSX_TEXT_CELL_REQUIRED");
+    rejected(mutate(file,"REPORT",4,3,"SUM(1,2)",true),"XLSX_TEXT_CELL_REQUIRED");
   }
 
   @Test
