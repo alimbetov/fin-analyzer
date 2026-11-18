@@ -150,7 +150,13 @@ public class FormXlsxExchangeService {
       current.view().formCode(),i.getPeriodType(),i.getPeriodCode(),
       i.getCurrency(),i.getCoverage(),i.getReportingBasis(),i.getDataSpace(),
       metadata.revision(),values,rows,actor,reason);
-    drafts.validateImportCandidate(request,metadata.formVersionId());
+    var canonical=drafts.normalizeImportCandidate(request,metadata.formVersionId());
+    Map<UUID,Map<String,String>> previousRows=new HashMap<>();
+    for(var row:current.view().rows())previousRows.put(row.rowId(),row.values());
+    if(canonical.values().equals(current.view().values())&&
+       canonical.rowValues().equals(previousRows))
+      throw invalid("XLSX_NO_CHANGES");
+
     return new Prepared(request,new ImportPreview(instanceId,organizationId,
       metadata.formVersionId(),metadata.formCode(),metadata.revision(),
       metadata.contentSha256(),parsed.values().size(),Map.copyOf(parsed.values())));
