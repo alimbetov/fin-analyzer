@@ -3,6 +3,8 @@ package kz.fin.formlib;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.service.FormDraftService;
+import kz.fin.formlib.bootstrap.CatalogCategoryBootstrap;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.junit.jupiter.api.Test;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.mock.web.MockMultipartFile;
@@ -54,6 +56,57 @@ class ReactLocalPostgresIntegrationTest {
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
   @Autowired JdbcTemplate jdbc;
+  @Autowired CatalogCategoryBootstrap categoryBootstrap;
+
+  @Test
+  void categorySeedIsAtomicCompleteAndIdempotentOnPostgresql() {
+    assertEquals(47,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_category",Integer.class));
+    assertEquals(188,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_category_translation",Integer.class));
+    assertEquals(389,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_category_form",Integer.class));
+    assertEquals(7,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_category WHERE category_type='ROOT'",
+      Integer.class));
+    assertEquals(40,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_category WHERE parent_code IS NOT NULL",
+      Integer.class));
+    assertEquals(166,jdbc.queryForObject("""
+      SELECT count(DISTINCT f.form_code)
+      FROM fin_lib.lib_catalog_category_form a
+      JOIN fin_lib.lib_form_definition f ON f.id=a.form_id
+      WHERE a.association_role='PRIMARY'
+      """,Integer.class));
+    for (String locale : List.of("ru","kk","en","zh-Hans")) {
+      assertEquals(47,jdbc.queryForObject("""
+        SELECT count(*) FROM fin_lib.lib_catalog_category_translation
+        WHERE locale=?
+        """,Integer.class,locale));
+    }
+    assertEquals(1,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_seed_manifest",Integer.class));
+    String sha=jdbc.queryForObject("""
+      SELECT source_sha256 FROM fin_lib.lib_catalog_seed_manifest
+      WHERE catalog_code='FIN_CATEGORY_R14_V1'
+      """,String.class);
+    assertNotNull(sha);
+    assertTrue(sha.matches("[0-9a-f]{64}"));
+
+    // Same seed may be invoked repeatedly without a second manifest or
+    // duplicate translation/link rows. This catches JDBC timestamp binding.
+    categoryBootstrap.run(new DefaultApplicationArguments(new String[0]));
+    assertEquals(1,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_seed_manifest",Integer.class));
+    assertEquals(188,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_category_translation",Integer.class));
+    assertEquals(389,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_lib.lib_catalog_category_form",Integer.class));
+    assertEquals(sha,jdbc.queryForObject("""
+      SELECT source_sha256 FROM fin_lib.lib_catalog_seed_manifest
+      WHERE catalog_code='FIN_CATEGORY_R14_V1'
+      """,String.class));
+  }
 
   @Test
   void postgresLiquibaseCatalogAndImmutableFinancialRevisions() throws Exception {
