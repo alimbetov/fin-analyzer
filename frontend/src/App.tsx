@@ -524,7 +524,7 @@ export default function App(){
                 <button type="button" disabled={!editable||busy||saveUncertain||commitUncertain||rowEntries.length>=200}
                   onClick={appendGridRow}>Добавить строку ({rowEntries.length}/200)</button>
               </div>:
-              {style==='EXCEL'?<div className="sheet-scroll"><table className="sheet"><thead><tr><th>№</th><th>Показатель</th><th>Значение</th></tr></thead>
+              style==='EXCEL'?<div className="sheet-scroll"><table className="sheet"><thead><tr><th>№</th><th>Показатель</th><th>Значение</th></tr></thead>
                 <tbody>{fields.map(renderRow)}</tbody></table></div>:
                 <div className={style==='DASHBOARD'?'cards-layout':'classic-layout'}>
                   {fields.map((f,i)=><div className="metric-card" key={f.fieldCode}>
@@ -533,7 +533,7 @@ export default function App(){
                     <input id={'field-'+f.fieldCode} value={values[f.fieldCode]??''} disabled={!editable||busy||saveUncertain||commitUncertain}
                       onChange={e=>setValue(f.fieldCode,e.target.value)} onPaste={e=>pasteRange(e,i)}
                       onKeyDown={e=>nextCell(e,i)}/></div>)}
-                </div>}}
+                </div>}
               <div className="import-box">
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
                 <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null)}}/>
