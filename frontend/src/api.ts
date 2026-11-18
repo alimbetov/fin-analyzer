@@ -14,7 +14,7 @@ export type Row = {rowId:string;rowPosition:number;values:Record<string,string>}
 export type Draft = {instanceId:string;organizationId:string;revisionNo:number;formCode:string;formVersion:string;contentMode:string;values:Record<string,string>;rows:Row[];sha256:string;periodType:string;periodCode:string;currency:string;workflowStatus:string;economicEntityId:string;businessScopeId:string;projectId:string;coverage:string;reportingBasis:string;dataSpace:string};
 export type Receipt = {instanceId:string;revisionNo:number;contentSha256:string;result:string};
 export type Profile = {id:string};
-export type PreviewTicket = {previewId:string;expectedRevision:number;values:Record<string,string>};
+export type PreviewTicket = {previewId:string;profileId:string;instanceId:string;organizationId:string;expectedRevision:number;uploadSha256:string;bindingSha256:string;expiresAt:string;inputCellCount:number;values:Record<string,string>};
 
 export class ApiHttpError extends Error {
   constructor(readonly status:number,readonly detail:string){
