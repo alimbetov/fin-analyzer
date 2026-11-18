@@ -75,7 +75,7 @@ CREATE TABLE fin_lib.lib_form_validation_rule (
  rule_code VARCHAR(128) NOT NULL,
  rule_version VARCHAR(64) NOT NULL,
  rule_kind VARCHAR(64) NOT NULL,
- typed_params CLOB,
+ typed_params TEXT,
  severity VARCHAR(32) NOT NULL,
  CONSTRAINT fk_lib_rule_version FOREIGN KEY(form_version_id) REFERENCES fin_lib.lib_form_version(id),
  CONSTRAINT uq_lib_rule UNIQUE(form_version_id,rule_code,rule_version)
@@ -118,7 +118,7 @@ CREATE TABLE fin_intake.lib_form_revision (
  revision_no INT NOT NULL CHECK (revision_no > 0),
  form_version_id UUID NOT NULL,
  content_mode VARCHAR(32) NOT NULL CHECK (content_mode IN ('SINGLE_RECORD','ROWSET','EVIDENCE')),
- values_json CLOB,
+ values_json TEXT,
  canonical_content_sha256 VARCHAR(64) NOT NULL,
  row_order_sha256 VARCHAR(64) NOT NULL,
  source_kind VARCHAR(64) NOT NULL,
@@ -136,7 +136,7 @@ CREATE TABLE fin_intake.lib_form_revision_row (
  revision_id UUID NOT NULL,
  row_id UUID NOT NULL,
  row_position INT NOT NULL CHECK(row_position > 0),
- values_json CLOB,
+ values_json TEXT,
  CONSTRAINT fk_lib_revision_row FOREIGN KEY(revision_id) REFERENCES fin_intake.lib_form_revision(id),
  CONSTRAINT uq_lib_row_id UNIQUE(revision_id,row_id),
  CONSTRAINT uq_lib_row_position UNIQUE(revision_id,row_position)
@@ -150,7 +150,7 @@ CREATE TABLE fin_intake.lib_form_revision_evidence (
  raw_sha256 VARCHAR(64) NOT NULL,
  media_type VARCHAR(255) NOT NULL,
  size_bytes BIGINT NOT NULL CHECK(size_bytes >= 0),
- metadata_json CLOB,
+ metadata_json TEXT,
  CONSTRAINT fk_lib_revision_evidence FOREIGN KEY(revision_id) REFERENCES fin_intake.lib_form_revision(id),
  CONSTRAINT uq_lib_evidence UNIQUE(revision_id,evidence_id)
 );
