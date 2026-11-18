@@ -7,6 +7,7 @@ import type {FormItem,IndicatorDefinition,IndicatorGoal,Locale,MetricReferenceVi
 import type {DecisionContext} from './decisionTree';
 import {buildDecisionTree,formContext,goalMetricCodes} from './decisionTree';
 import {get} from './api';
+import FinancialAtlas from './FinancialAtlas';
 
 type Props={
   locale:Locale;
@@ -40,6 +41,7 @@ export default function FinancialGoalsNavigator({
   const [collapsedModels,setCollapsedModels]=useState<string[]>([]);
   const [recommendationsOpen,setRecommendationsOpen]=useState(true);
   const [query,setQuery]=useState('');
+  const [visualMode,setVisualMode]=useState<'flow'|'atlas'>('flow');
   const [busy,setBusy]=useState(true);
   const [failure,setFailure]=useState('');
   useEffect(()=>{
@@ -110,9 +112,19 @@ export default function FinancialGoalsNavigator({
         <p>Выберите финансовую задачу. Раскройте показатель, его модели
           и формы-источники — без необходимости знать номера отчётов.</p>
       </div>
-      <button className="kpi-secondary-action" type="button" onClick={onOpenLibrary}>
-        <BookOpen size={17}/> Профессиональная библиотека
-      </button>
+      <div className="kpi-header-buttons">
+        <div className="kpi-mode-switch" role="group" aria-label="Режим карты финансовых связей">
+          <button type="button" aria-pressed={visualMode==='flow'}
+            className={visualMode==='flow'?'active':''}
+            onClick={()=>setVisualMode('flow')}><GitBranch size={15}/> Flow</button>
+          <button type="button" aria-pressed={visualMode==='atlas'}
+            className={visualMode==='atlas'?'active':''}
+            onClick={()=>setVisualMode('atlas')}><Layers3 size={15}/> Atlas 2.5D</button>
+        </div>
+        <button className="kpi-secondary-action" type="button" onClick={onOpenLibrary}>
+          <BookOpen size={17}/> Профессиональная библиотека
+        </button>
+      </div>
     </div>
     {busy&&<div role="status" className="kpi-empty">Загружаем дерево финансовых решений...</div>}
     {failure&&<div role="alert" className="error"><CircleAlert size={18}/>
@@ -152,6 +164,7 @@ export default function FinancialGoalsNavigator({
             <span>4. Редактор</span>
           </div>
         </div>
+        {visualMode==='flow'&&<>
         <div className="kpi-branch-stage">
           <div className="kpi-branch-heading">
             <span className="kpi-branch-count">02</span>
@@ -269,6 +282,12 @@ export default function FinancialGoalsNavigator({
             </div>}
           </section>}
         </div>}
+        </>}
+        {visualMode==='atlas'&&tree&&<FinancialAtlas
+          goal={goal} metricCodes={metricCodes} metricCode={activeMetric}
+          tree={tree} forms={forms}
+          metricReference={selectedReference} explanation={help}
+          onSelectMetric={selectMetric} onOpenForm={openForm}/>}
         <div className="kpi-next-step">
           <div><strong>ШАГ 04 / ОТКРЫТЬ НУЖНЫЙ РЕДАКТОР</strong>
             <p>Выберите форму в ветви. FIN сохранит выбранные задачу,
