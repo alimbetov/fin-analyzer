@@ -223,6 +223,25 @@ export default function App(){
         setSaveUncertain(false);
         saveKeyRef.current=null;
       }
+      if(!draft&&error instanceof Error&&error.message.includes('REPORT_SLOT_ALREADY_EXISTS')){
+        // Re-open the exact slot, but do NOT silently overwrite the user's
+        // unsaved financial input. A second Save will use a fresh revision key.
+        const query=new URLSearchParams({
+          organizationId:scope.organizationId,
+          economicEntityId:scope.economicEntityId,
+          businessScopeId:scope.businessScopeId,
+          projectId:scope.projectId,
+          formCode,periodType,periodCode,coverage:'PERIOD_ONLY',
+          currency,reportingBasis:'MANAGEMENT',dataSpace:'SYNTHETIC'
+        });
+        const existing=await get<Draft>('/drafts/slot?'+query);
+        setDraft(existing);
+        setInstanceId(existing.instanceId);
+        setDirty(true);
+        throw new Error('Уже существует отчёт за этот период. Открыта ревизия '+
+          existing.revisionNo+'. Введённые значения сохранены в редакторе, но ещё не записаны в БД. '+
+          'Проверьте их и нажмите «Сохранить ревизию» ещё раз.');
+      }
       throw error;
     }
     const snapshot=await get<Draft>('/drafts/'+receipt.instanceId+'?organizationId='+scope.organizationId);
