@@ -33,8 +33,8 @@ export function parseExcelPaste(text:string,start:number,fields:PasteField[]):st
   else if(width===3&&grid.every((row,i)=>fields[start+i]&&
     row[0].trim()===String(start+i+1)&&equalLabel(row[1],fields[start+i])))
     values=grid.map(row=>row[2]);
-  else if(grid.length===1&&grid[0].every(v=>v.trim()!=='')&&
-    (width!==3||!/^\d+$/.test(grid[0][0].trim())))
+  else if(grid.length===1&&grid[0].every(v=>
+    /^-?\\d+(?:[.,]\\d+)?$/.test(v.trim())))
     values=grid[0];
   else
     throw new ClipboardShapeError(
