@@ -19,6 +19,11 @@ export type IndicatorDefinition = {
 export type IndicatorFormUsage = {
   formCode:string;goalCodes:string[];modelCodes:string[];qualificationStatus:string
 };
+export type MetricReferenceView = {
+  metricCode:string;kind:string;formCode:string|null;fieldCode:string|null;
+  unitPolicy:string;qualificationState:string;locale:string;
+  title:string|null;description:string|null;translationStatus:string
+};
 
 export type Style = 'EXCEL' | 'CLASSIC' | 'DASHBOARD';
 export type Category = {code:string;parentCode:string|null;type:string;sortOrder:number;title:string;translationStatus:string};
