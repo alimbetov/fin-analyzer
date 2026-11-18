@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.service.FormDraftService;
 import org.junit.jupiter.api.Test;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.springframework.mock.web.MockMultipartFile;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -118,5 +122,65 @@ class ReactLocalPostgresIntegrationTest {
     assertEquals(2,jdbc.queryForObject(
       "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
       Integer.class,instance));
+
+    // Full React XLSX round-trip on the same PostgreSQL instance.
+    byte[] exported=mvc.perform(get("/api/v1/drafts/"+instance+"/export.xlsx")
+      .param("organizationId",org.toString()).param("styleCode","EXCEL")
+      .param("locale","ru")).andExpect(status().isOk()).andReturn()
+      .getResponse().getContentAsByteArray();
+    byte[] edited;
+    try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(exported));
+        var out=new ByteArrayOutputStream()){
+      workbook.getSheet("REPORT").getRow(4).getCell(3).setCellValue("140000.50");
+      workbook.write(out);
+      edited=out.toByteArray();
+    }
+    JsonNode version=json.readTree(mvc.perform(get("/api/v1/uat-helper/drafts/"+instance+
+      "/version").param("organizationId",org.toString()))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+    JsonNode profile=json.readTree(mvc.perform(post("/api/v1/import-profiles")
+      .contentType(MediaType.APPLICATION_JSON)
+      .content(json.writeValueAsBytes(Map.of(
+        "formVersionId",version.path("formVersionId").asText()))))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+    var upload=new MockMultipartFile("file","fin-form.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",edited);
+    String purl="/api/v1/import-profiles/"+profile.path("id").asText()+"/preview";
+    JsonNode preview=json.readTree(mvc.perform(multipart(purl)
+      .file(upload).param("instanceId",instance.toString())
+      .param("organizationId",org.toString())
+      .param("actor","postgres-uat").param("reason","preview-only"))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+    assertEquals(2,preview.path("expectedRevision").asInt());
+    assertEquals(2,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
+      Integer.class,instance),"Preview must not persist a financial revision");
+
+    JsonNode imported=json.readTree(mvc.perform(multipart(
+      "/api/v1/import-profiles/previews/"+preview.path("previewId").asText()+"/commit")
+      .file(upload).param("instanceId",instance.toString())
+      .param("organizationId",org.toString())
+      .param("actor","postgres-uat").param("reason","preview-only")
+      .header("Idempotency-Key","pg-xlsx-commit-"+org))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+    assertEquals(3,imported.path("revisionNo").asInt());
+    assertEquals(3,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
+      Integer.class,instance));
+    JsonNode after=json.readTree(mvc.perform(get("/api/v1/drafts/"+instance)
+      .param("organizationId",org.toString()))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+    assertEquals("140000.5",after.path("values").path("netRevenue").asText());
+    assertEquals(imported.path("contentSha256").asText(),after.path("sha256").asText());
+    // The original immutable revision must still be accessible after import.
+    mvc.perform(get("/api/v1/drafts/"+instance+"/revisions/1")
+      .param("organizationId",org.toString())).andExpect(status().isOk());
+    mvc.perform(multipart(
+      "/api/v1/import-profiles/previews/"+preview.path("previewId").asText()+"/commit")
+      .file(upload).param("instanceId",instance.toString())
+      .param("organizationId",org.toString())
+      .param("actor","postgres-uat").param("reason","preview-only")
+      .header("Idempotency-Key","pg-xlsx-commit-replay-"+org))
+      .andExpect(status().isConflict());
   }
 }
