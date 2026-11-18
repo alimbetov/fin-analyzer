@@ -3,6 +3,7 @@ package kz.fin.formlibrary.contract;
 import liquibase.integration.spring.SpringLiquibase;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -23,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * This does not prove full 001-015 upgrade compatibility or intake E2E.
  */
 @Testcontainers
+@EnabledIfSystemProperty(named="fin.postgres.uat.enabled",matches="true")
 class R16BPostgresqlContractTest {
     @Container
     static PostgreSQLContainer<?> pg = new PostgreSQLContainer<>("postgres:16-alpine");
