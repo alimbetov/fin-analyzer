@@ -12,7 +12,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 /**
@@ -133,7 +134,7 @@ public class CatalogCategoryBootstrap implements ApplicationRunner {
     if(primary.size()!=166||primary.values().stream().anyMatch(v->v!=1))
       throw new IllegalStateException("INVALID_PRIMARY_COVERAGE");
     jdbc.update("INSERT INTO fin_lib.lib_catalog_seed_manifest "+
-      "(catalog_code,source_sha256,seeded_at) VALUES(?,?,?)",SEED_CODE,sha,Instant.now());
+      "(catalog_code,source_sha256,seeded_at) VALUES(?,?,?)",SEED_CODE,sha,OffsetDateTime.now(ZoneOffset.UTC));
     if(count("lib_catalog_category")!=47||
       count("lib_catalog_category_translation")!=188||
       count("lib_catalog_category_form")!=389)
