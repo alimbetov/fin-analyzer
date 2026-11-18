@@ -31,3 +31,5 @@ databaseChangeLog:
       file: db/changelog/015-lib-contract-append-only-postgresql.sql
   - include:
       file: db/changelog/016-lib-form-style-preferences.sql
+  - include:
+      file: db/changelog/017-lib-versioned-import-profile.sql
