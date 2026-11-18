@@ -34,13 +34,15 @@ public class IndicatorCatalogController {
   }
 
   @GetMapping("/indicators")
-  public List<IndicatorNavigatorCatalog.Indicator> indicators(){
-    return catalog.indicators();
+  public List<IndicatorNavigatorCatalog.Indicator> indicators(
+      @RequestParam(defaultValue="ru") String locale){
+    return catalog.indicators(validLocale(locale));
   }
 
   @GetMapping("/indicators/{code}")
-  public IndicatorNavigatorCatalog.Indicator indicator(@PathVariable String code){
-    return catalog.indicator(code)
+  public IndicatorNavigatorCatalog.Indicator indicator(@PathVariable String code,
+      @RequestParam(defaultValue="ru") String locale){
+    return catalog.indicator(code,validLocale(locale))
         .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"INDICATOR_NOT_FOUND"));
   }
 
