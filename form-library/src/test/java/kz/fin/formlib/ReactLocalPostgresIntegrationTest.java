@@ -108,6 +108,80 @@ class ReactLocalPostgresIntegrationTest {
       """,String.class));
   }
 
+  @Autowired FormDraftService draftService;
+
+  @Test
+  void competingWritesProduceOneImmutableRevisionAndOneConflict() throws Exception {
+    UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),scope=UUID.randomUUID(),
+      project=UUID.randomUUID();
+    var initial=new FormDraftService.DraftRequest(null,org,entity,scope,project,
+      "F02","M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
+      0,Map.of("netRevenue","100","cogs","20","operatingExpenses","5"),
+      List.of(),"pg-r3","initial");
+    var first=draftService.save(initial,"r3-create-"+org);
+    UUID id=first.instanceId();
+    assertEquals(1,first.revisionNo());
+    var unchanged=new FormDraftService.DraftRequest(id,org,entity,scope,project,
+      "F02","M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
+      1,initial.values(),List.of(),"pg-r3","no change");
+    mvc.perform(post("/api/v1/drafts")
+        .header("Idempotency-Key","r3-nochange-"+org)
+        .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(unchanged)))
+      .andExpect(status().isUnprocessableEntity())
+      .andExpect(jsonPath("$.code").value("NO_FINANCIAL_CHANGES"));
+    assertEquals(1,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
+      Integer.class,id));
+
+    var executor=java.util.concurrent.Executors.newFixedThreadPool(2);
+    var ready=new java.util.concurrent.CountDownLatch(2);
+    var fire=new java.util.concurrent.CountDownLatch(1);
+    try {
+      List<java.util.concurrent.Future<String>> outcomes=new java.util.ArrayList<>();
+      for(int k=0;k<2;k++){
+        final int n=k;
+        outcomes.add(executor.submit(()->{
+          var next=new FormDraftService.DraftRequest(id,org,entity,scope,project,
+            "F02","M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
+            1,Map.of("netRevenue",n==0?"200":"300","cogs","20",
+              "operatingExpenses","5"),List.of(),"pg-r3","competing");
+          ready.countDown();
+          if(!fire.await(10,java.util.concurrent.TimeUnit.SECONDS))
+            throw new IllegalStateException("START_BARRIER_TIMEOUT");
+          try {
+            var result=draftService.save(next,"r3-concurrent-"+org+"-"+n);
+            return "SAVED:"+result.revisionNo();
+          } catch(org.springframework.web.server.ResponseStatusException e) {
+            return "REJECTED:"+e.getReason();
+          } catch(org.springframework.dao.DataIntegrityViolationException|
+                  org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+            return "REJECTED:CONFLICT";
+          }
+        }));
+      }
+      assertTrue(ready.await(10,java.util.concurrent.TimeUnit.SECONDS));
+      fire.countDown();
+      List<String> result=new java.util.ArrayList<>();
+      for(var f:outcomes)result.add(f.get(30,java.util.concurrent.TimeUnit.SECONDS));
+      assertEquals(1,result.stream().filter(v->v.equals("SAVED:2")).count(),result.toString());
+      assertEquals(1,result.stream().filter(v->v.startsWith("REJECTED:")).count(),result.toString());
+    } finally {
+      fire.countDown();
+      executor.shutdownNow();
+    }
+    assertEquals(2,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
+      Integer.class,id));
+    assertEquals(2,jdbc.queryForObject(
+      "SELECT latest_revision_no FROM fin_intake.lib_form_instance WHERE id=?",
+      Integer.class,id));
+    assertEquals(2,draftService.read(id,org).revisionNo());
+    assertEquals("100",draftService.readRevision(id,org,1).values().get("netRevenue"));
+    assertEquals(2,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_command_receipt WHERE organization_id=?",
+      Integer.class,org));
+  }
+
   @Test
   void postgresLiquibaseCatalogAndImmutableFinancialRevisions() throws Exception {
     assertEquals("fin_form_qualification",
