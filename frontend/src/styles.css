@@ -33,3 +33,13 @@
 .editor-qualification{margin-top:5px!important;color:#7b8ba5!important;font-family:Consolas,monospace;font-size:10px!important}
 @media(max-width:1280px){.overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.overview-grid{grid-template-columns:1fr}.overview-title{flex-direction:column}}
+
+/* R0.2 mobile navigation: the menu remains reachable instead of always hidden. */
+.sidebar{overflow-x:hidden;overflow-y:auto;scrollbar-width:thin}
+@media(max-width:920px){
+  .shell,.shell.collapsed{display:block}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:50;width:256px;max-height:100dvh;
+    visibility:visible;transform:translateX(0);transition:transform .18s ease;
+    box-shadow:12px 0 28px #0b173044}
+  .shell.collapsed .sidebar{visibility:hidden;transform:translateX(-100%)}
+}
