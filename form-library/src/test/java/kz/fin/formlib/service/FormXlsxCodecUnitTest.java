@@ -287,8 +287,8 @@ class FormXlsxCodecUnitTest {
         params.getRow(14+i).getCell(1).setCellValue("C"+(5+i));
       }
       sheet.getRow(3).getCell(3).setCellValue("");
-      sheet.getRow(3).getCell(2).setCellValue("Value");
-      sheet.getRow(3).getCell(1).setCellValue("Field key");
+      sheet.getRow(3).getCell(2).setCellValue("Значение");
+      sheet.getRow(3).getCell(1).setCellValue("Показатель");
       sheet.getRow(3).createCell(0,CellType.STRING).setCellValue("№");
       params.getRow(0).getCell(1).setCellValue("FIN-FORM-XLSX-V3");
       book.write(out);
