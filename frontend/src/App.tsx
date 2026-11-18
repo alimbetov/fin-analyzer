@@ -121,7 +121,7 @@ export default function App(){
   }
   function pasteRange(e:ClipboardEvent<HTMLInputElement>,index:number){
     const plain=e.clipboardData.getData('text/plain');
-    if(!plain.includes('\\t')&&!plain.includes('\\n'))return;
+    if(!plain.includes('\t')&&!plain.includes('\n'))return;
     e.preventDefault();
     try{
       const pasted=parseExcelPaste(plain,index,fields);
