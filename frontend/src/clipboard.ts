@@ -47,3 +47,27 @@ export function parseExcelPaste(text:string,start:number,fields:PasteField[]):st
     throw new ClipboardShapeError('Недопустимые управляющие символы');
   return values;
 }
+
+/**
+ * A rectangular Excel range goes into a ROWSET grid at an explicit row/column.
+ * Never infer indicator identity from pasted captions: columns follow the
+ * displayed, server-defined field order. Reject overflow before mutating UI.
+ */
+export function parseRowsetExcelPaste(
+  text:string, startRow:number, startColumn:number, fieldCount:number,
+  maxRows=200
+):string[][] {
+  const value=text.replace(/\r\n?/g,'\n').replace(/\n$/,'');
+  if(!value.trim())throw new ClipboardShapeError('Буфер Excel пуст');
+  const grid=value.split('\n').map(row=>row.split('\t'));
+  const width=grid[0]?.length??0;
+  if(!width||grid.some(r=>r.length!==width))
+    throw new ClipboardShapeError('Excel диапазон должен быть прямоугольным');
+  if(startRow<0||startColumn<0||startColumn+width>fieldCount)
+    throw new ClipboardShapeError('Вставка выходит за пределы столбцов формы');
+  if(startRow+grid.length>maxRows)
+    throw new ClipboardShapeError('Максимум 200 строк отчёта');
+  if(grid.some(row=>row.some(v=>/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v))))
+    throw new ClipboardShapeError('Недопустимые управляющие символы');
+  return grid;
+}
