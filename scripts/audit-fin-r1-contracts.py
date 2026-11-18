@@ -59,6 +59,27 @@ def audit() -> dict:
     for f in fields:
         by_form[f["formCode"]].append(f)
     by_candidate = {c["formCode"]: c for c in candidates}
+    detailed_fields = []
+    for item in sorted(fields, key=lambda f: (f["formCode"], f["fieldCode"])):
+        form = indexed[item["formCode"]]
+        label_values = [item[k] for k in ("labelRu", "labelKk", "labelEn", "labelZhHans")]
+        is_derived = item["formCode"] == "F02" and item["fieldCode"] == "netProfit"
+        detailed_fields.append({
+            "formCode": item["formCode"],
+            "fieldCode": item["fieldCode"],
+            "fieldType": item["fieldType"],
+            "grain": form["grain"],
+            "metricCodeCandidate": item["formCode"] + "." + item["fieldCode"],
+            "semanticRoleCandidate": "FORM_DERIVED_CANDIDATE" if is_derived else "SOURCE_FIELD",
+            "labelRu": label_values[0], "labelKk": label_values[1],
+            "labelEn": label_values[2], "labelZhHans": label_values[3],
+            "missingLocaleCount": sum(not value.strip() for value in label_values),
+            "labelReview": item["reviewStatus"],
+            "requirednessReview": item["requiredness"],
+            "unitPolicy": item["unitPolicy"],
+            "s2Qualified": False,
+            "qualificationReason": "R16_SOURCE_REVIEW_PENDING",
+        })
     output = []
     for code, definition in sorted(indexed.items()):
         own = by_form[code]
@@ -120,6 +141,7 @@ def audit() -> dict:
             "unqualifiedForms": sum(not r["s2Qualified"] for r in output),
         },
         "forms": output,
+        "fields": detailed_fields,
     }
 
 
@@ -138,6 +160,11 @@ def main() -> None:
         writer.writeheader()
         for form in result["forms"]:
             writer.writerow({**form, "blockers": ";".join(form["blockers"])})
+    with (flags.out_dir / "field-metric-contract-matrix.csv").open(
+        "w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(result["fields"][0]))
+        writer.writeheader()
+        writer.writerows(result["fields"])
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
     print(f"Audit: {flags.out_dir}")
     # Inventory success != S2 qualification. Formal review must clear blockers.
