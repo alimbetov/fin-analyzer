@@ -91,8 +91,12 @@ class FormXlsxExchangeIntegrationTest {
           .andExpect(status().isOk()).andReturn().getResponse();
         String header=response.getHeader("Content-Disposition");
         assertNotNull(header);
-        assertTrue(header.startsWith("attachment; filename=\"FIN_F02_M-2026-11_KZT_"+
-          style+"_"+locale+"_FIN-FORM-V2_r0001_"),header);
+        // Catalog revisions are version-pinned and their labels may be
+        // editorial IDs (e.g. LIB-EDIT-uuid), not a hard-coded FIN-FORM-V2.
+        String prefix="attachment; filename=\"FIN_F02_M-2026-11_KZT_"+
+          style+"_"+locale+"_";
+        assertTrue(header.startsWith(prefix),header);
+        assertTrue(header.contains("_r0001_"+saved.sha().substring(0,12)+".xlsx"),header);
         assertTrue(header.endsWith(".xlsx\""),header);
         assertTrue(header.contains(saved.sha().substring(0,12)),header);
         assertFalse(header.contains(saved.id().toString()));
