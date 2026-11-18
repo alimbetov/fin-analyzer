@@ -35,6 +35,7 @@ public class CatalogReadCache {
     "currencies","period-types","metrics","metric-detail","forms","form-detail",
     "legacy-form-summaries","legacy-form-detail","ui-categories",
     "ui-category-forms","ui-launch","use-case-forms","ui-db-catalog",
+    "category-tree",
     "editorial-draft-forms","field-label-candidates","metric-label-candidates");
   private final Map<String,Cache<String,Object>> namespaceCaches=new ConcurrentHashMap<>();
   // An in-flight loader that began before publication is always keyed by the
