@@ -36,7 +36,6 @@ export default function App(){
   const [navigation,setNavigation]=useState<Navigation|null>(null);
   const [tree,setTree]=useState<CategoryTree|null>(null);
   const [form,setForm]=useState<FormDetail|null>(null);
-  const lastForm=useRef('F02');
   const [currencyOptions,setCurrencyOptions]=useState<Currency[]>([]);
   const [periodOptions,setPeriodOptions]=useState<PeriodType[]>([]);
   const [category,setCategory]=useState('ALL');
@@ -93,7 +92,7 @@ export default function App(){
   useEffect(()=>{
     let active=true;
     get<FormDetail>('/catalog/forms/'+encodeURIComponent(formCode)+'?locale='+language)
-      .then(v=>{if(active){setForm(v);lastForm.current=formCode;}})
+      .then(v=>{if(active)setForm(v)})
       .catch(e=>{if(active)setError(String(e))});
     return()=>{active=false};
   },[formCode,language]);
@@ -123,7 +122,7 @@ export default function App(){
   },[navigation,tree,category,search]);
   const filled=fields.filter(f=>values[f.fieldCode]?.trim()).length;
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
-  const isLocked=Boolean(draft)||saveUncertain||commitUncertain;
+  const isLocked=Boolean(draft)||dirty||saveUncertain||commitUncertain;
 
   function setValue(code:string,value:string){
     setValues(old=>({...old,[code]:value}));
