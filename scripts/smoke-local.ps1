@@ -161,7 +161,7 @@ try {
     Assert ($receipt.contentSha256 -match '^[0-9a-f]{64}$') 'Invalid content SHA256'
     $script:instance=[string]$receipt.instanceId
     $script:revision=1
-    $snapshot=GetJson ("/api/v1/drafts/$instance?organizationId=$org")
+    $snapshot=GetJson ("/api/v1/drafts/$($instance)?organizationId=$org")
     Assert ($snapshot.revisionNo -eq 1) 'Revision 1 readback failed'
     Assert ($snapshot.sha256 -eq $receipt.contentSha256) 'SHA mismatch after write'
     Assert ($snapshot.values.netRevenue -eq '125000.5') 'Decimal normalization failed'
@@ -185,7 +185,7 @@ try {
     Assert ($receipt.revisionNo -eq 2) 'Expected revision 2'
     $script:revision=2
     $old=GetJson ("/api/v1/drafts/$instance/revisions/1?organizationId=$org")
-    $current=GetJson ("/api/v1/drafts/$instance?organizationId=$org")
+    $current=GetJson ("/api/v1/drafts/$($instance)?organizationId=$org")
     Assert ($old.values.netRevenue -eq '125000.5') 'Revision 1 was modified'
     Assert ($current.values.netRevenue -eq '130000.5') 'Revision 2 value mismatch'
     Assert ($current.sha256 -eq $receipt.contentSha256) 'Revision 2 SHA mismatch'
@@ -195,7 +195,7 @@ try {
     foreach($key in $second.Keys){$stale[$key]=$second[$key]}
     $stale.values=@{netRevenue='190000';cogs='70000';operatingExpenses='1000'}
     ExpectHttp {SendJson $stale "smoke-stale-$runId"} 409 'Stale save'
-    $view=GetJson ("/api/v1/drafts/$instance?organizationId=$org")
+    $view=GetJson ("/api/v1/drafts/$($instance)?organizationId=$org")
     Assert ($view.revisionNo -eq 2) 'Stale write changed revision'
   }
   Step '08 XLSX V4 export and filename' {
@@ -230,14 +230,14 @@ try {
       $sha=(Get-FileHash $script:editedFile -Algorithm SHA256).Hash.ToLowerInvariant()
       Assert ($ticket.uploadSha256 -eq $sha) 'Preview upload hash differs'
       Assert ($ticket.values.netRevenue -eq '140000.5') 'Preview amount mismatch'
-      $current=GetJson ("/api/v1/drafts/$instance?organizationId=$org")
+      $current=GetJson ("/api/v1/drafts/$($instance)?organizationId=$org")
       Assert ($current.revisionNo -eq 2) 'Preview wrote a financial revision'
     }
     Step '12 Commit XLSX revision 3 / verify SHA and history' {
       $receipt=Upload ("/api/v1/import-profiles/previews/$($script:ticket.previewId)/commit") $script:editedFile 'smoke commit' "smoke-commit-$runId"
       Assert ($receipt.revisionNo -eq 3) 'Expected revision 3 from Commit'
       $script:revision=3
-      $now=GetJson ("/api/v1/drafts/$instance?organizationId=$org")
+      $now=GetJson ("/api/v1/drafts/$($instance)?organizationId=$org")
       Assert ($now.revisionNo -eq 3) 'Commit readback revision wrong'
       Assert ($now.sha256 -eq $receipt.contentSha256) 'Commit SHA differs'
       Assert ($now.values.netRevenue -eq '140000.5') 'Imported value not stored'
@@ -248,7 +248,7 @@ try {
       ExpectHttp {
         Upload ("/api/v1/import-profiles/previews/$($script:ticket.previewId)/commit") $script:editedFile 'duplicate' "smoke-replay-$runId"
       } 409 'Consumed import preview'
-      $now=GetJson ("/api/v1/drafts/$instance?organizationId=$org")
+      $now=GetJson ("/api/v1/drafts/$($instance)?organizationId=$org")
       Assert ($now.revisionNo -eq 3) 'Replay created revision 4'
     }
   }
