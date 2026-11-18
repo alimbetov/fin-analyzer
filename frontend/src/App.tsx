@@ -444,7 +444,7 @@ export default function App(){
       </header>
       <main className="content">
         <div className="intro"><div><p className="eyebrow">FINANCIAL REPORTING WORKSPACE</p>
-          <h1>{navigator?'Навигатор финансовых решений':dashboard?'Финансовая рабочая область':'Каталог и редактор форм'}</h1>
+          <h1>{navigator?'От вопроса — к нужным данным':dashboard?'Финансовая рабочая область':'Каталог и редактор форм'}</h1>
           <p className="subtitle">{navigator?'От финансового вопроса к показателям и необходимым отчётам':'Единый контракт данных · 166 форм · immutable revisions · Excel round-trip'}</p></div>
           <span className="mode-pill">LOCAL DEVELOPMENT</span></div>
         {error&&<div className="error" role="alert"><AlertTriangle size={18}/><span>{error}</span><button onClick={()=>setError('')} aria-label="Закрыть">×</button></div>}
