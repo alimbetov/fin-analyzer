@@ -3,10 +3,8 @@ import {expect,test} from '@playwright/test';
 
 test('form opens a scoped period tree and resumes and saves a report',async({page,request})=>{
   await page.goto('/');
-  const library=page.getByRole('button',{name:'Профессиональная библиотека'});
   const list=page.getByRole('region',{name:'Сохранённые отчёты'});
   async function selectF02(){
-    await library.click();
     await page.getByPlaceholder('Код или название...').fill('F02');
     await page.getByRole('button',{name:/^Отчёт о прибылях и убытках F02/}).click();
     await expect(list.getByRole('heading',{name:'Сохранённые отчёты'})).toBeVisible();
@@ -33,7 +31,7 @@ test('form opens a scoped period tree and resumes and saves a report',async({pag
   await page.locator('#field-netRevenue').fill('2300.47');
   await page.locator('#field-cogs').fill('400.12');
   await page.locator('#field-operatingExpenses').fill('160.91');
-  const save=page.getByRole('button',{name:'Сохранить ревизию'});
+  const save=page.getByRole('button',{name:'Сохранить',exact:true});
   await save.click();
   await expect(page.locator('.editor-footer')).toContainText('Сохранено: ревизия 1');
   await page.reload();
@@ -41,6 +39,14 @@ test('form opens a scoped period tree and resumes and saves a report',async({pag
   await expect(list.locator('.saved-year > summary strong')).toHaveText(['2026','2025']);
   await expect(list.locator('.saved-year[open] .saved-period > summary strong')).toHaveText(['2026-10','2026-03']);
   await expect(list).not.toContainText('2026-11');
+  await list.getByRole('combobox',{name:'Фильтр по году'}).selectOption('2025');
+  await expect(list.locator('.saved-year > summary strong')).toHaveText(['2025']);
+  await list.getByRole('combobox',{name:'Фильтр по году'}).selectOption('ALL');
+  await list.getByRole('textbox',{name:'Поиск по сохранённым отчётам'}).fill('2026-10');
+  await expect(list.locator('.saved-year > summary strong')).toHaveText(['2026']);
+  await expect(list.locator('.saved-period > summary strong')).toHaveText(['2026-10']);
+  await list.getByRole('button',{name:'Сбросить'}).click();
+  await expect(list.locator('.saved-year > summary strong')).toHaveText(['2026','2025']);
   const october=list.locator('.saved-period').filter({hasText:'2026-10'});
   await october.getByRole('button',{name:/Открыть отчёт/}).click();
   await expect(page.locator('#field-netRevenue')).toHaveValue('2300.47');
