@@ -74,14 +74,14 @@ class VersionedImportProfileIntegrationTest {
     return new MockMultipartFile("file","report.xlsx",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",file);
   }
-  private org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder
+  private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
       previewRequest(UUID profileId,Created c,byte[] file) {
     return multipart("/api/v1/import-profiles/"+profileId+"/preview")
       .file(part(file)).param("instanceId",c.id().toString())
       .param("organizationId",c.org().toString())
       .param("actor","qa").param("reason","import preview");
   }
-  private org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder
+  private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
       commitRequest(UUID ticket,Created c,byte[] file,String key) {
     return multipart("/api/v1/import-profiles/previews/"+ticket+"/commit")
       .file(part(file)).param("instanceId",c.id().toString())
