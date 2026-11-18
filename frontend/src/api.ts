@@ -43,8 +43,12 @@ export type Profile = {id:string};
 export type PreviewTicket = {previewId:string;profileId:string;instanceId:string;organizationId:string;expectedRevision:number;uploadSha256:string;bindingSha256:string;expiresAt:string;inputCellCount:number;values:Record<string,string>};
 
 export class ApiHttpError extends Error {
-  constructor(readonly status:number,readonly detail:string){
+  readonly status:number;
+  readonly detail:string;
+  constructor(status:number,detail:string){
     super('HTTP '+status+': '+detail);
+    this.status=status;
+    this.detail=detail;
     this.name='ApiHttpError';
   }
 }
