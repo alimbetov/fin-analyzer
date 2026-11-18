@@ -161,6 +161,44 @@ class ReactLocalPostgresIntegrationTest {
   }
 
   @Test
+  void rowsetReorderRetainsContentIdentityButCreatesAuditableRevision() {
+    UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),scope=UUID.randomUUID(),
+      project=UUID.randomUUID(),r1=UUID.randomUUID(),r2=UUID.randomUUID();
+    Map<String,String> a=Map.of("paymentRef","PAY-A","postedAt","2026-11-17",
+      "amount","100.00","purpose","Purchase","invoiceRef","INV-A");
+    Map<String,String> b=Map.of("paymentRef","PAY-B","postedAt","2026-11-18",
+      "amount","200.00","purpose","Purchase","invoiceRef","INV-B");
+    var first=new FormDraftService.DraftRequest(null,org,entity,scope,project,
+      "DF-CSH-01","M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
+      0,Map.of(),List.of(new FormDraftService.RowInput(r1,10,a),
+        new FormDraftService.RowInput(r2,20,b)),"pg-r3","initial rows");
+    var saved=draftService.save(first,"r3-rowset-first-"+org);
+    var second=new FormDraftService.DraftRequest(saved.instanceId(),org,entity,scope,project,
+      "DF-CSH-01","M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
+      1,Map.of(),List.of(new FormDraftService.RowInput(r1,20,a),
+        new FormDraftService.RowInput(r2,10,b)),"pg-r3","row reordering");
+    var reordered=draftService.save(second,"r3-rowset-reorder-"+org);
+    assertEquals(2,reordered.revisionNo());
+    assertEquals(saved.contentSha256(),reordered.contentSha256(),
+      "Visual row order must not change the economic content digest");
+    assertNotEquals(jdbc.queryForObject(
+      "SELECT row_order_sha256 FROM fin_intake.lib_form_revision WHERE id=?",
+      String.class,saved.revisionId()),jdbc.queryForObject(
+      "SELECT row_order_sha256 FROM fin_intake.lib_form_revision WHERE id=?",
+      String.class,reordered.revisionId()));
+    var current=draftService.read(saved.instanceId(),org);
+    assertEquals(r2,current.rows().get(0).rowId());
+    assertEquals(r1,current.rows().get(1).rowId());
+    assertEquals(2,current.rows().size());
+    var original=draftService.readRevision(saved.instanceId(),org,1);
+    assertEquals(r1,original.rows().get(0).rowId());
+    assertEquals("100",original.rows().get(0).values().get("amount"));
+    assertEquals(2,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
+      Integer.class,saved.instanceId()));
+  }
+
+  @Test
   void competingWritesProduceOneImmutableRevisionAndOneConflict() throws Exception {
     UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),scope=UUID.randomUUID(),
       project=UUID.randomUUID();
