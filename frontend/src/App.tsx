@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
-import {Activity,AlertTriangle,Check,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
+import {Activity,AlertTriangle,Check,CheckCircle2,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileText,FileUp,FolderTree,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
@@ -87,6 +87,7 @@ export default function App(){
   const [showReports,setShowReports]=useState(true);
   const [showCategories,setShowCategories]=useState(false);
   const [historyOpen,setHistoryOpen]=useState(false);
+  const [attemptedSave,setAttemptedSave]=useState(false);
   const [reports,setReports]=useState<SavedReport[]|null>(null);
   const [reportsError,setReportsError]=useState('');
   const [reportsRefresh,setReportsRefresh]=useState(0);
@@ -169,6 +170,12 @@ export default function App(){
   const filled=rowset?rowEntries.reduce((n,r)=>n+fields.filter(f=>r.values[f.fieldCode]?.trim()).length,0):fields.filter(f=>values[f.fieldCode]?.trim()).length;
   const fieldCapacity=fields.length*(rowset?rowEntries.length:1);
   const completion=fieldCapacity>0?Math.round(filled/fieldCapacity*100):0;
+  const sections=useMemo(()=>{
+    const byCode=new Map<string,Field[]>();
+    for(const field of fields){const key=field.sectionCode||'GENERAL';byCode.set(key,[...(byCode.get(key)??[]),field]);}
+    const order=new Map((form?.sections??[]).map(section=>[section.sectionCode,section.sectionOrder]));
+    return [...byCode.entries()].sort(([a],[b])=>(order.get(a)??9999)-(order.get(b)??9999)).map(([code,items],index)=>({code,items,index,filled:items.filter(field=>values[field.fieldCode]?.trim()).length,missing:items.filter(field=>field.required&&!values[field.fieldCode]?.trim()).length}));
+  },[fields,form,values]);
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
   const isLocked=Boolean(draft)||dirty||saveUncertain||commitUncertain;
 
@@ -221,6 +228,7 @@ export default function App(){
   }
   function switchForm(code:string):boolean{
     if(inFlight.current||!confirmDiscard())return false;
+    setAttemptedSave(false);
     setHistoryOpen(false);
     if(code!==formCode){
       setForm(null);
@@ -241,6 +249,7 @@ export default function App(){
     if(switchForm(code))setDecisionContext(context);
   }
   const save=()=>execute(async()=>{
+    setAttemptedSave(true);
     if(!form||!editable)throw new Error('Для этой формы запись черновика недоступна.');
     if(!draft&&!dirty&&Object.keys(values).length===0&&rowEntries.length===0)throw new Error('Сначала заполните отчёт');
     if(draft&&!dirty)throw new Error('Нет изменений для сохранения');
@@ -308,7 +317,7 @@ export default function App(){
         'Не меняйте данные вслепую: откройте сохранённый экземпляр и проверьте результат.');
     setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setRowEntries(snapshot.rows);setPreview(null);
     saveKeyRef.current=null;setSaveUncertain(false);
-    setDirty(false);setCommitUncertain(false);
+    setDirty(false);setCommitUncertain(false);setAttemptedSave(false);
     setMessage('Сохранено: ревизия '+snapshot.revisionNo+' · SHA '+snapshot.sha256.slice(0,12));
   });
   const openDraft=(id:string)=>execute(async()=>{
@@ -317,7 +326,7 @@ export default function App(){
     const query=new URLSearchParams({organizationId:scope.organizationId});
     const snapshot=await get<Draft>('/drafts/'+encodeURIComponent(id)+'?'+query);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
-    setHistoryOpen(false);
+    setHistoryOpen(false);setAttemptedSave(false);
     setDraft(snapshot);setValues(snapshot.values);setRowEntries(snapshot.rows);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
     setCurrency(snapshot.currency);setScope({
       organizationId:snapshot.organizationId,economicEntityId:snapshot.economicEntityId,
@@ -396,7 +405,7 @@ export default function App(){
     setMessage('Commit '+current.revisionNo+' · SHA '+current.sha256.slice(0,12)+' · проверено '+Object.keys(preview.values).length+' полей');
   });
   const resetEditor=()=>{
-    setHistoryOpen(false);
+    setAttemptedSave(false);setHistoryOpen(false);
     setDraft(null);setInstanceId('');setValues({});setRowEntries([]);setProfileId('');
     setPreview(null);setFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
     setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
@@ -537,7 +546,7 @@ export default function App(){
             <div className="form-list">
               {filtered.map(f=><button key={f.formCode} className={'form-list-item '+(f.formCode===formCode?'active':'')}
                 onClick={()=>switchForm(f.formCode)}>
-                <span className="form-icon"><FileSpreadsheet size={18}/></span>
+                <span className={"form-icon "+(f.contentMode==="EVIDENCE"?"icon-document":f.contentMode==="ROWSET"?"icon-table":"icon-finance")}>{f.contentMode==="EVIDENCE"?<FileText size={18}/>:<FileSpreadsheet size={18}/>}</span>
                 <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode==='EVIDENCE'?'Документ':f.contentMode==='ROWSET'?'Таблица':'Форма'}</small></span><ChevronRight size={16}/></button>)}
               {!filtered.length&&<p className="empty">Формы не найдены</p>}
             </div>
@@ -623,13 +632,33 @@ export default function App(){
               </div>:
               style==='EXCEL'?<div className="sheet-scroll"><table className="sheet"><thead><tr><th>№</th><th>Показатель</th><th>Значение</th></tr></thead>
                 <tbody>{fields.map(renderRow)}</tbody></table></div>:
-                <div className={style==='DASHBOARD'?'cards-layout':'classic-layout'}>
-                  {fields.map((f,i)=><div className="metric-card" key={f.fieldCode}>
-                    <span className="card-seq">{i+1}</span><label htmlFor={'field-'+f.fieldCode}>{f.title||f.fieldCode}
-                    {f.required&&<span className="required"> *</span>}<small>{f.fieldCode} · {f.fieldType}</small></label>
-                    <input id={'field-'+f.fieldCode} value={values[f.fieldCode]??''} disabled={!editable||busy||saveUncertain||commitUncertain}
-                      onChange={e=>setValue(f.fieldCode,e.target.value)} onPaste={e=>pasteRange(e,i)}
-                      onKeyDown={e=>nextCell(e,i)}/></div>)}
+                <div className="sectioned-editor">
+                  <nav className="section-nav" aria-label="Разделы формы">
+                    {sections.map(section=><button type="button" key={section.code} onClick={()=>{
+                      const element=document.getElementById('form-section-'+section.index);
+                      if(element instanceof HTMLDetailsElement)element.open=true;
+                      element?.scrollIntoView({behavior:'smooth',block:'start'});
+                    }}><span>{section.code==='GENERAL'?'Общие сведения':section.code.replaceAll('_',' ')}</span>
+                    <small>{section.filled}/{section.items.length}</small>
+                    {attemptedSave&&section.missing>0?<AlertTriangle size={14} aria-label="Есть обязательные поля"/>:section.filled===section.items.length?<CheckCircle2 size={14}/>:<ChevronRight size={14}/>}</button>)}
+                  </nav>
+                  <div className="section-groups">
+                    {sections.map((section,sectionIndex)=><details className="form-section" id={'form-section-'+section.index} key={section.code} open={sectionIndex===0}>
+                      <summary><span className="section-symbol"><FileSpreadsheet size={18}/></span><span className="section-title"><strong>{section.code==='GENERAL'?'Общие сведения':section.code.replaceAll('_',' ')}</strong><small>{section.filled} из {section.items.length} заполнено</small></span>
+                      {attemptedSave&&section.missing>0&&<span className="section-error">{section.missing} обязательных</span>}<ChevronDown size={18}/></summary>
+                      <div className={style==='DASHBOARD'?'cards-layout':'classic-layout'}>
+                        {section.items.map(f=><div className={'metric-card'+(attemptedSave&&f.required&&!values[f.fieldCode]?.trim()?' field-invalid':'')} key={f.fieldCode}>
+                          <span className="card-seq">{fields.indexOf(f)+1}</span><label htmlFor={'field-'+f.fieldCode}>{f.title||f.fieldCode}
+                          {f.required&&<span className="required"> *</span>}<small>{f.fieldCode} · {f.fieldType}</small></label>
+                          <input id={'field-'+f.fieldCode} value={values[f.fieldCode]??''} disabled={!editable||busy||saveUncertain||commitUncertain}
+                            aria-invalid={attemptedSave&&f.required&&!values[f.fieldCode]?.trim()}
+                            aria-describedby={attemptedSave&&f.required&&!values[f.fieldCode]?.trim()?'field-error-'+f.fieldCode:undefined}
+                            onChange={e=>setValue(f.fieldCode,e.target.value)} onPaste={e=>pasteRange(e,fields.indexOf(f))}
+                            onKeyDown={e=>nextCell(e,fields.indexOf(f))}/>
+                          {attemptedSave&&f.required&&!values[f.fieldCode]?.trim()&&<span className="field-error" id={'field-error-'+f.fieldCode}>Заполните обязательное поле</span>}</div>)}
+                      </div>
+                    </details>)}
+                  </div>
                 </div>}
               {!evidence&&<details className="import-details"><summary><FileUp size={16}/> Импорт данных из Excel (дополнительно)</summary><div className="import-box">
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
