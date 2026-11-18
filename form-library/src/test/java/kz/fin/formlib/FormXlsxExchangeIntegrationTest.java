@@ -172,7 +172,7 @@ class FormXlsxExchangeIntegrationTest {
     Saved saved=create("F02",Map.of("netRevenue","500",
         "cogs","200","operatingExpenses","100"),List.of());
     byte[] original=export(saved,"EXCEL");
-    upload(saved,changeCell(original,4,2,"700"),"first-"+saved.org());
+    upload(saved,changeCell(original,4,3,"700"),"first-"+saved.org());
     var file=new MockMultipartFile("file","old.xlsx",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",original);
     http.perform(multipart("/api/v1/drafts/"+saved.id()+"/import.xlsx")
