@@ -189,7 +189,7 @@ async function download(){
  const response=await call("/drafts/"+encodeURIComponent(val("instanceId"))+"/export.xlsx?"+q);
  const blob=await response.blob();
  const header=response.headers.get("Content-Disposition")||"";
- const match=/filename="([^"]+\\.xlsx)"/i.exec(header);
+ const match=/filename="([^"]+\.xlsx)"/i.exec(header);
  if(!match)throw Error("Сервер не указал имя XLSX в Content-Disposition");
  const name=match[1];
  const u=URL.createObjectURL(blob),a=document.createElement("a");
