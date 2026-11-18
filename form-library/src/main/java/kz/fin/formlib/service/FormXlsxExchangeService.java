@@ -169,10 +169,22 @@ public class FormXlsxExchangeService {
       throw conflict("XLSX_STALE_REVISION");
     Map<String,String> values=new LinkedHashMap<>();
     List<FormDraftService.RowInput> rows=new ArrayList<>();
+    Map<String,String> normalizedCells=new LinkedHashMap<>();
+    Map<String,String> types=new HashMap<>();
+    for(FormField f:current.fields())types.put(f.getFieldCode(),f.getFieldType());
+    for(var cell:parsed.values().entrySet()){
+      String key=cell.getKey();
+      int idx=key.indexOf('|');
+      String fieldCode=idx<0?key:key.substring(idx+1);
+      String type=types.get(fieldCode);
+      if(type==null)throw invalid("XLSX_UNKNOWN_FIELD:"+fieldCode);
+      normalizedCells.put(key,ImportNumberNormalizer.normalize(
+        cell.getValue(),type,parsed.displayLocale(),fieldCode));
+    }
     if("SINGLE_RECORD".equals(current.view().contentMode())){
       for(FormField field:current.fields()){
         String code=field.getFieldCode();
-        String value=parsed.values().get(code);
+        String value=normalizedCells.get(code);
         if(!value.isEmpty()||current.view().values().containsKey(code))
           values.put(code,value);
       }
@@ -181,7 +193,7 @@ public class FormXlsxExchangeService {
         Map<String,String> rowValues=new LinkedHashMap<>();
         for(FormField field:current.fields()){
           String code=field.getFieldCode();
-          String value=parsed.values().get(row.rowId()+"|"+code);
+          String value=normalizedCells.get(row.rowId()+"|"+code);
           if(!value.isEmpty()||row.values().containsKey(code))rowValues.put(code,value);
         }
         rows.add(new FormDraftService.RowInput(row.rowId(),row.rowPosition(),rowValues));
@@ -202,7 +214,7 @@ public class FormXlsxExchangeService {
 
     return new Prepared(request,new ImportPreview(instanceId,organizationId,
       metadata.formVersionId(),metadata.formCode(),metadata.revision(),
-      metadata.contentSha256(),parsed.values().size(),Map.copyOf(parsed.values())));
+      metadata.contentSha256(),normalizedCells.size(),Map.copyOf(normalizedCells)));
   }
 
   @Transactional(readOnly=true)
