@@ -136,8 +136,16 @@ public class FormXlsxExchangeService {
     return export(instanceId,organizationId,styleCode,userId,"ru");
   }
 
+  public record NamedExport(byte[] bytes,String filename) {}
+
   @Transactional(readOnly=true)
   public byte[] export(UUID instanceId,UUID organizationId,String styleCode,UUID userId,String locale){
+    return exportNamed(instanceId,organizationId,styleCode,userId,locale).bytes();
+  }
+
+  @Transactional(readOnly=true)
+  public NamedExport exportNamed(UUID instanceId,UUID organizationId,String styleCode,
+                                 UUID userId,String locale){
     Current current=current(instanceId,organizationId);
     String selected=styleCode;
     if(selected==null||selected.isBlank())
@@ -150,7 +158,12 @@ public class FormXlsxExchangeService {
     var resolved=FormXlsxCodec.export(envelope,localizedEntries(current,locale),
       new FormXlsxCodec.Display(locale,localizedTitle(current,locale)),
       reportContext(current));
-    return resolved;
+    String filename=FormXlsxFilename.build(current.view().formCode(),
+      current.view().periodType(),current.view().periodCode(),
+      current.view().currency(),envelope.style(),locale,
+      current.view().formVersion(),current.revision().getRevisionNo(),
+      current.revision().getCanonicalContentSha256());
+    return new NamedExport(resolved,filename);
   }
 
   public record ImportPreview(UUID instanceId,UUID organizationId,UUID formVersionId,
