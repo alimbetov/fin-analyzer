@@ -157,6 +157,34 @@ class FinIntakeDatabasePersistenceAuditTest {
    assertEquals(2,number("select count(*) from fin_intake.lib_form_revision where instance_id=?",id));
  }
 
+ @Test void rowsetRejectsTopLevelValuesAndNullRowsWithoutCreatingFinancialRecords()
+     throws Exception {
+   UUID org=UUID.randomUUID(),project=UUID.randomUUID();
+   var row=new FormDraftService.RowInput(UUID.randomUUID(),10,
+     Map.of("paymentRef","PAY-1","postedAt","2026-11-17",
+       "amount","1.25","purpose","Purchase","invoiceRef","INV-1"));
+   var invalid=req(null,org,project,"DF-CSH-01",0,
+     Map.of("amount","999"),List.of(row));
+   http.perform(post("/api/v1/drafts")
+     .header("Idempotency-Key","rowset-top-values-"+org)
+     .contentType(MediaType.APPLICATION_JSON).content(json(invalid)))
+     .andExpect(status().isUnprocessableEntity())
+     .andExpect(jsonPath("$.code").value("ROWSET_TOP_LEVEL_VALUES_FORBIDDEN"));
+
+   var nullRows=java.util.Arrays.asList((FormDraftService.RowInput)null);
+   http.perform(post("/api/v1/drafts")
+     .header("Idempotency-Key","rowset-null-row-"+org)
+     .contentType(MediaType.APPLICATION_JSON)
+     .content(json(req(null,org,project,"DF-CSH-01",0,Map.of(),nullRows))))
+     .andExpect(status().isUnprocessableEntity())
+     .andExpect(jsonPath("$.code").value("INVALID_ROW"));
+
+   assertEquals(0,number("""
+     SELECT count(*) FROM fin_intake.lib_form_instance
+     WHERE organization_id=? AND project_id=?
+     """,org,project));
+ }
+
  @Test void twoHundredRowClipboardSavesAllIdsValuesAndOrderingWithOneCommittedRevision()
      throws Exception {
    UUID org=UUID.randomUUID(),project=UUID.randomUUID();
