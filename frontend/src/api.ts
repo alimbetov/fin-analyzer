@@ -24,8 +24,14 @@ export class ApiHttpError extends Error {
 }
 
 export function isDefiniteRejection(error:unknown):boolean {
-  return error instanceof ApiHttpError &&
-    [400,401,403,404,409,413,415,422].includes(error.status);
+  if(!(error instanceof ApiHttpError))return false;
+  // A second in-flight request can win the idempotency unique race. Its
+  // 409 does not prove the original transaction failed. Preserve the exact
+  // command key until the revision has been read back.
+  if(error.status===409)
+    return !['IDEMPOTENCY_WRITE_CONFLICT','CONCURRENT_OR_DUPLICATE_WRITE']
+      .includes(error.detail);
+  return [400,401,403,404,413,415,422].includes(error.status);
 }
 
 const tokenKey='fin-demo-correlation';
