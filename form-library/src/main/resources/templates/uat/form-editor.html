@@ -34,6 +34,7 @@ table{border-collapse:collapse;width:100%}th,td{border:1px solid #d9e2ed;text-al
 <div class="grid">
 <label>Форма<select id="formCode"><option value="F02">F02</option></select></label>
 <label>Стиль<select id="style"><option>CLASSIC</option><option selected>EXCEL</option><option>DASHBOARD</option></select></label>
+<label>Язык Excel<select id="locale"><option value="ru" selected>Русский</option><option value="kk">Қазақша</option><option value="en">English</option><option value="zh-Hans">中文</option></select></label>
 <label>Период<input id="period" value="2026-11"></label>
 <label>Валюта<input id="currency" value="KZT"></label>
 <label>Организация UUID<input id="organizationId"></label>
@@ -141,7 +142,7 @@ async function save(){
 }
 async function download(){
  if(!val("instanceId"))throw Error("Сохраните экземпляр перед экспортом");
- const q=new URLSearchParams({organizationId:val("organizationId"),styleCode:val("style")});
+ const q=new URLSearchParams({organizationId:val("organizationId"),styleCode:val("style"),locale:val("locale")});
  const blob=await (await call("/drafts/"+encodeURIComponent(val("instanceId"))+"/export.xlsx?"+q)).blob();
  const u=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=u;a.download="fin-"+val("formCode")+"-"+val("style")+".xlsx";
