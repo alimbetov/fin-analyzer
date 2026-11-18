@@ -1,12 +1,12 @@
 # FIN Form Library
 
-Отдельный Java 21 / Spring Boot / Spring Data JPA / Liquibase / H2 проект для системного справочника финансовых форм, генерации их шаблонов и сохранения введённых отчётных данных.
+Отдельный Java 21 / Spring Boot / Spring Data JPA / Liquibase / PostgreSQL проект для системного справочника финансовых форм, генерации их шаблонов и сохранения введённых отчётных данных.
 
-**Рабочая ветка:** `feat/fin-form-library-standalone`. Здесь намеренно нет старого FIN Analyzer Backend, React, E2E и CI других подсистем. История Git и `main` не изменены.
+**Рабочая ветка:** `feat/fin-form-library-standalone`. Ветка содержит FIN Form Library и её React-интерфейс, без старого FIN Analyzer Backend и CI других подсистем. История Git и `main` не изменены.
 
 ## Архитектура
 
-| Контур | PostgreSQL-совместимая схема H2 | Ответственность |
+| Контур | Схема PostgreSQL | Ответственность |
 |---|---|---|
 | Системный каталог | `fin_lib` | Системные коды форм/показателей, типы, единицы, валюты, периоды, переводы RU/KK/EN/ZH, неизменяемые версии, правила и каталог редакций |
 | Шаблон отчёта | `fin_lib` | Разделы, порядок показателей, матричная ориентация, форматы, правила ввода и вычисляемые итоги `SUM` / `LAST_VALUE` |
@@ -18,30 +18,34 @@
 
 ## Состав репозитория
 
-- `form-library/` — **единственный** модуль приложения: Java, REST API, JPA, Liquibase, локальные исходные TSV-каталоги, тесты и спецификации.
+- `form-library/` — backend: Java, REST API, JPA, Liquibase, локальные исходные TSV-каталоги, тесты и спецификации.
+- `frontend/` — React/TypeScript, Vite и Playwright.
+- `compose.local.yml` — PostgreSQL 16 для локального запуска.
 - `.github/workflows/fin-form-library.yml` — изолированная сборка Java 21 + H2.
 - `.gitignore` — локальные артефакты Maven, IDE и операционной системы.
 
 ## Запуск
 
-Требуются Java 21 и Maven.
+Требуются Java 21, Maven, Docker Compose, Node.js 22 и npm. Запустите PostgreSQL и backend из корня:
 
 ```bash
-mvn -f form-library/pom.xml clean verify
+docker compose -f compose.local.yml up -d
 mvn -f form-library/pom.xml spring-boot:run
 ```
 
-Локальный сервер: `http://127.0.0.1:8086`. Основные API: `/api/v1/catalog`, `/api/v1/catalog-admin`, `/api/v1/forms`, `/api/v1/drafts`, `/api/v1/report-grids`.
+В другом терминале выполните `npm ci` и `npm run dev` в `frontend/`. Откройте `http://127.0.0.1:5173`.
+
+Локальный REST-сервер: `http://127.0.0.1:8086`. Основные API: `/api/v1/catalog`, `/api/v1/catalog-admin`, `/api/v1/forms`, `/api/v1/drafts`, `/api/v1/report-grids`.
 
 Подробные инструкции и контракты: [form-library/README.md](form-library/README.md), [документация](form-library/docs).
 
 ## Текущие ограничения
 
-- **Без React и Spring Security** по текущему решению; H2 in-memory удаляет данные при рестарте. Сервис доступен только на `127.0.0.1`.
+- Стенд работает на localhost с PostgreSQL и без Spring Security. H2 используется в части автоматических тестов.
 - Системный каталог импортирует 166 форм и кандидатные показатели; наличие определения не означает финансового утверждения и полной формы для всех 166 случаев.
 - Ввод пока имеет **два контракта хранения** — `FormDraftService` и `ReportGridService`. Унификация фактов и обязательное хранение `projectCode` + `userCode` для каждого отчёта ещё не выполнены.
 - `SUM` / `LAST_VALUE` работают только как предварительные вычисляемые результаты. Универсальный движок формул `ADD/SUBTRACT/DIVIDE` пока не реализован.
-- В модуле нет Writer для `fin_fact`, контура FIN HTAP, фронтенда и экспортных XLSX/PDF/HTML-renderer.
+- В модуле нет Writer для `fin_fact`, контура FIN HTAP и PDF/HTML-renderer. Для поддерживаемых форм есть XLSX round-trip.
 
 ## Изоляция ветки
 

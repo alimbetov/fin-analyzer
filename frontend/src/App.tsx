@@ -35,6 +35,14 @@ function storedScope():Scope{
 const normalize=(s:string,type:string)=>{
   const v=s.trim().replace(/[\u00a0\u202f]/g,' ');
   if(!['MONEY','DECIMAL','INTEGER'].includes(type))return v;
+  if(type==='DECIMAL'){
+    const number=/^(-?(?:\d{1,3}(?: \d{3})+|\d+))(?:([.,])(\d{1,12}))?$/.exec(v);
+    if(!number)return v;
+    const [,whole,separator,fraction]=number;
+    // A lone comma followed by three digits may mean grouping.
+    if(separator===','&&fraction.length===3&&/^-?\d{1,3}$/.test(whole))return v;
+    return whole.replaceAll(' ','')+(fraction?'.'+fraction:'');
+  }
   if(/^-?\d{1,3}( \d{3})+(?:[.,]\d{1,2})?$/.test(v))return v.replaceAll(' ','').replace(',','.');
   if(/^-?\d+(?:[.,]\d{1,2})?$/.test(v))return v.replace(',','.');
   return v; // invalid and ambiguous financial values are rejected by Backend
