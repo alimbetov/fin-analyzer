@@ -70,6 +70,16 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: form-library/pom.xml
+      - name: Reject mixed Testcontainers module versions
+        shell: bash
+        run: |
+          mvn -B -ntp -f form-library/pom.xml dependency:tree -Dincludes=org.testcontainers -DoutputFile=target/testcontainers-tree.txt
+          cat form-library/target/testcontainers-tree.txt
+          if grep -E 'org\\.testcontainers:.*:1\\.21\\.3' form-library/target/testcontainers-tree.txt; then
+            echo "Mixed Testcontainers versions detected: 1.21.3 must not be present"
+            exit 1
+          fi
+          grep -E 'org\\.testcontainers:testcontainers:jar:1\\.21\\.4' form-library/target/testcontainers-tree.txt
       - name: Run isolated PostgreSQL Testcontainers integration
         run: >-
           mvn -B -ntp -f form-library/pom.xml
