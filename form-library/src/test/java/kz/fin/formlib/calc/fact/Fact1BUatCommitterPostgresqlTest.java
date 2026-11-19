@@ -262,11 +262,50 @@ class Fact1BUatCommitterPostgresqlTest {
   }
 
   @Test void qf19MissingMonthCannotCreatePartitionOrFactSet(){
+    // The source itself must use the uncovered month, not merely inspect
+    // the partition catalog without attempting the real commit.
+    var s=Slot.fresh();
+    var user=UUID.randomUUID();
+    var missing=YearMonth.of(2026,4);
+    assertFalse(partitions.inspectRequiredCoverage(missing,missing).complete());
+    var saved=drafts.save(new FormDraftService.DraftRequest(
+        null,s.org,s.entity,s.business,s.project,"F02",
+        "M","2026-04","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",0,
+        Map.of("netRevenue","12500000","cogs","7400000",
+               "operatingExpenses","2100000"),
+        List.of(),"fact1b-qa","Missing partition negative test"),
+        UUID.randomUUID().toString());
+    var exact=candidates.extractExact(saved.revisionId(),s.org,s.project);
+    var descriptor=F02MappingDescriptor.testOnlyPilot(exact.formVersionId(),
+        exact.sourceSchemaSha256(),exact.sourceMappingSha256());
+    var candidate=assembler.assemble(exact,descriptor);
+    var principal=new TrustedRequestPrincipal(user.toString(),
+        UatF02FactSetCommitter.PROVIDER,candidate.scope(),
+        UUID.randomUUID().toString(),Set.of(TrustedRequestPrincipal.QUALIFY_ACTION));
+    var approval=synthetic(candidate,principal,UUID.randomUUID(),1);
+    assertEquals("FACT1B_PARTITION_MISSING",assertThrows(
+        IllegalStateException.class,()->
+          committer.commitExact(candidate,descriptor,approval,principal,user)).getMessage());
+    assertEquals(0,count("fin_fact.fact_set",s.org));
+    assertEquals(0,count("fin_fact.factset_qualification_receipt",s.org));
+    assertEquals(0,count("fin_calc.calc_outbox_event",s.org));
+    assertFalse(partitions.inspectRequiredCoverage(missing,missing).complete(),
+        "Admission must never silently create financial partitions");
+  }
+
+  @Test void qf21ImmutableReceiptRejectsUpdateDeleteAndPreservesProvenance(){
     var c=fresh();
-    var nonexistent=YearMonth.of(2026,4);
-    assertFalse(partitions.inspectRequiredCoverage(nonexistent,nonexistent).complete());
-    // A different historical source month would require its own exact projection.
-    assertEquals(0,count("fin_fact.fact_set",c.slot.org));
+    var result=commit(c);
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("UPDATE fin_fact.factset_qualification_receipt SET project_id=? WHERE factset_id=?",
+            UUID.randomUUID(),result.factSetId()));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("DELETE FROM fin_fact.factset_qualification_receipt WHERE factset_id=?",
+            result.factSetId()));
+    assertEquals(1,count("fin_fact.factset_qualification_receipt",c.slot.org));
+    assertEquals(c.slot.project,sql.queryForObject(
+        "SELECT project_id FROM fin_fact.factset_qualification_receipt WHERE factset_id=?",
+        UUID.class,result.factSetId()));
   }
 
   @Test void qf24NormalRuntimeIsDeniedWithoutUatExplicitFlag(){
