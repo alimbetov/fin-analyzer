@@ -2,7 +2,7 @@
 -- Branch: feat/fin-form-library-standalone. Re-runnable. PostgreSQL 16.
 -- PURPOSE: Inventory + proposal registry, NOT approved calculations or financial results.
 -- Source files: docs/FIN-CALC-R0-COVERAGE-166-BASELINE.tsv (166 rows),
--- docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv (794 physical source-field rows).
+-- docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv (794 candidate metric rows: 793 physical source fields + F02.netProfit derived candidate).
 -- Document-only forms D01-D08/T01-T04 intentionally have no numeric field rows.
 -- This script MUST NOT insert into qualified fin_fact or immutable fin_calc.calc_result.
 BEGIN;
@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS fin_calc.form_field_calc_candidate_inventory (
  form_code text NOT NULL REFERENCES fin_calc.form_calc_candidate_inventory(form_code),
  field_code text NOT NULL,
  field_type_r6_candidate text NOT NULL,
+ semantic_role text NOT NULL DEFAULT 'SOURCE_FIELD_CANDIDATE' CHECK (semantic_role IN ('SOURCE_FIELD_CANDIDATE','FORM_DERIVED_CANDIDATE')),
  unit_policy_r6_candidate text NOT NULL,
  field_metric_binding_state text NOT NULL,
  time_semantics_state text NOT NULL,
@@ -36,6 +37,15 @@ CREATE TABLE IF NOT EXISTS fin_calc.form_field_calc_candidate_inventory (
  updated_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(form_code,field_code)
 );
+-- Existing installations from the earlier candidate inventory script receive the additive column.
+ALTER TABLE fin_calc.form_field_calc_candidate_inventory
+ ADD COLUMN IF NOT EXISTS semantic_role text NOT NULL DEFAULT 'SOURCE_FIELD_CANDIDATE';
+-- Guard the special non-physical F02.netProfit candidate against being treated as input.
+-- Do not infer this status from an SQL calculation or a form label.
+UPDATE fin_calc.form_field_calc_candidate_inventory
+ SET semantic_role='FORM_DERIVED_CANDIDATE'
+ WHERE form_code='F02' AND field_code='netProfit'
+   AND semantic_role IS DISTINCT FROM 'FORM_DERIVED_CANDIDATE';
 -- Note: MERGE updates ONLY this mutable proposal registry, never original input revisions.
 MERGE INTO fin_calc.form_calc_candidate_inventory AS t
 USING (VALUES
@@ -1010,16 +1020,32 @@ USING (VALUES
 ON (t.form_code=s.form_code AND t.field_code=s.field_code)
 WHEN MATCHED THEN UPDATE SET field_type_r6_candidate=s.field_type_r6_candidate, unit_policy_r6_candidate=s.unit_policy_r6_candidate, field_metric_binding_state=s.field_metric_binding_state, time_semantics_state=s.time_semantics_state, aggregation_policy_state=s.aggregation_policy_state, formula_id_and_version_state=s.formula_id_and_version_state, methodology_review_state=s.methodology_review_state, calc_proof_state=s.calc_proof_state, updated_at=now()
 WHEN NOT MATCHED THEN INSERT (form_code,field_code,field_type_r6_candidate,unit_policy_r6_candidate,field_metric_binding_state,time_semantics_state,aggregation_policy_state,formula_id_and_version_state,methodology_review_state,calc_proof_state) VALUES (s.form_code,s.field_code,s.field_type_r6_candidate,s.unit_policy_r6_candidate,s.field_metric_binding_state,s.time_semantics_state,s.aggregation_policy_state,s.formula_id_and_version_state,s.methodology_review_state,s.calc_proof_state);
+-- The single derived candidate is metadata, NOT an ingestible source field.
+UPDATE fin_calc.form_field_calc_candidate_inventory
+ SET semantic_role='FORM_DERIVED_CANDIDATE'
+ WHERE form_code='F02' AND field_code='netProfit';
 -- Enforce full source coverage (no silent partial import).
 DO $audit$
-DECLARE n_forms integer; n_fields integer; n_documents integer;
+DECLARE n_forms integer; n_fields integer; n_documents integer; n_physical integer; n_derived integer;
 BEGIN
  SELECT count(*) INTO n_forms FROM fin_calc.form_calc_candidate_inventory;
  SELECT count(*) INTO n_fields FROM fin_calc.form_field_calc_candidate_inventory;
+ SELECT count(*) INTO n_physical FROM fin_calc.form_field_calc_candidate_inventory WHERE semantic_role='SOURCE_FIELD_CANDIDATE';
+ SELECT count(*) INTO n_derived FROM fin_calc.form_field_calc_candidate_inventory WHERE semantic_role='FORM_DERIVED_CANDIDATE';
  SELECT count(*) INTO n_documents FROM fin_calc.form_calc_candidate_inventory WHERE bootstrap_content_mode='EVIDENCE';
- IF n_forms<>166 OR n_fields<>794 OR n_documents<>12 THEN
-  RAISE EXCEPTION 'CALC166_CANDIDATE_COVERAGE_MISMATCH: forms %, fields %, evidence %',n_forms,n_fields,n_documents;
+ IF n_forms<>166 OR n_fields<>794 OR n_documents<>12 OR n_physical<>793 OR n_derived<>1 THEN
+  RAISE EXCEPTION 'CALC166_CANDIDATE_COVERAGE_MISMATCH: forms %, candidates %, evidence %, physical %, derived %',n_forms,n_fields,n_documents,n_physical,n_derived;
  END IF;
+ IF NOT EXISTS (
+  SELECT 1 FROM fin_calc.form_field_calc_candidate_inventory
+  WHERE form_code='F02' AND field_code='netProfit'
+    AND semantic_role='FORM_DERIVED_CANDIDATE'
+ ) THEN RAISE EXCEPTION 'CALC166_F02_DERIVED_CANDIDATE_MISSING'; END IF;
+ IF EXISTS (
+  SELECT 1 FROM fin_calc.form_field_calc_candidate_inventory
+  WHERE semantic_role='FORM_DERIVED_CANDIDATE'
+    AND (form_code<>'F02' OR field_code<>'netProfit')
+ ) THEN RAISE EXCEPTION 'CALC166_UNEXPECTED_DERIVED_CANDIDATE'; END IF;
  IF EXISTS (
   SELECT 1 FROM fin_calc.form_calc_candidate_inventory f
   WHERE f.bootstrap_content_mode='EVIDENCE'
@@ -1029,6 +1055,7 @@ END $audit$;
 COMMIT;
 
 -- REVIEW QUERIES (safe/read-only):
+-- SELECT semantic_role,count(*) FROM fin_calc.form_field_calc_candidate_inventory GROUP BY 1;
 -- SELECT bootstrap_content_mode,count(*) FROM fin_calc.form_calc_candidate_inventory GROUP BY 1;
 -- SELECT form_code,candidate_operations_not_approved,formula_contract_state FROM fin_calc.form_calc_candidate_inventory ORDER BY form_code;
 -- SELECT form_code,field_code,aggregation_policy_state FROM fin_calc.form_field_calc_candidate_inventory WHERE field_type_r6_candidate IN ('MONEY','DECIMAL');
