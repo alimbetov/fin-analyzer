@@ -35,7 +35,7 @@ import java.util.UUID;
  */
 @Component
 @Order(7)
-public final class Calc154FormulaContractBootstrap implements ApplicationRunner {
+public class Calc154FormulaContractBootstrap implements ApplicationRunner {
   private static final String RESOURCE="catalog/calc154-formula-contracts-v1.tsv";
   private static final String HEADER=String.join("\t",
       "form_code","output_metric_code","source_metrics","operation",
