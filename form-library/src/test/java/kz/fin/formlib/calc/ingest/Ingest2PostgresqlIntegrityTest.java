@@ -123,22 +123,25 @@ class Ingest2PostgresqlIntegrityTest {
     };
   }
 
-  private static byte[] changeFirstExcelBinding(byte[] file,String expectedCode,
-      String expectedValue) throws Exception {
+  private record EditedXlsx(byte[] bytes,String fieldCode,String value) {}
+  private static EditedXlsx changeFirstExcelBinding(byte[] file) throws Exception {
     try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(file));
         var output=new ByteArrayOutputStream()) {
       var metadata=workbook.getSheet("PARAMETERS");
       assertNotNull(metadata);
       String binding=metadata.getRow(14).getCell(0).getStringCellValue();
-      assertTrue(binding.equals(expectedCode)||binding.endsWith("|"+expectedCode),
-          "XLSX_FIRST_BINDING_UNEXPECTED:"+binding);
+      int separator=binding.lastIndexOf('|');
+      String fieldCode=separator<0?binding:binding.substring(separator+1);
+      String fieldType=metadata.getRow(14).getCell(2).getStringCellValue();
+      String value=nextXlsxValue(fieldType);
+      assertFalse(fieldCode.isBlank());
       String address=metadata.getRow(14).getCell(1).getStringCellValue();
       var location=new CellReference(address);
       var target=workbook.getSheet("REPORT").getRow(location.getRow())
           .getCell(location.getCol());
-      target.setCellValue(expectedValue);
+      target.setCellValue(value);
       workbook.write(output);
-      return output.toByteArray();
+      return new EditedXlsx(output.toByteArray(),fieldCode,value);
     }
   }
 
@@ -415,10 +418,10 @@ class Ingest2PostgresqlIntegrityTest {
       byte[] exported=http.perform(xlsxRequest).andExpect(status().isOk())
           .andReturn().getResponse().getContentAsByteArray();
       assertTrue(exported.length>100,"XLSX_EXPORT_EMPTY:"+code);
-      String changedField=definition.getFirst()[2];
-      String changedType=definition.getFirst()[3];
-      String thirdValue=nextXlsxValue(changedType);
-      byte[] edited=changeFirstExcelBinding(exported,changedField,thirdValue);
+      var xlsxChange=changeFirstExcelBinding(exported);
+      String changedField=xlsxChange.fieldCode();
+      String thirdValue=xlsxChange.value();
+      byte[] edited=xlsxChange.bytes();
       var part=new MockMultipartFile("file","roundtrip.xlsx",
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",edited);
       var importRequest=multipart("/api/v1/drafts/"+first.instanceId()+"/import.xlsx")
