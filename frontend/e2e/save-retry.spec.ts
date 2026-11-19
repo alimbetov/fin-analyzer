@@ -7,7 +7,7 @@ import {expect,test} from '@playwright/test';
 test('lost save response replays one immutable revision instead of blocking the editor',async({page,request})=>{
   await page.goto('/');
   await page.getByPlaceholder('Код или название...').fill('F02');
-  await page.locator('.form-list-item').filter({hasText:'F02 ·'}).click();
+  await page.locator('.form-list-item').filter({has:page.locator('small').filter({hasText:/^F02 ·/})}).click();
   await page.getByRole('button',{name:'Создать отчёт'}).click();
   await page.locator('#field-netRevenue').fill('15730.47');
   await page.locator('#field-cogs').fill('950.12');
