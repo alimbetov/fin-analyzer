@@ -59,3 +59,5 @@ databaseChangeLog:
       file: db/changelog/029-fin-calc-hyb2b-pinned-admission-postgresql.sql
   - include:
       file: db/changelog/030-fin-calc-f01-f03-candidates-postgresql.sql
+  - include:
+      file: db/changelog/031-fin-calc-candidate-interval-aggregate-postgresql.sql
