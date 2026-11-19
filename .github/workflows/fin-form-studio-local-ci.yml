@@ -141,6 +141,38 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Synthetic performance evidence, separately reported and never treated
+  # as financial S2, correctness qualification or a production speed promise.
+  calc-sql-benchmark:
+    name: CALC-SQL-01 10k/100k/1m Java SQL hybrid benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Run PG16 comparative benchmark with numerical parity assertions
+        run: >-
+          mvn -B -ntp -f form-library/pom.xml
+          -Dtest=SqlF02BenchmarkPostgresqlTest
+          -Dfin.sql.benchmark.enabled=true
+          -DfailIfNoTests=true
+          test
+      - name: Preserve measured timings and comparison inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-calc-sql-benchmark
+          path: |
+            form-library/target/fin-calc-sql-benchmark/comparative-benchmark.json
+            form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.kernel.SqlF02BenchmarkPostgresqlTest.xml
+          if-no-files-found: error
+          retention-days: 30
+
   powershell-smoke-syntax:
     name: PowerShell 7 smoke script parser
     runs-on: ubuntu-latest
