@@ -1,5 +1,6 @@
 package kz.fin.formlib.calc.hybrid;
 
+import kz.fin.formlib.bootstrap.Calc154FormulaContractBootstrap;
 import kz.fin.formlib.bootstrap.Calc3BModelBootstrap;
 import kz.fin.formlib.bootstrap.Calc3BRequirementBootstrap;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,7 @@ class Calc3BGovernancePostgresqlTest {
   @Autowired JdbcTemplate jdbc;
   @Autowired Calc3BRequirementBootstrap requirements;
   @Autowired Calc3BModelBootstrap models;
+  @Autowired Calc154FormulaContractBootstrap formulas;
 
   @Test void everyNumericFormRequiresHumanReviewWithoutInventedMandatoryOutputs(){
     assertEquals(154,jdbc.queryForObject("""
@@ -203,4 +205,63 @@ class Calc3BGovernancePostgresqlTest {
     assertEquals(97,jdbc.queryForObject(
       "SELECT count(*) FROM fin_calc.model_candidate_input_form",Integer.class));
   }
+  @Test void bootstrapReplaysBaselineAlongsideAdditionalImmutableRevisions() throws Exception {
+    // Synthetic unqualified revisions prove the loaders no longer equate
+    // global table cardinality with a fixed historical manifest.
+    jdbc.update("""
+      INSERT INTO fin_calc.formula_contract_revision(
+        id,form_code,form_version_id,source_schema_sha256,
+        output_metric_code,formula_version,operation_code,source_metrics_jsonb,
+        period_semantics,dimension_policy,currency_policy,unit_policy,
+        rounding_policy,missing_policy,zero_policy,review_state,blocker_codes,
+        source_evidence,definition_sha256,binding_sha256)
+      SELECT gen_random_uuid(),form_code,form_version_id,source_schema_sha256,
+        output_metric_code,'CALC3C2_TEST_UNQUALIFIED_V2',operation_code,
+        source_metrics_jsonb,period_semantics,dimension_policy,currency_policy,
+        unit_policy,rounding_policy,missing_policy,zero_policy,
+        'CANDIDATE_UNQUALIFIED',blocker_codes,'CALC3C2_SYNTHETIC_TEST_ONLY',
+        repeat('a',64),repeat('b',64)
+      FROM fin_calc.formula_contract_revision
+      WHERE output_metric_code='F02.grossProfit'
+      """);
+    jdbc.update("""
+      INSERT INTO fin_calc.form_calculation_requirement_revision(
+        id,form_code,form_version_id,source_schema_sha256,requirement_version,
+        mandatory_output_state,mandatory_outputs_jsonb,obligation_blockers,
+        approval_state,source_definition_sha256,binding_sha256)
+      SELECT gen_random_uuid(),form_code,form_version_id,source_schema_sha256,
+        'CALC3C2_TEST_UNQUALIFIED_V2','REVIEW_REQUIRED',NULL,obligation_blockers,
+        'NOT_S2_APPROVED',repeat('c',64),repeat('d',64)
+      FROM fin_calc.form_calculation_requirement_revision
+      WHERE form_code='F02'
+      """);
+    jdbc.update("""
+      INSERT INTO fin_calc.model_candidate_revision(
+        id,model_code,catalog_revision,model_pack,catalog_state,
+        formula_state,requirement_state,financial_approval_state,
+        definition_sha256,binding_sha256)
+      SELECT gen_random_uuid(),model_code,'CALC3C2_TEST_UNQUALIFIED_V2',
+        model_pack,catalog_state,'NOT_AUTHORED','REVIEW_REQUIRED',
+        'NOT_S2_APPROVED',repeat('e',64),repeat('f',64)
+      FROM fin_calc.model_candidate_revision
+      WHERE model_code='ACC-07' AND catalog_revision='CATALOG_CANDIDATE_V1'
+      """);
+    var args=new DefaultApplicationArguments(new String[0]);
+    formulas.run(args);
+    requirements.run(args);
+    models.run(args);
+    assertEquals(11,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_calc.formula_contract_revision",Integer.class));
+    assertEquals(155,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_calc.form_calculation_requirement_revision",Integer.class));
+    assertEquals(43,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_calc.model_candidate_revision",Integer.class));
+    assertEquals(21,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_calc.formula_typed_input_binding",Integer.class));
+    assertEquals(97,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_calc.model_candidate_input_form",Integer.class));
+    assertEquals(0,jdbc.queryForObject(
+      "SELECT count(*) FROM fin_calc.calc_plan",Integer.class));
+  }
+
 }
