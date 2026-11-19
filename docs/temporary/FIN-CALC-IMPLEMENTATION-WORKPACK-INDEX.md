@@ -1,7 +1,7 @@
 # FIN CALC — TEMP Code-Level Workpacks R0 → R1 → R2
 
 **Branch:** `feat/fin-form-library-standalone`  
-**State:** DRAFT SPECIFICATIONS ONLY. Java/SQL/Redis implementation and benchmarks remain NOT EXECUTED until separately verified.  
+**State (2026-11-19):** INGEST-0/1/2, physical FIN FACT/FIN CALC migrations 019–021 and TEST_ONLY F02 TX-Q passed PostgreSQL technical qualification; **FACT-1 runtime trusted qualifier, DAG/worker, Redis and production S2 NOT IMPLEMENTED**. [Roadmap](../FIN-FACT-DEVELOPMENT-ROADMAP.md).  
 **Canonical architecture:** [FIN CALC-R0 master ТЗ](../FIN-CALC-R0-INCREMENTAL-CALCULATION-ARCHITECTURE-TZ.md).  
 **S1 findings:** [Architecture review](../audits/FIN-CALC-R0-S1-ARCHITECTURE-REVIEW-2026-11-19.md), [Source→Fact data-flow audit](../audits/FIN-CALC-R0-S1-SOURCE-FACT-CALC-FLOW-REVIEW-2026-11-19.md), [S1B partitioning and 166-form re-review](../audits/FIN-CALC-R0-S1B-PARTITIONED-166-INGESTION-REVIEW-2026-11-19.md).  
 **Source matrices:** [166 forms](../FIN-CALC-R0-COVERAGE-166-BASELINE.tsv), [794 candidate fields](../FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv), [166-form ingestion strategy matrix](../FIN-FACT-R0-166-FORM-INGESTION-COVERAGE.tsv).
@@ -10,9 +10,13 @@
 
 | Stage | Code-level TЗ | Core implementation | DoD / no-go |
 |---|---|---|---|
-| **CALC-R0** | [R0 code-level](./FIN-CALC-R0-CODE-LEVEL-TZ.md) + [Source→Fact](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md) + [Partitioned fin_fact/166 forms](./FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md) | F02 typed DAG, pinned JSON→**monthly-partitioned** typed observations, TEST_ONLY FactSet, PostgreSQL queue, multithreaded workers and Caffeine descriptors | PG16 001–020, STF-01–16, PFT-01–18, A01–A25/A27/A29–A34, Java/React E2E GREEN on one SHA; no production S2 |
+| **FACT-0.H** | [PG roles, partitions, recovery](./FIN-FACT-0H-POSTGRES-SECURITY-AND-OPERATIONS-TZ.md) | Separate runtime/owner/maintenance PostgreSQL identities; prove DDL/TRUNCATE denied, pruning and restore | **OPS-01–16**, planned additive 022+; no privileged DDL in business app |
+| **FACT-1.A/B** | [F02 typed mapper, authority and committer](./FIN-FACT-1A-1B-TRUSTED-QUALIFICATION-CODE-LEVEL-TZ.md) | Typed canonical CandidateFactSet, deny-by-default S2 gateway, trusted receipt, TX-Q/epoch/replay/Outbox | **QF-01–24**, main runtime cannot approve until trusted issuer/ABAC; source SHA recheck inside TX-Q |
+| **CALC-R0** | [R0 code-level](./FIN-CALC-R0-CODE-LEVEL-TZ.md) + [Source→Fact](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md) + [Partitioned fin_fact/166 forms](./FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md) | FACT-0 storage already implemented; future F02 DAG, PostgreSQL queue, bounded multithread workers and Caffeine descriptor reuse | PostgreSQL 019–021 baseline GREEN; future 022+ gates, STF-01–16/PFT-01–18/A01–34; no production S2 |
 | **CALC-R1** | [R1 code-level](./FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md) | `CalculationCache` port, Caffeine node values L1, optional Redis L2 OFF by default; **R1-INGEST** adds ROWSET/EVIDENCE and later ReportGrid adapters with reviewed field semantics | Cache failure ≡ correct output; per-form mapping E2E separately, no automatic S2 or source mixing |
 | **CALC-R2** | [R2 code-level](./FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md) | Reproducible OFF/L1/L1+L2 benchmark, exact fixture SHAs, performance + correctness report | Enable Redis **only** after measured benefit; `KEEP_DISABLED_NO_GAIN` is a valid outcome |
+
+**Execution order:** FACT-1.A1 typed mapper → FACT-1.A2 independent fail-closed authority + FACT-0.H DB roles → FACT-1.B committer/receipt → separate real S2 acceptance → CALC-R0 worker/publisher. [Latest S1 review](../audits/FIN-FACT-FACT1-NEXT-S1-PREIMPLEMENTATION-REVIEW-2026-11-19.md). No changes to 001–021 migrations.
 
 **Do not start R1 before accepted R0; do not start R2 before R1 correctness GREEN.** Distinguish architecture test-only acceptance from production financial approval.
 
