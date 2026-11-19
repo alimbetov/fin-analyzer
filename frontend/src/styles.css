@@ -512,3 +512,7 @@
 .form-icon.icon-tone-violet{background:#f0eafb;color:#6e56a7}
 .form-icon.icon-tone-amber{background:#fff2dd;color:#97621d}
 .form-list-item:focus-visible{outline:3px solid #89aef0;outline-offset:2px}
+
+/* Sticky save must not be trapped by editor-panel overflow:hidden. */
+.editor-only .editor-panel{overflow:visible}
+.editor-only .editor-sticky-actions{border-radius:0 0 10px 10px}
