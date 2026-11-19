@@ -74,3 +74,15 @@ R0 calculations use the existing pinned F02 input values. Do not build `fin_read
 **Allow R0.B1 implementation in the existing branch** only as **LOCAL_TEST_ONLY** with F02 pinned inputs and three explicit pilot outputs. Do not label FIN HTAP v2 as production-ready, do not promote calculation candidates to `fin_fact`, and do not allow the pilot issuer from HTTP input. Keep source output, plan, job, fingerprint and lineage available for exact audit.
 
 This report does not claim that 21 acceptance scenarios, CI builds, database migrations, financial qualification, or real user E2E have already passed.
+
+## 6. Post-review architectural decision: bounded concurrency and cache phases (2026-11-19)
+
+The user explicitly requires **multithreaded execution**. The updated TЗ `FIN-CALC-R0-INCREMENTAL-CALCULATION-ARCHITECTURE-TZ.md` adds CALC-FR-10/11 and acceptance A22–A28:
+
+1. **CALC-R0:** bounded CPU worker pool executing distinct PostgreSQL calculation jobs concurrently; parallel independent DAG branches when measured work justifies it, deterministic topological barriers, fair per-tenant admission, separate interactive preview resources. `Caffeine` L1 for versioned immutable descriptors/graphs (already a Maven dependency). No Redis dependency; node-value reuse from verified PostgreSQL immutable results.
+2. **CALC-R1:** `CalculationCache` port, optional Redis L2 adapter disabled by default, test for fallback and corruption/tenant isolation.
+3. **CALC-R2:** measurement-driven Redis activation only if p95/p99 and PostgreSQL load improve on representative concurrent workloads without correctness regression.
+
+**Additional S1 risks explicitly gated:** unbounded parallel streams/virtual threads, starvation of preview requests, CPU oversubscription, DB connection starvation, shared mutable DAG context, stale ownership after cancellation, cache-stampede, Redis outages, cache poisoning, and accidentally trusting cached admission/current pointers.
+
+**Evidence:** documentation-only change, no Java worker/cache implementation or load-test result at this point. Before R0.B sign-off, demonstrate real concurrent worker execution with PostgreSQL 16 concurrency tests; before Redis enablement, demonstrate controlled OFF/L1/L1+L2 benchmarks.
