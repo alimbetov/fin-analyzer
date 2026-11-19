@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
-import {Activity,AlertTriangle,Check,CheckCircle2,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
+import {Activity,AlertTriangle,ArrowLeft,Check,CheckCircle2,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
 import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
@@ -500,7 +500,9 @@ export default function App(){
     </aside>
     <div className="workspace">
       <header className="topbar">
-        <div className="top-left"><Tool label={sidebar?'Скрыть меню':'Открыть меню'} onClick={()=>setSidebar(v=>!v)}>{sidebar?<PanelLeftClose size={19}/>:<PanelLeftOpen size={19}/>}</Tool>
+        <div className="top-left">{!navigator&&!dashboard&&!showReports?
+          <Tool label="Назад к сохранённым отчётам" onClick={()=>{if(confirmDiscard()){resetEditor();setShowReports(true)}}}><ArrowLeft size={19}/></Tool>:
+          <Tool label={sidebar?'Скрыть меню':'Открыть меню'} onClick={()=>setSidebar(v=>!v)}>{sidebar?<PanelLeftClose size={19}/>:<PanelLeftOpen size={19}/>}</Tool>}
         <span className="breadcrumb">Рабочая область <ChevronRight size={14}/> {navigator?'Финансовые решения':dashboard?'Профессиональный обзор':'Библиотека форм'} {!navigator&&<><ChevronRight size={14}/> <b>{formCode}</b></>}</span></div>
         <div className="top-right"><button type="button" className="mobile-decision-link" onClick={()=>{if(!navigator&&dirty&&!confirmDiscard())return;setNavigator(true);setDashboard(false)}}><GitBranch size={16}/> Финансовые решения</button><span className="local-state"><span className="dot"/> LOCAL</span>
           <select value={language} onChange={e=>setLanguage(e.target.value as Locale)} aria-label="Язык">
