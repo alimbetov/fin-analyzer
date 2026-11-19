@@ -107,10 +107,16 @@ public class FormFactSourceReader {
 
   private Map<String,String> parseStringMap(String json) {
     if (json == null || json.isBlank()) return Map.of();
-    try {
-      JsonNode node = mapper.readTree(json);
+    try (var parser=mapper.getFactory().createParser(json)) {
+      // A duplicate object key is never a legitimate immutable financial input;
+      // silently keeping the last value would conceal a changed raw source.
+      parser.enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+      JsonNode node = mapper.readTree(parser);
       if (node == null || !node.isObject()) {
         throw new IllegalArgumentException("SOURCE_JSON_OBJECT_REQUIRED");
+      }
+      if (parser.nextToken() != null) {
+        throw new IllegalArgumentException("SOURCE_JSON_TRAILING_DATA");
       }
       Map<String,String> values = new TreeMap<>();
       var it = node.fields();
@@ -122,7 +128,7 @@ public class FormFactSourceReader {
         values.put(field.getKey(), field.getValue().textValue());
       }
       return java.util.Collections.unmodifiableMap(values);
-    } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+    } catch (java.io.IOException ex) {
       throw new IllegalArgumentException("SOURCE_JSON_INVALID", ex);
     }
   }
