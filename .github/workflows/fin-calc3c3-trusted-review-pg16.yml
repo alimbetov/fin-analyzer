@@ -29,7 +29,7 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: form-library/pom.xml
-      - name: Validate seven real PostgreSQL 16 IAM and segregation tests
+      - name: Validate eight real PostgreSQL 16 IAM and segregation tests
         run: |
           mvn -B -ntp -f form-library/pom.xml test \
             -Dfin.postgres.uat.enabled=true \
@@ -45,6 +45,6 @@ jobs:
           root=ET.parse(xml[0]).getroot()
           actual={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
           print(actual)
-          if actual!={'tests':7,'errors':0,'failures':0,'skipped':0}:
-              sys.exit('FAIL CALC3C3: exactly seven tests must PASS')
+          if actual!={'tests':8,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('FAIL CALC3C3: exactly eight tests must PASS')
           PY
