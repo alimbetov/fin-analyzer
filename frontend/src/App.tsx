@@ -211,7 +211,12 @@ export default function App(){
     if(e.key==='Enter'||e.key==='ArrowDown'||e.key==='ArrowUp'){
       e.preventDefault();
       const dest=fields[index+(e.key==='ArrowUp'?-1:1)];
-      if(dest)document.getElementById('field-'+dest.fieldCode)?.focus();
+      if(dest){
+        const input=document.getElementById('field-'+dest.fieldCode);
+        const disclosure=input?.closest('details.form-section');
+        if(disclosure instanceof HTMLDetailsElement)disclosure.open=true;
+        input?.focus();
+      }
     }
   }
   async function execute(job:()=>Promise<void>){
