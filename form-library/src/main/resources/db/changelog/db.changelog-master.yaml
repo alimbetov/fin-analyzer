@@ -41,3 +41,5 @@ databaseChangeLog:
       file: db/changelog/020-fin-fact-r0-pilot-postgresql.sql
   - include:
       file: db/changelog/021-fin-fact-scope-source-immutability-postgresql.sql
+  - include:
+      file: db/changelog/022-fin-fact1b-uat-commit-receipt-postgresql.sql
