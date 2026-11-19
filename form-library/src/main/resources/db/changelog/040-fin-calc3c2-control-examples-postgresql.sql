@@ -26,7 +26,7 @@ CREATE TABLE fin_calc.financial_control_example_revision (
   CONSTRAINT uq_calc3c2_example_key UNIQUE(formula_revision_id,example_code),
   CONSTRAINT uq_calc3c2_example_binding UNIQUE(formula_revision_id,binding_sha256),
   CONSTRAINT ck_calc3c2_example_payload CHECK(
-    jsonb_object_length(input_values_jsonb)>0)
+    input_values_jsonb <> '{}'::jsonb)
 );
 CREATE INDEX idx_calc3c2_example_formula
   ON fin_calc.financial_control_example_revision(formula_revision_id);
