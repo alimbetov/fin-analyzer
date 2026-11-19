@@ -555,7 +555,8 @@ class Ingest2PostgresqlIntegrityTest {
 
     // FACT-0 schema exists, but an ordinary form save MUST NOT materialize
     // financially qualified facts or enqueue a qualified calculation.
-    assertEquals(3,sql.queryForObject(
+    // Migration 022 adds immutable receipt as the fourth fin_fact table.
+    assertEquals(4,sql.queryForObject(
         "SELECT count(*) FROM information_schema.tables WHERE table_schema='fin_fact'",
         Integer.class));
     assertEquals(0,sql.queryForObject("SELECT count(*) FROM fin_fact.fact_set",Integer.class));
