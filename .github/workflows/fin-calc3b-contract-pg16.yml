@@ -1,0 +1,53 @@
+name: FIN CALC-3B — Requiredness & Dependency PostgreSQL 16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/resources/db/changelog/036-fin-calc154-calc3b-requirements-and-lineage-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/main/resources/catalog/analytics-model-catalog.tsv'
+      - 'form-library/src/main/resources/catalog/calc154-formula-contracts-v1.tsv'
+      - 'form-library/src/main/java/kz/fin/formlib/bootstrap/Calc3BRequirementBootstrap.java'
+      - 'form-library/src/main/java/kz/fin/formlib/bootstrap/Calc3BModelBootstrap.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/hybrid/Calc3BGovernancePostgresqlTest.java'
+      - 'form-library/pom.xml'
+      - '.github/workflows/fin-calc3b-contract-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calc3b-postgresql16:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Run six actual PostgreSQL 16 qualification-blocker tests
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc3BGovernancePostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Reject silent skips and incomplete CALC-3B
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob,xml.etree.ElementTree as ET,sys
+          reports=glob.glob('form-library/target/surefire-reports/TEST-*Calc3BGovernancePostgresqlTest.xml')
+          if len(reports)!=1:
+              sys.exit('FAIL: CALC3B test report not found')
+          attrs=ET.parse(reports[0]).getroot().attrib
+          values={name:int(attrs.get(name,0)) for name in ('tests','errors','failures','skipped')}
+          print(values)
+          if values!={'tests':6,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('FAIL: 6/6 real PostgreSQL tests required')
+          PY
