@@ -43,3 +43,5 @@ databaseChangeLog:
       file: db/changelog/021-fin-fact-scope-source-immutability-postgresql.sql
   - include:
       file: db/changelog/022-fin-fact1b-uat-commit-receipt-postgresql.sql
+  - include:
+      file: db/changelog/023-fin-calc-r01-outbox-integrity-postgresql.sql
