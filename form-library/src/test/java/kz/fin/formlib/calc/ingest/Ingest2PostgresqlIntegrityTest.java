@@ -249,8 +249,9 @@ class Ingest2PostgresqlIntegrityTest {
     assertEquals(revised.contentSha256(),current.sha256(),code);
     if("ROWSET".equals(mode)) {
       assertEquals(2,current.rows().size(),code);
+      UUID firstRowId=inputRows.getFirst().rowId();
       assertEquals(nextValue,current.rows().stream()
-          .filter(r->r.rowId().equals(inputRows.getFirst().rowId()))
+          .filter(r->r.rowId().equals(firstRowId))
           .findFirst().orElseThrow().values().get(changingField),code);
     }else {
       assertEquals(nextValue,current.values().get(changingField),code);
