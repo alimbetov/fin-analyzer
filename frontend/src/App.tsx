@@ -7,6 +7,7 @@ import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
 import SavedReports from './SavedReports';
 import RevisionDrawer from './RevisionDrawer';
+import {formVisual,sectionTitle} from './formVisuals';
 import type {SavedReport} from './SavedReports';
 import FinancialGoalsNavigator from './FinancialGoalsNavigator';
 import type {DecisionContext} from './decisionTree';
@@ -546,7 +547,7 @@ export default function App(){
             <div className="form-list">
               {filtered.map(f=><button key={f.formCode} className={'form-list-item '+(f.formCode===formCode?'active':'')}
                 onClick={()=>switchForm(f.formCode)}>
-                <span className={"form-icon "+(f.contentMode==="EVIDENCE"?"icon-document":f.contentMode==="ROWSET"?"icon-table":"icon-finance")}>{f.contentMode==="EVIDENCE"?<FileText size={18}/>:<FileSpreadsheet size={18}/>}</span>
+                <span className={"form-icon icon-tone-"+formVisual(f.functionalDomain).tone}>{(()=>{const Icon=formVisual(f.functionalDomain).icon;return <Icon size={18}/>;})()}</span>
                 <span><b>{f.title||f.formCode}</b><small>{f.formCode} · {f.contentMode==='EVIDENCE'?'Документ':f.contentMode==='ROWSET'?'Таблица':'Форма'}</small></span><ChevronRight size={16}/></button>)}
               {!filtered.length&&<p className="empty">Формы не найдены</p>}
             </div>
@@ -638,13 +639,13 @@ export default function App(){
                       const element=document.getElementById('form-section-'+section.index);
                       if(element instanceof HTMLDetailsElement)element.open=true;
                       element?.scrollIntoView({behavior:'smooth',block:'start'});
-                    }}><span>{section.code==='GENERAL'?'Общие сведения':section.code.replaceAll('_',' ')}</span>
+                    }}><span>{sectionTitle(section.code,language)}</span>
                     <small>{section.filled}/{section.items.length}</small>
                     {attemptedSave&&section.missing>0?<AlertTriangle size={14} aria-label="Есть обязательные поля"/>:section.filled===section.items.length?<CheckCircle2 size={14}/>:<ChevronRight size={14}/>}</button>)}
                   </nav>
                   <div className="section-groups">
                     {sections.map((section,sectionIndex)=><details className="form-section" id={'form-section-'+section.index} key={section.code} open={sectionIndex===0}>
-                      <summary><span className="section-symbol"><FileSpreadsheet size={18}/></span><span className="section-title"><strong>{section.code==='GENERAL'?'Общие сведения':section.code.replaceAll('_',' ')}</strong><small>{section.filled} из {section.items.length} заполнено</small></span>
+                      <summary><span className="section-symbol"><FileSpreadsheet size={18}/></span><span className="section-title"><strong>{sectionTitle(section.code,language)}</strong><small>{section.filled} из {section.items.length} заполнено</small></span>
                       {attemptedSave&&section.missing>0&&<span className="section-error">{section.missing} обязательных</span>}<ChevronDown size={18}/></summary>
                       <div className={style==='DASHBOARD'?'cards-layout':'classic-layout'}>
                         {section.items.map(f=><div className={'metric-card'+(attemptedSave&&f.required&&!values[f.fieldCode]?.trim()?' field-invalid':'')} key={f.fieldCode}>
