@@ -69,7 +69,7 @@ case "$mode" in
     options=()
     ;;
   quick)
-    selector="Ingest2PostgresqlIntegrityTest#f02ExactHistoricalRevisionIsVerifiedNotLatest,FactR0PostgresqlPartitionTest#partitionedSchemaIsPresentWithCompositePrimaryKeyAndNoDefault+octoberAndNovemberRowsRouteToSeparatePartitionsAndCannotChange+planAndSourceCannotCrossScopeOrAlterVerifiedHistoricalRevision,Fact1F02TestOnlyQualificationTest#f02ExactVerifiedRevisionCreatesThreeFactsAndOneOutbox+atomicTxRollsBackAllThreeFactsAndTrustedEventOnFault,Fact1BUatCommitterPostgresqlTest#qf11OneAtomicFactSetAndThreeExactObservationsPlusOutbox,CalcR01PostgresqlTest#r01_01PublishedUatFactsetCreatesPlanAndReadyJobWithExactFingerprint,CalcR02PostgresqlTest#r02_01EndToEndPersistsCorrectImmutableFinancialResult
+    selector="Ingest2PostgresqlIntegrityTest#f02ExactHistoricalRevisionIsVerifiedNotLatest,FactR0PostgresqlPartitionTest#partitionedSchemaIsPresentWithCompositePrimaryKeyAndNoDefault+octoberAndNovemberRowsRouteToSeparatePartitionsAndCannotChange+planAndSourceCannotCrossScopeOrAlterVerifiedHistoricalRevision,Fact1F02TestOnlyQualificationTest#f02ExactVerifiedRevisionCreatesThreeFactsAndOneOutbox+atomicTxRollsBackAllThreeFactsAndTrustedEventOnFault,Fact1BUatCommitterPostgresqlTest#qf11OneAtomicFactSetAndThreeExactObservationsPlusOutbox,CalcR01PostgresqlTest#r01_01PublishedUatFactsetCreatesPlanAndReadyJobWithExactFingerprint,CalcR02PostgresqlTest#r02_01EndToEndPersistsCorrectImmutableFinancialResult"
     expected=9
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
@@ -79,7 +79,7 @@ case "$mode" in
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
   extended)
-    selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,CalcR02PostgresqlTest,FactR0PostgresqlUpgradeTest
+    selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,CalcR02PostgresqlTest,FactR0PostgresqlUpgradeTest"
     expected=220
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
