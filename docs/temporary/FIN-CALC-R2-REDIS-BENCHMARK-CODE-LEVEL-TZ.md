@@ -62,7 +62,7 @@ public record BenchmarkManifest(
 
 Synthetic organizations/projects must be **stable UUIDs from deterministic seed**; explicitly scope them to test-only datasets. Inputs use the real F02 fields `netRevenue/cogs/operatingExpenses` and `PeriodResolver` codes/intervals; synthetic qualified issuer only under test profile.
 
-For the same benchmark manifest, MODE_OFF/L1/L1_L2 **must produce exactly the same sorted output values and canonical result SHA** per qualified execution binding; reuse markers and timings are excluded from canonical economic value hash (record separately in audit metadata). Each run must start from a restored **equivalent PostgreSQL snapshot** (or carefully controlled reset+reseed) and isolated new cache namespace; warm runs must use the same deterministic warm-up manifest. Never compare one mode with a fresh DB and the other with hot DB by accident.
+For the same benchmark manifest, MODE_OFF/L1/L1_L2 **must produce exactly the same sorted output values and `outputValuesSha256`** per qualified execution binding; `resultSha256` may differ because full immutable result metadata/lineage includes cache-mode-dependent `REUSED` flags or timing. Compare exact economic outputs and source binding identities, not cache execution provenance. Reuse markers and timings are excluded from the economic values hash (record separately in audit metadata). Each run must start from a restored **equivalent PostgreSQL snapshot** (or carefully controlled reset+reseed) and isolated new cache namespace; warm runs must use the same deterministic warm-up manifest. Never compare one mode with a fresh DB and the other with hot DB by accident.
 
 ### 2.2 Benchmark levels
 
@@ -175,7 +175,7 @@ algorithm artifact/config/params SHAs, worker/queue/pool limits,
 mode OFF/L1/L1_L2, cold/warm/repeat description,
 five runs per mode, raw metric file paths, aggregation method,
 p50/p95/p99, DB reads, reused nodes, Redis RTT, error/fencing stats,
-output hash equivalence validation, activation decision and reviewer.
+`outputValuesSha256` equivalence validation, separately recorded `resultSha256` per run, activation decision and reviewer.
 ```
 
 The report must link test CI artifacts and raw metrics. No screenshot-only or hand-entered invented latency evidence. Preserve reproducible seeds and exact load parameters.
@@ -184,7 +184,7 @@ The report must link test CI artifacts and raw metrics. No screenshot-only or ha
 
 | ID | Test | Expected |
 |---|---|---|
-| B01 | Same dataset, config, SHA, 3 cache modes | Exactly equal canonical financial output and result lineage per binding |
+| B01 | Same dataset, config, SHA, 3 cache modes | Exactly equal canonical financial outputs and `outputValuesSha256`; exact source binding identities; technical reuse lineage may differ |
 | B02 | New revision touches only operatingExpenses | Only dependent node recomputed; all modes same full output |
 | B03 | Tenant isolation under 50-tenant load | No shared key/value reuse across tenants |
 | B04 | One Redis miss/outage mid-run | Correct PG fallback and bounded queue |
