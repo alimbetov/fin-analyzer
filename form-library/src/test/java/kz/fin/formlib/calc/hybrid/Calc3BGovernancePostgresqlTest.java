@@ -205,7 +205,9 @@ class Calc3BGovernancePostgresqlTest {
     assertEquals(97,jdbc.queryForObject(
       "SELECT count(*) FROM fin_calc.model_candidate_input_form",Integer.class));
   }
-  @Test void bootstrapReplaysBaselineAlongsideAdditionalImmutableRevisions() throws Exception {
+  @Test
+  @org.springframework.transaction.annotation.Transactional
+  void bootstrapReplaysBaselineAlongsideAdditionalImmutableRevisions() throws Exception {
     // Synthetic unqualified revisions prove the loaders no longer equate
     // global table cardinality with a fixed historical manifest.
     jdbc.update("""
