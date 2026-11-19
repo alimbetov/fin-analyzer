@@ -11,7 +11,7 @@
 **Original specification: P0 HOLD for source→fact→qualified calculation end-to-end.**
 Reason: an undefined `FACTSET_QUALIFIED` producer and missing physical source→fact mapping could cause the worker to compute directly from unqualified JSON. This is a **material trust-boundary and data-integrity defect**, not just a missing optimization.
 
-**After documentation remediation: DESIGN-CONDITIONALLY ACCEPTED for TEST_ONLY implementation.** R0.B1 pure kernel can begin; R0 end-to-end **must fail** acceptance until explicit typed fact persistence, epoch-safe qualification and PostgreSQL F01–F16 negative tests are implemented. Real production S2/IAM remains HOLD.
+**After documentation remediation: DESIGN-CONDITIONALLY ACCEPTED for TEST_ONLY implementation.** R0.B1 pure kernel can begin; R0 end-to-end **must fail** acceptance until explicit typed fact persistence, epoch-safe qualification and PostgreSQL STF-01–STF-16 negative tests are implemented. Real production S2/IAM remains HOLD.
 
 ## 1. Evidence from code — what exists and what does not
 
@@ -73,14 +73,14 @@ Reason: an undefined `FACTSET_QUALIFIED` producer and missing physical source→
 
 ## 4. Required PostgreSQL 16 acceptance and decision rule
 
-The baseline CALC tests A01–A28 are insufficient for this new seam. Add **F01–F16** from source-to-fact contract and acceptance **A29–A31** to the master specification.
+The baseline CALC tests A01–A28 are insufficient for this new seam. Add **STF-01–STF-16** from source-to-fact contract and acceptance **A29–A31** to the master specification.
 
 Minimum proofs: 3 exact fact rows per F02 FactSet, no row on rollback, no qualified job from draft-only event, no S2 from READY_FOR_REVIEW, canonical source+fact SHA reconstruction, idempotent qualifier and outbox replay, no cross-tenant/currency/period merging, no unqualified F02.netProfit, correct source after a new draft, correct dirty-node count after qualified update, revoke between TX-Q/TX-E/GET CURRENT, and failure to reuse stale owner results.
 
 **Release gates:**
 
 1. **R0.B1 pure calculation kernel:** may proceed on Java unit tests without fact storage.
-2. **R0.B3F Source-to-Fact:** cannot be marked GREEN without PostgreSQL 16 migrations 001–020 and F01–F16.
+2. **R0.B3F Source-to-Fact:** cannot be marked GREEN without PostgreSQL 16 migrations 001–020 and STF-01–STF-16.
 3. **R0.B4 worker:** MUST read persisted immutable `fin_fact.fact_observation` for qualified execution.
 4. **R0.D:** full browser+PG+concurrency on identical git SHA. Functional proof is not financial S2 approval.
 5. **Production:** HOLD until independent real S2, verifiable issuer/revocation, trusted principal/project ABAC, source immutability and distributed publication safety.
