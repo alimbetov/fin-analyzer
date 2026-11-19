@@ -5,6 +5,12 @@ import kz.fin.formlib.service.FormDraftService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import org.apache.poi.ss.util.CellReference;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -78,6 +84,62 @@ class Ingest2PostgresqlIntegrityTest {
         instance,s.org(),s.entity(),s.scope(),s.project(),formCode,
         "M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
         revision,values,rows,"ingest2-ci","source SHA rehash");
+  }
+
+  private FormDraftService.DraftReceipt saveViaHttp(FormDraftService.DraftRequest command,
+      String key) throws Exception {
+    var result=http.perform(post("/api/v1/drafts")
+        .header("Idempotency-Key",key)
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsBytes(command)))
+        .andExpect(status().isOk()).andReturn();
+    return json.readValue(result.getResponse().getContentAsByteArray(),
+        FormDraftService.DraftReceipt.class);
+  }
+
+  private FormDraftService.DraftReceipt attachmentViaHttp(FormDraftService.DraftRequest command,
+      String key, byte[] bytes) throws Exception {
+    var requestPart=new MockMultipartFile("draft","draft.json",
+        "application/json",json.writeValueAsBytes(command));
+    var filePart=new MockMultipartFile("file","proof-"+command.formCode()+".pdf",
+        "application/pdf",bytes);
+    var result=http.perform(multipart("/api/v1/drafts/with-attachment")
+        .file(requestPart).file(filePart)
+        .header("Idempotency-Key",key))
+        .andExpect(status().isOk()).andReturn();
+    return json.readValue(result.getResponse().getContentAsByteArray(),
+        FormDraftService.DraftReceipt.class);
+  }
+
+  private static String nextXlsxValue(String type) {
+    return switch(type) {
+      case "MONEY" -> "200";
+      case "DECIMAL" -> "200.5";
+      case "INTEGER" -> "19";
+      case "DATE" -> "2026-11-18";
+      case "BOOLEAN" -> "true";
+      case "REF","CODE","PERIOD","ENUM","TEXT" -> "R2_XLSX_REVISED";
+      default -> throw new AssertionError("UNSUPPORTED_XLSX_TYPE:"+type);
+    };
+  }
+
+  private static byte[] changeFirstExcelBinding(byte[] file,String expectedCode,
+      String expectedValue) throws Exception {
+    try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(file));
+        var output=new ByteArrayOutputStream()) {
+      var metadata=workbook.getSheet("PARAMETERS");
+      assertNotNull(metadata);
+      String binding=metadata.getRow(14).getCell(0).getStringCellValue();
+      assertTrue(binding.equals(expectedCode)||binding.endsWith("|"+expectedCode),
+          "XLSX_FIRST_BINDING_UNEXPECTED:"+binding);
+      String address=metadata.getRow(14).getCell(1).getStringCellValue();
+      var location=new CellReference(address);
+      var target=workbook.getSheet("REPORT").getRow(location.getRow())
+          .getCell(location.getCol());
+      target.setCellValue(expectedValue);
+      workbook.write(output);
+      return output.toByteArray();
+    }
   }
 
   /**
@@ -185,14 +247,12 @@ class Ingest2PostgresqlIntegrityTest {
     var initialRequest=request(tenant,code,null,0,top,inputRows);
     String initialKey="all166-lifecycle-v1-"+code+"-"+tenant.org();
     FormDraftService.DraftReceipt first;
-    if("EVIDENCE".equals(mode)) {
-      var bytes=("%PDF-1.4\\nSynthetic test evidence for "+code)
-          .getBytes(StandardCharsets.UTF_8);
-      var upload=FormAttachmentStore.validate("proof-"+code+".pdf",bytes);
-      first=drafts.saveWithAttachment(initialRequest,initialKey,upload);
-    }else {
-      first=drafts.save(initialRequest,initialKey);
-    }
+    byte[] originalEvidence=("%PDF-1.4\\nSynthetic test evidence for "+code)
+        .getBytes(StandardCharsets.UTF_8);
+    if("EVIDENCE".equals(mode))
+      first=attachmentViaHttp(initialRequest,initialKey,originalEvidence);
+    else
+      first=saveViaHttp(initialRequest,initialKey);
     assertEquals(1,first.revisionNo(),code);
     assertEquals("UNQUALIFIED_DRAFT",first.result(),code);
 
@@ -257,12 +317,15 @@ class Ingest2PostgresqlIntegrityTest {
       assertTrue(original.numeric().stream().allMatch(n->ids.contains(n.rowId())),code);
     }
 
-    // Exact command replay must not allocate another historical revision.
-    if(!"EVIDENCE".equals(mode)) {
-      var replay=drafts.save(initialRequest,initialKey);
-      assertEquals(first.revisionId(),replay.revisionId(),code);
-      assertEquals("IDEMPOTENT_REPLAY",replay.result(),code);
-    }
+    // HTTP command replay, including attachment, must never allocate a second revision.
+    var replay="EVIDENCE".equals(mode)
+        ?attachmentViaHttp(initialRequest,initialKey,originalEvidence)
+        :saveViaHttp(initialRequest,initialKey);
+    assertEquals(first.revisionId(),replay.revisionId(),code);
+    assertEquals("IDEMPOTENT_REPLAY",replay.result(),code);
+    assertEquals(1,sql.queryForObject(
+        "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
+        Integer.class,first.instanceId()),code);
     var changedTop=new java.util.TreeMap<>(top);
     List<FormDraftService.RowInput> changedRows=inputRows;
     String changingField=definition.getFirst()[2];
@@ -278,7 +341,7 @@ class Ingest2PostgresqlIntegrityTest {
       changedTop.put(changingField,nextValue);
     }
 
-    var revised=drafts.save(request(tenant,code,first.instanceId(),1,
+    var revised=saveViaHttp(request(tenant,code,first.instanceId(),1,
         changedTop,changedRows),"all166-lifecycle-v2-"+code+"-"+tenant.org());
     assertEquals(2,revised.revisionNo(),code);
     assertNotEquals(first.revisionId(),revised.revisionId(),code);
@@ -317,23 +380,82 @@ class Ingest2PostgresqlIntegrityTest {
     var xlsxRequest=get("/api/v1/drafts/"+first.instanceId()+"/export.xlsx")
         .param("organizationId",tenant.org().toString())
         .param("styleCode","EXCEL").param("locale","ru");
+    int expectedRevisions=2;
     if("EVIDENCE".equals(mode)) {
       http.perform(xlsxRequest).andExpect(status().isUnprocessableEntity());
-      var downloaded=http.perform(get("/api/v1/drafts/"+first.instanceId()
+      var downloadRequest=get("/api/v1/drafts/"+first.instanceId()
           +"/revisions/1/attachment")
           .param("organizationId",tenant.org().toString())
-          .param("projectId",tenant.project().toString()))
-          .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-      assertEquals(opened.attachment().sizeBytes(),downloaded.length,code);
-    }else{
-      // Parse the actual workbook; HTTP 200 alone would not prove validity.
-      var export=http.perform(xlsxRequest).andExpect(status().isOk())
+          .param("projectId",tenant.project().toString());
+      var downloaded=http.perform(downloadRequest).andExpect(status().isOk())
           .andReturn().getResponse().getContentAsByteArray();
-      assertTrue(export.length>100,"XLSX_EXPORT_EMPTY:"+code);
-      try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(export))) {
-        assertNotNull(workbook.getSheet("REPORT"),"XLSX_REPORT_SHEET_MISSING:"+code);
-        assertNotNull(workbook.getSheet("PARAMETERS"),"XLSX_PARAMS_SHEET_MISSING:"+code);
+      assertArrayEquals(originalEvidence,downloaded,"EVIDENCE_BYTES_CHANGED:"+code);
+      assertEquals(opened.attachment().sha256(),FormAttachmentStore
+          .validate("proof-"+code+".pdf",downloaded).sha256(),code);
+      assertArrayEquals(downloaded,http.perform(get("/api/v1/drafts/"
+          +first.instanceId()+"/revisions/2/attachment")
+          .param("organizationId",tenant.org().toString())
+          .param("projectId",tenant.project().toString()))
+          .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray(),code);
+      var file=Path.of("target/ingest2-verified-attachments")
+          .toAbsolutePath().normalize()
+          .resolve(opened.attachment().id()+".bin");
+      var originalBytes=Files.readAllBytes(file);
+      try {
+        Files.write(file,"CORRUPTED_EVIDENCE".getBytes(StandardCharsets.UTF_8));
+        http.perform(downloadRequest).andExpect(status().isConflict());
+      } finally {
+        Files.write(file,originalBytes);
       }
+      assertArrayEquals(originalEvidence,http.perform(downloadRequest)
+          .andExpect(status().isOk()).andReturn()
+          .getResponse().getContentAsByteArray(),code);
+    }else{
+      // HTTP XLSX export -> edit one server-pinned binding -> HTTP import.
+      byte[] exported=http.perform(xlsxRequest).andExpect(status().isOk())
+          .andReturn().getResponse().getContentAsByteArray();
+      assertTrue(exported.length>100,"XLSX_EXPORT_EMPTY:"+code);
+      String changedField=definition.getFirst()[2];
+      String changedType=definition.getFirst()[3];
+      String thirdValue=nextXlsxValue(changedType);
+      byte[] edited=changeFirstExcelBinding(exported,changedField,thirdValue);
+      var part=new MockMultipartFile("file","roundtrip.xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",edited);
+      var importRequest=multipart("/api/v1/drafts/"+first.instanceId()+"/import.xlsx")
+          .file(part).param("organizationId",tenant.org().toString())
+          .param("actor","qa-r2").param("reason","166-form XLSX round trip")
+          .header("Idempotency-Key","r2-xlsx-"+code+"-"+tenant.org());
+      var importResponse=http.perform(importRequest).andExpect(status().isOk())
+          .andReturn().getResponse().getContentAsByteArray();
+      var imported=json.readValue(importResponse,FormDraftService.DraftReceipt.class);
+      assertEquals(3,imported.revisionNo(),code);
+      assertNotEquals(revised.contentSha256(),imported.contentSha256(),code);
+      var third=drafts.read(first.instanceId(),tenant.org());
+      assertEquals(3,third.revisionNo(),code);
+      assertEquals(imported.contentSha256(),third.sha256(),code);
+      if("ROWSET".equals(mode)) {
+        assertEquals(2,third.rows().size(),code);
+        UUID rowId=inputRows.getFirst().rowId();
+        assertEquals(thirdValue,third.rows().stream()
+            .filter(r->r.rowId().equals(rowId)).findFirst().orElseThrow()
+            .values().get(changedField),code);
+      }else assertEquals(thirdValue,third.values().get(changedField),code);
+      assertEquals(first.contentSha256(),
+          drafts.readRevision(first.instanceId(),tenant.org(),1).sha256(),code);
+      assertEquals(revised.contentSha256(),
+          drafts.readRevision(first.instanceId(),tenant.org(),2).sha256(),code);
+      assertEquals(imported.contentSha256(),
+          candidates.extractExact(imported.revisionId(),tenant.org(),tenant.project())
+              .sourceSha256Claim(),code);
+      // Stale workbook cannot silently create revision 4.
+      var stale=new MockMultipartFile("file","stale.xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",edited);
+      http.perform(multipart("/api/v1/drafts/"+first.instanceId()+"/import.xlsx")
+          .file(stale).param("organizationId",tenant.org().toString())
+          .param("actor","qa-r2").param("reason","stale replay")
+          .header("Idempotency-Key","r2-stale-"+code+"-"+tenant.org()))
+          .andExpect(status().isConflict());
+      expectedRevisions=3;
     }
     assertEquals(original.sourceSha256Claim(),
         candidates.extractExact(first.revisionId(),tenant.org(),tenant.project())
@@ -372,10 +494,17 @@ class Ingest2PostgresqlIntegrityTest {
       badTop.put("__forbidden_166_field__","100");
     }
     var finalRows=badRows;
-    assertThrows(org.springframework.web.server.ResponseStatusException.class,
-        ()->drafts.save(request(tenant,code,first.instanceId(),2,
-            badTop,finalRows),"all166-reject-"+code+"-"+tenant.org()),code);
-    assertEquals(2,sql.queryForObject(
+    var invalidRequest=request(tenant,code,first.instanceId(),expectedRevisions,
+        badTop,finalRows);
+    var rejected=http.perform(post("/api/v1/drafts")
+        .header("Idempotency-Key","all166-reject-"+code+"-"+tenant.org())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(json.writeValueAsBytes(invalidRequest)))
+        .andExpect(status().isUnprocessableEntity()).andReturn();
+    assertEquals("UNKNOWN_FIELD:__forbidden_166_field__",
+        json.readTree(rejected.getResponse().getContentAsByteArray())
+            .path("code").asText(),code);
+    assertEquals(expectedRevisions,sql.queryForObject(
         "SELECT count(*) FROM fin_intake.lib_form_revision WHERE instance_id=?",
         Integer.class,first.instanceId()),code);
     assertEquals(0,sql.queryForObject(
