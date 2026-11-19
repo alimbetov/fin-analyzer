@@ -3,6 +3,9 @@ package kz.fin.formlib.calc.worker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.calc.fact.*;
 import kz.fin.formlib.calc.ingest.FormFactCandidateService;
+import kz.fin.formlib.calc.kernel.F02CalculationKernel;
+import kz.fin.formlib.calc.kernel.SqlF02CalculationKernel;
+import org.springframework.transaction.PlatformTransactionManager;
 import kz.fin.formlib.calc.partition.FactMonthlyPartitionService;
 import kz.fin.formlib.service.FormDraftService;
 import org.junit.jupiter.api.AfterEach;
@@ -54,6 +57,9 @@ class CalcR02PostgresqlTest {
   @Autowired UatF02FactSetCommitter committer;
   @Autowired UatCalcR01OutboxDispatcher dispatcher;
   @Autowired UatF02CalcWorker worker;
+  @Autowired SqlF02CalculationKernel sqlKernel;
+  @Autowired UatF02PinnedPlanReader pinnedReader;
+  @Autowired PlatformTransactionManager txManager;
   @Autowired FactMonthlyPartitionService partitions;
 
   record Slot(UUID org,UUID entity,UUID business,UUID project){
@@ -311,4 +317,32 @@ class CalcR02PostgresqlTest {
         assertThrows(IllegalStateException.class,()->
             denied.claimNext("any-worker",60)).getMessage());
   }
+
+  @Test void r02_12OptInNativeSqlWorkerMatchesPinnedJavaAndImmutableResult() throws Exception{
+    var f=fresh();
+    var pinned=pinnedReader.verify(f.planId,f.slot.org,f.scope);
+    var canonicalJava=new F02CalculationKernel().evaluate(pinned.observations());
+    var canonicalSql=sqlKernel.evaluate(pinned.observations());
+    assertEquals(canonicalJava,canonicalSql,
+        "SQL must exactly match Java values, INVALID states and SHA before TX-D");
+    var nativeWorker=new UatF02CalcWorker(sql,txManager,pinnedReader,mapper,
+        sqlKernel,true,true);
+    var work=nativeWorker.runOne("f02-sql-parity");
+    assertNotNull(work);
+    assertEquals(UatF02CalcWorker.Publication.PUBLISHED,work.publication());
+    assertEquals(canonicalJava.outputValuesSha256(),
+        work.completion().outputValuesSha256());
+    assertEquals(work.completion().resultId(),current(f));
+    assertEquals(1,results(f.slot));
+    String json=sql.queryForObject("""
+        SELECT result_jsonb::text FROM fin_calc.calc_result WHERE id=?
+        """,String.class,work.completion().resultId());
+    var root=mapper.readTree(json);
+    assertEquals("5100000.00",root.at("/outputs/grossProfit/value").asText());
+    assertEquals("0.40800000",root.at("/outputs/grossMargin/value").asText());
+    assertEquals("3000000.00",root.at("/outputs/operatingResult/value").asText());
+    assertEquals(canonicalJava.nodes().get("grossMargin").valueSha256(),
+        root.at("/outputs/grossMargin/valueSha256").asText());
+  }
+
 }
