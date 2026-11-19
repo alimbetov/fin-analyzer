@@ -28,7 +28,7 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: form-library/pom.xml
-      - name: Run seven real PG16 arithmetic SQL/JDBC candidate DAG tests
+      - name: Run eight real PG16 arithmetic SQL/JDBC candidate DAG tests
         run: |
           mvn -B -ntp -f form-library/pom.xml test \
             -Dfin.postgres.uat.enabled=true \
@@ -44,6 +44,6 @@ jobs:
           r=ET.parse(files[0]).getroot()
           actual={k:int(r.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
           print(actual)
-          if actual!={'tests':7,'errors':0,'failures':0,'skipped':0}:
-              sys.exit('FAIL CALC4A: expected seven PostgreSQL tests, no skips/errors')
+          if actual!={'tests':8,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('FAIL CALC4A: expected eight PostgreSQL tests, no skips/errors')
           PY
