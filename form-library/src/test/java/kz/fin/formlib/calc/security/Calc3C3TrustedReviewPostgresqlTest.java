@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
@@ -24,6 +27,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * PostgreSQL 16 negative governance: JWT authentication assumed verified
@@ -31,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * authorization, NOT RSA signature validation or real Keycloak availability.
  * No APPROVED decision or executable plan is produced.
  */
+@AutoConfigureMockMvc
 @SpringBootTest(properties={
     "fin.uat.editor.enabled=false",
     "fin.financial-review.api-enabled=false",
@@ -50,6 +56,7 @@ class Calc3C3TrustedReviewPostgresqlTest {
     r.add("spring.datasource.driver-class-name",()->"org.postgresql.Driver");
   }
   @Autowired JdbcTemplate jdbc;
+  @Autowired MockMvc mvc;
   @Autowired TrustedFinancialReviewIntakeService intake;
   @Autowired RequiredOutputReviewDraftService legacy;
 
@@ -213,4 +220,13 @@ class Calc3C3TrustedReviewPostgresqlTest {
       "reviewer not author"));
     noPlanOrApproval();
   }
+  @Test void unconfiguredReviewHttpEndpointIsAlwaysDenied() throws Exception {
+    mvc.perform(post("/internal/fin-calc/financial-review/drafts")
+        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+      .andExpect(status().isForbidden());
+    mvc.perform(post("/internal/fin-calc/financial-review/drafts/"
+        +UUID.randomUUID()+"/submit-for-independent-s2"))
+      .andExpect(status().isForbidden());
+  }
+
 }
