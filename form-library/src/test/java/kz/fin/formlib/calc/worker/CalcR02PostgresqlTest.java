@@ -2,6 +2,10 @@ package kz.fin.formlib.calc.worker;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.calc.fact.*;
+import kz.fin.formlib.calc.hybrid.HybridMethodRegistry;
+import kz.fin.formlib.calc.hybrid.HybridF02ComparisonService;
+import kz.fin.formlib.calc.hybrid.HybridF02RegistryTestFixture;
+import kz.fin.formlib.calc.fact.FactDigest;
 import kz.fin.formlib.calc.ingest.FormFactCandidateService;
 import kz.fin.formlib.calc.kernel.F02CalculationKernel;
 import kz.fin.formlib.calc.kernel.SqlF02CalculationKernel;
@@ -33,7 +37,8 @@ import static org.junit.jupiter.api.Assertions.*;
     "fin.uat.editor.enabled=false",
     "fin.fact.uat-committer.enabled=true",
     "fin.calc.uat.dispatch.enabled=true",
-    "fin.calc.uat.worker.enabled=true"
+    "fin.calc.uat.worker.enabled=true",
+    "fin.calc.hybrid.uat.compare.enabled=true"
 })
 @Testcontainers
 @EnabledIfSystemProperty(named="fin.postgres.uat.enabled",matches="true")
@@ -60,6 +65,8 @@ class CalcR02PostgresqlTest {
   @Autowired SqlF02CalculationKernel sqlKernel;
   @Autowired UatF02PinnedPlanReader pinnedReader;
   @Autowired PlatformTransactionManager txManager;
+  @Autowired HybridMethodRegistry methodRegistry;
+  @Autowired HybridF02ComparisonService hybridComparison;
   @Autowired FactMonthlyPartitionService partitions;
 
   record Slot(UUID org,UUID entity,UUID business,UUID project){
@@ -343,6 +350,195 @@ class CalcR02PostgresqlTest {
     assertEquals("3000000.00",root.at("/outputs/operatingResult/value").asText());
     assertEquals(canonicalJava.nodes().get("grossMargin").valueSha256(),
         root.at("/outputs/grossMargin/valueSha256").asText());
+  }
+
+  private UUID registerHybridReference(Input f,String state,boolean wrongSchema){
+    var verified=pinnedReader.verify(f.planId,f.slot.org,f.scope);
+    return HybridF02RegistryTestFixture.install(sql,f.planId,
+        verified.formVersionId(),state,wrongSchema);
+  }
+
+  @Test void r02_13HybridJavaSqlAndJdbcAggregatedResultsHaveIdenticalSha() {
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    var version=pinnedReader.verify(f.planId,f.slot.org,f.scope).formVersionId();
+    var model=methodRegistry.requireF02TestOnly(method,version);
+    assertFalse(model.financiallyApproved());
+    assertEquals(3,model.inputs().size());
+    assertEquals(3,model.outputs().size());
+    var baseline=hybridComparison.compare(f.planId,f.slot.org,f.scope,method,
+        HybridMethodRegistry.Strategy.JAVA_ONLY);
+    assertEquals("LOCAL_TEST_ONLY_NOT_PUBLISHED",baseline.admissionMode());
+    for(var strategy:HybridMethodRegistry.Strategy.values()){
+      var other=hybridComparison.compare(f.planId,f.slot.org,f.scope,method,strategy);
+      assertEquals(baseline.result(),other.result(),strategy.name());
+      assertEquals(baseline.result().outputValuesSha256(),
+          other.result().outputValuesSha256());
+    }
+    // Diagnostic execution must never create a result/job or publish CURRENT.
+    assertEquals(0,results(f.slot));
+    assertEquals(0,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_current_result
+        WHERE organization_id=? AND scope_key=?
+        """,Integer.class,f.slot.org,f.scope));
+    // Existing qualified F02 worker keeps its original TX-C/D/E behavior.
+    assertEquals(UatF02CalcWorker.Publication.PUBLISHED,
+        worker.runOne("hyb-original").publication());
+    assertEquals(1,results(f.slot));
+  }
+
+  @Test void r02_14CandidateMethodCannotBeAdmittedEvenWhenStructurallyCorrect(){
+    var f=fresh();
+    UUID candidate=registerHybridReference(f,"CANDIDATE_UNQUALIFIED",false);
+    var v=pinnedReader.verify(f.planId,f.slot.org,f.scope).formVersionId();
+    assertEquals(HybridMethodRegistry.RegistryState.CANDIDATE_UNQUALIFIED,
+        methodRegistry.requireVerified(candidate).state());
+    assertFalse(methodRegistry.requireVerified(candidate).financiallyApproved());
+    assertEquals("HYB_METHOD_NOT_ADMITTED_TEST_ONLY",
+        assertThrows(IllegalStateException.class,()->
+            methodRegistry.requireF02TestOnly(candidate,v)).getMessage());
+    assertThrows(IllegalStateException.class,()->
+        hybridComparison.compare(f.planId,f.slot.org,f.scope,candidate,
+            HybridMethodRegistry.Strategy.SQL_ONLY));
+    assertEquals(0,results(f.slot));
+  }
+
+  @Test void r02_15ForgedMethodSourceSchemaShaMustFailClosed(){
+    var f=fresh();
+    UUID candidate=registerHybridReference(f,"CANDIDATE_UNQUALIFIED",true);
+    assertEquals("HYB_METHOD_INPUT_CONTRACT_DRIFT",
+        assertThrows(IllegalStateException.class,()->
+            methodRegistry.requireVerified(candidate)).getMessage());
+    assertEquals(0,results(f.slot));
+  }
+
+  @Test void r02_16MethodRegistryCannotBeUpdatedDeletedOrTruncated(){
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            UPDATE fin_calc.method_revision
+              SET registry_state='CANDIDATE_UNQUALIFIED' WHERE id=?
+            """,method));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("DELETE FROM fin_calc.method_revision WHERE id=?",method));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.execute("TRUNCATE fin_calc.method_output_binding"));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            UPDATE fin_calc.method_input_binding SET unit_policy='WRONG'
+            WHERE method_revision_id=? AND ordinal=0
+            """,method));
+    assertEquals(HybridMethodRegistry.RegistryState.TEST_ONLY_REFERENCE,
+        methodRegistry.requireVerified(method).state());
+  }
+
+  @Test void r02_17DatabaseRejectsDuplicateMethodVersionAndForeignKeyFields(){
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            INSERT INTO fin_calc.method_revision (
+              id,method_code,method_version,registry_state,
+              source_contract_sha256,output_contract_sha256,dag_sha256,
+              algorithm_artifact_sha256,config_sha256,params_sha256,
+              sql_artifact_sha256)
+            SELECT ?,method_code,method_version,registry_state,
+              source_contract_sha256,output_contract_sha256,dag_sha256,
+              algorithm_artifact_sha256,config_sha256,params_sha256,
+              sql_artifact_sha256
+            FROM fin_calc.method_revision WHERE id=?
+            """,UUID.randomUUID(),method));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            INSERT INTO fin_calc.method_input_binding (
+              method_revision_id,ordinal,form_version_id,field_code,metric_code,
+              source_schema_sha256,unit_policy,period_semantics,
+              aggregation_policy,missing_policy)
+            SELECT method_revision_id,99,?,field_code,metric_code,
+              source_schema_sha256,unit_policy,period_semantics,
+              aggregation_policy,missing_policy
+            FROM fin_calc.method_input_binding
+            WHERE method_revision_id=? AND ordinal=0
+            """,UUID.randomUUID(),method));
+    assertNotNull(methodRegistry.requireVerified(method));
+  }
+
+  @Test void r02_18FactsetBindingIsImmutableAndEnforcesProjectAndExactSha(){
+    var f=fresh();
+    String factSha=sql.queryForObject("""
+        SELECT factset_sha256 FROM fin_fact.fact_set WHERE id=?
+        """,String.class,f.factsetId);
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            INSERT INTO fin_calc.plan_factset_binding
+              (plan_id,organization_id,plan_scope_key,ordinal,
+               source_factset_id,source_scope_key,source_factset_sha256)
+            VALUES(?,?,?,?,?,?,?)
+            """,f.planId,f.slot.org,f.scope,0,f.factsetId,f.scope,"f".repeat(64)));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            INSERT INTO fin_calc.plan_factset_binding
+              (plan_id,organization_id,plan_scope_key,ordinal,
+               source_factset_id,source_scope_key,source_factset_sha256)
+            VALUES(?,?,?,?,?,?,?)
+            """,f.planId,UUID.randomUUID(),f.scope,0,f.factsetId,f.scope,factSha));
+    assertEquals(1,sql.update("""
+        INSERT INTO fin_calc.plan_factset_binding
+          (plan_id,organization_id,plan_scope_key,ordinal,
+           source_factset_id,source_scope_key,source_factset_sha256)
+        VALUES(?,?,?,?,?,?,?)
+        """,f.planId,f.slot.org,f.scope,0,f.factsetId,f.scope,factSha));
+    // A different project in the same organization is not an approved source.
+    var other=prepare(new Slot(f.slot.org,f.slot.entity,f.slot.business,
+            UUID.randomUUID()),UUID.randomUUID(),null,0,1,
+        "3","1","1");
+    var otherSha=sql.queryForObject("""
+        SELECT factset_sha256 FROM fin_fact.fact_set WHERE id=?
+        """,String.class,other.factsetId);
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            INSERT INTO fin_calc.plan_factset_binding
+              (plan_id,organization_id,plan_scope_key,ordinal,
+               source_factset_id,source_scope_key,source_factset_sha256)
+            VALUES(?,?,?,?,?,?,?)
+            """,f.planId,f.slot.org,f.scope,1,other.factsetId,other.scope,otherSha));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            UPDATE fin_calc.plan_factset_binding SET source_factset_sha256=?
+            WHERE plan_id=? AND ordinal=0
+            ""","a".repeat(64),f.planId));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            DELETE FROM fin_calc.plan_factset_binding WHERE plan_id=?
+            """,f.planId));
+    assertEquals(1,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.plan_factset_binding WHERE plan_id=?
+        """,Integer.class,f.planId));
+  }
+
+  @Test void r02_19LegacyPlanCannotBeAssignedUnpinnedExecutionStrategy(){
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    var proposedSha=FactDigest.sha("FIN-FACT-HYB-EXECUTION-CONTRACT-V1",
+        method.toString(),"SQL_ONLY");
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            INSERT INTO fin_calc.plan_execution_binding(
+              plan_id,organization_id,scope_key,method_revision_id,
+              strategy,execution_contract_sha256)
+            VALUES(?,?,?,?,?,?)
+            """,f.planId,f.slot.org,f.scope,method,"SQL_ONLY",proposedSha),
+        "Original F02 CalcPlan does not pin the strategy in DAG/fingerprint");
+    assertEquals(0,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.plan_execution_binding WHERE plan_id=?
+        """,Integer.class,f.planId));
+    assertThrows(IllegalArgumentException.class,()->
+        methodRegistry.requireVerified(UUID.randomUUID()));
+    assertThrows(IllegalStateException.class,()->
+        hybridComparison.compare(f.planId,UUID.randomUUID(),f.scope,method,
+            HybridMethodRegistry.Strategy.JAVA_ONLY));
+    assertEquals(0,results(f.slot));
   }
 
 }
