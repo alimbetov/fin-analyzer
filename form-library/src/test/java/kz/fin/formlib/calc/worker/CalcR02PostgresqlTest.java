@@ -38,7 +38,8 @@ import static org.junit.jupiter.api.Assertions.*;
     "fin.fact.uat-committer.enabled=true",
     "fin.calc.uat.dispatch.enabled=true",
     "fin.calc.uat.worker.enabled=true",
-    "fin.calc.hybrid.uat.compare.enabled=true"
+    "fin.calc.hybrid.uat.compare.enabled=true",
+    "fin.calc.hybrid.uat.planner.enabled=true"
 })
 @Testcontainers
 @EnabledIfSystemProperty(named="fin.postgres.uat.enabled",matches="true")
@@ -67,6 +68,7 @@ class CalcR02PostgresqlTest {
   @Autowired PlatformTransactionManager txManager;
   @Autowired HybridMethodRegistry methodRegistry;
   @Autowired HybridF02ComparisonService hybridComparison;
+  @Autowired UatHybridPlanCommitter hybridPlanner;
   @Autowired FactMonthlyPartitionService partitions;
 
   record Slot(UUID org,UUID entity,UUID business,UUID project){
@@ -540,6 +542,206 @@ class CalcR02PostgresqlTest {
             hybridComparison.compare(f.planId,UUID.randomUUID(),f.scope,method,
             HybridMethodRegistry.Strategy.JAVA_ONLY)).getMessage());
     assertEquals(0,results(f.slot));
+  }
+
+  @Test void r02_20HybridPlanPinnedAndAtomicWithBlockedJob() {
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    var receipt=hybridPlanner.planExact(f.planId,f.slot.org,f.scope,method,
+        HybridMethodRegistry.Strategy.SQL_AGG_JAVA_FINAL);
+    assertFalse(receipt.reused());
+    assertEquals("BLOCKED",receipt.jobState());
+    assertNotEquals(f.planId,receipt.planId());
+    assertEquals(f.factsetId,receipt.factsetId());
+    var plan=sql.queryForMap("""
+        SELECT p.dag_jsonb::text dag,p.execution_fingerprint,
+          p.qualification_mode,p.algorithm_artifact_sha256,
+          p.qualified_binding_sha256,p.qualification_epoch
+        FROM fin_calc.calc_plan p WHERE p.id=?
+        """,receipt.planId());
+    var json=assertDoesNotThrow(()->mapper.readTree((String)plan.get("dag")));
+    assertEquals("FIN-CALC-HYB2B-F02-TEST-V1",json.at("/hybridContract").asText());
+    assertEquals("SQL_AGG_JAVA_FINAL",json.at("/executionStrategy").asText());
+    assertEquals(method.toString(),json.at("/methodRevisionId").asText());
+    assertEquals(receipt.executionFingerprint(),
+        json.at("/executionFingerprint").asText());
+    assertEquals(receipt.executionContractSha256(),
+        json.at("/executionContractSha256").asText());
+    assertEquals(receipt.executionFingerprint(),plan.get("execution_fingerprint"));
+    assertEquals("TEST_QUALIFIED",plan.get("qualification_mode"));
+    assertEquals(1,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.plan_factset_binding WHERE plan_id=?
+        """,Integer.class,receipt.planId()));
+    var binding=sql.queryForMap("""
+        SELECT method_revision_id,strategy,execution_contract_sha256
+        FROM fin_calc.plan_execution_binding WHERE plan_id=?
+        """,receipt.planId());
+    assertEquals(method,binding.get("method_revision_id"));
+    assertEquals("SQL_AGG_JAVA_FINAL",binding.get("strategy"));
+    assertEquals(receipt.executionContractSha256(),binding.get("execution_contract_sha256"));
+    var job=sql.queryForMap("""
+        SELECT state,last_error_code,attempts,fencing_token
+        FROM fin_calc.calc_job WHERE id=?
+        """,receipt.jobId());
+    assertEquals("BLOCKED",job.get("state"));
+    assertEquals("HYB_WORKER_NOT_ADMITTED",job.get("last_error_code"));
+    assertEquals(0,((Number)job.get("attempts")).intValue());
+    assertEquals(0,results(f.slot));
+  }
+
+  @Test void r02_21HybridReplayIsIdempotentAndNeverMutatesExistingPlan() {
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    var first=hybridPlanner.planExact(f.planId,f.slot.org,f.scope,method,
+        HybridMethodRegistry.Strategy.SQL_ONLY);
+    var replay=hybridPlanner.planExact(f.planId,f.slot.org,f.scope,method,
+        HybridMethodRegistry.Strategy.SQL_ONLY);
+    assertTrue(replay.reused());
+    assertEquals(first.planId(),replay.planId());
+    assertEquals(first.jobId(),replay.jobId());
+    assertEquals(first.executionFingerprint(),replay.executionFingerprint());
+    assertEquals(first.executionContractSha256(),replay.executionContractSha256());
+    assertEquals(2,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_plan WHERE factset_id=?
+        """,Integer.class,f.factsetId));
+    assertEquals(1,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.plan_execution_binding WHERE plan_id=?
+        """,Integer.class,first.planId()));
+    assertEquals(0,results(f.slot));
+  }
+
+  @Test void r02_22ThreeStrategiesProduceThreeDifferentImmutablePlans() {
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    var plans=new HashSet<UUID>();
+    var fps=new HashSet<String>();
+    var contracts=new HashSet<String>();
+    for(var strategy:HybridMethodRegistry.Strategy.values()){
+      var c=hybridPlanner.planExact(f.planId,f.slot.org,f.scope,method,strategy);
+      assertEquals("BLOCKED",c.jobState());
+      assertTrue(plans.add(c.planId()));
+      assertTrue(fps.add(c.executionFingerprint()));
+      assertTrue(contracts.add(c.executionContractSha256()));
+    }
+    assertEquals(3,plans.size());
+    assertEquals(4,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_plan WHERE factset_id=?
+        """,Integer.class,f.factsetId));
+    assertEquals(3,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.plan_execution_binding
+        WHERE plan_id IN (SELECT id FROM fin_calc.calc_plan
+          WHERE factset_id=? AND id<>?)
+        """,Integer.class,f.factsetId,f.planId));
+    assertEquals(0,results(f.slot));
+  }
+
+  @ParameterizedTest
+  @EnumSource(value=UatHybridPlanCommitter.FaultPoint.class,
+      names={"AFTER_PLAN","AFTER_SOURCE","AFTER_EXECUTION","AFTER_JOB"})
+  void r02_23HybridFaultInjectionRollsBackEntireTransaction(
+      UatHybridPlanCommitter.FaultPoint fault){
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    assertEquals("HYB2B_FORCED_ROLLBACK",
+        assertThrows(IllegalStateException.class,()->
+            hybridPlanner.planWithFault(f.planId,f.slot.org,f.scope,method,
+                HybridMethodRegistry.Strategy.SQL_ONLY,fault)).getMessage());
+    assertEquals(1,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_plan WHERE factset_id=?
+        """,Integer.class,f.factsetId));
+    assertEquals(0,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.plan_execution_binding
+        WHERE organization_id=? AND scope_key=?
+        """,Integer.class,f.slot.org,f.scope));
+    assertEquals(0,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.plan_factset_binding
+        WHERE organization_id=? AND plan_scope_key=?
+        """,Integer.class,f.slot.org,f.scope));
+    assertEquals(1,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_job
+        WHERE organization_id=? AND scope_key=?
+        """,Integer.class,f.slot.org,f.scope));
+  }
+
+  @Test void r02_24SourceRevocationBlocksHybridPlanBeforeAnyWrites() {
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    sql.update("""
+        UPDATE fin_fact.factset_control
+        SET revoked=true,active_factset_id=NULL,
+          qualification_epoch=qualification_epoch+1
+        WHERE stable_scope_key=?
+        """,f.scope);
+    assertEquals("HYB2B_SOURCE_REVOKED_OR_SUPERSEDED",
+        assertThrows(IllegalStateException.class,()->
+            hybridPlanner.planExact(f.planId,f.slot.org,f.scope,method,
+                HybridMethodRegistry.Strategy.JAVA_ONLY)).getMessage());
+    assertEquals(1,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_plan WHERE factset_id=?
+        """,Integer.class,f.factsetId));
+  }
+
+  @Test void r02_25LegacyWorkerCannotClaimBlockedHybridJob() {
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    var h=hybridPlanner.planExact(f.planId,f.slot.org,f.scope,method,
+        HybridMethodRegistry.Strategy.SQL_ONLY);
+    assertEquals(UatF02CalcWorker.Publication.PUBLISHED,
+        worker.runOne("original-f02").publication());
+    assertNull(worker.runOne("blocked-hybrid"));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            UPDATE fin_calc.calc_job SET state='READY'
+            WHERE id=?
+            """,h.jobId()));
+    assertEquals("BLOCKED",sql.queryForObject("""
+        SELECT state FROM fin_calc.calc_job WHERE id=?
+        """,String.class,h.jobId()));
+    assertEquals(1,results(f.slot));
+  }
+
+  @Test void r02_26HybridCandidateOrWrongTenantCannotCreatePlan() {
+    var f=fresh();
+    UUID candidate=registerHybridReference(f,"CANDIDATE_UNQUALIFIED",false);
+    assertEquals("HYB_METHOD_NOT_ADMITTED_TEST_ONLY",
+        assertThrows(IllegalStateException.class,()->
+            hybridPlanner.planExact(f.planId,f.slot.org,f.scope,candidate,
+                HybridMethodRegistry.Strategy.SQL_ONLY)).getMessage());
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    assertEquals("CALC_R02_QUALIFIED_PLAN_MISSING",
+        assertThrows(IllegalArgumentException.class,()->
+            hybridPlanner.planExact(f.planId,UUID.randomUUID(),f.scope,method,
+                HybridMethodRegistry.Strategy.SQL_ONLY)).getMessage());
+    assertEquals(1,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_plan WHERE factset_id=?
+        """,Integer.class,f.factsetId));
+  }
+
+  @Test void r02_27ParallelHybridPlanningReusesOneExactPlan() throws Exception {
+    var f=fresh();
+    UUID method=registerHybridReference(f,"TEST_ONLY_REFERENCE",false);
+    try(var pool=Executors.newFixedThreadPool(4)){
+      var calls=java.util.stream.IntStream.range(0,6)
+          .mapToObj(i->(Callable<UatHybridPlanCommitter.Receipt>)()->
+              hybridPlanner.planExact(f.planId,f.slot.org,f.scope,method,
+                  HybridMethodRegistry.Strategy.SQL_AGG_JAVA_FINAL)).toList();
+      var futures=pool.invokeAll(calls);
+      var ids=new HashSet<UUID>();
+      var jobs=new HashSet<UUID>();
+      var fingerprints=new HashSet<String>();
+      for(var future:futures){
+        var r=future.get(60,TimeUnit.SECONDS);
+        ids.add(r.planId());
+        jobs.add(r.jobId());
+        fingerprints.add(r.executionFingerprint());
+      }
+      assertEquals(1,ids.size());
+      assertEquals(1,jobs.size());
+      assertEquals(1,fingerprints.size());
+    }
+    assertEquals(2,sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.calc_plan WHERE factset_id=?
+        """,Integer.class,f.factsetId));
   }
 
 }
