@@ -1,17 +1,19 @@
 # FIN CALC-R0 / HTAP v2 — Source-to-Fact Pipeline Contract
 
-**Date:** 2026-11-19. **Status:** P0 SPECIFICATION HARDENING / NOT IMPLEMENTED / PRODUCTION S2 HOLD.
+**Date:** 2026-11-19. **Status:** INGEST-0–2 and FACT-0 PostgreSQL 019–021 implemented and PG16 GREEN; FACT-1 F02 TX-Q only test-source synthetic GREEN; **FACT-1.A/B runtime NOT IMPLEMENTED; production S2 and CALC worker HOLD**. [Next-step normative ТЗ](./FIN-FACT-1A-1B-TRUSTED-QUALIFICATION-CODE-LEVEL-TZ.md).
 **Scope:** `alimbetov/fin-analyzer`, branch `feat/fin-form-library-standalone`.
 **Normative parent:** `docs/FIN-CALC-R0-INCREMENTAL-CALCULATION-ARCHITECTURE-TZ.md`.
-**Binding physical partitioned design:** `docs/temporary/FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md` and draft `docs/temporary/sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql`. Where earlier single-source headers or `UUID PRIMARY KEY` observations conflict, **the newer multi-source monthly-partition contract prevails**. This is specification only; not an applied migration.
+**Authoritative physical schema:** **APPLIED** `form-library/src/main/resources/db/changelog/019-fin-calc-r0-postgresql.sql`, `020-fin-fact-r0-pilot-postgresql.sql` and `021-fin-fact-scope-source-immutability-postgresql.sql`; historical draft `docs/temporary/sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql` is **not normative**. Where older single-source/UUID-only observation keys conflict, the **applied monthly-partition schema** prevails. FACT-1.A/B design: [Trusted Qualification code-level ТЗ](./FIN-FACT-1A-1B-TRUSTED-QUALIFICATION-CODE-LEVEL-TZ.md); security prerequisite [FACT-0.H](./FIN-FACT-0H-POSTGRES-SECURITY-AND-OPERATIONS-TZ.md).
 
 ## 1. P0 gap and architectural decision
 
 Previous R0 specified `F02 revision → TEST_QUALIFIED FactSet → DAG → job → result`, but did not define an actual producer of FactSet, typed source extraction, versioned field-to-metric mapping, persisted fact observations, the factset digest, or a qualified event that could be verified by the consumer.
 
-**Verified source state:** standalone branch has `fin_intake.lib_form_revision.values_json TEXT` and `lib_form_revision_row`, but **no fin_fact tables and no production S2 gateway**. `fin_lib.lib_field_binding_contract` and versioned policy/mapping candidates are marked `CANDIDATE_UNQUALIFIED`, not S2-approved. `FormWorkflowService.READY_FOR_REVIEW` is not S2.
+**Verified implementation state (2026-11-19):** `fin_intake` has immutable revisions and INGEST-2 SHA rehash, and `fin_fact.fact_set`/monthly partitioned `fact_observation`/`factset_control` and `fin_calc` storage exist after migrations 019–021. **No production S2 gateway or runtime FactSetCommitter/DAG/worker**, and source field mapping candidates remain `CANDIDATE_UNQUALIFIED`. `FormWorkflowService.READY_FOR_REVIEW` is not S2.
 
-**Decision:** close the full source-to-fact gap with **three additive PostgreSQL fact-boundary tables** in R0 pilot, alongside the existing five proposed fin_calc tables (eight new tables total). No warehouse, Kafka, Redis or new service required. Only synthetic `TEST_QUALIFIED` facts until independent S2+IAM exists.
+**Decision:** physical storage foundation (3 fact + 5 calc tables) already implemented and tested. Next close the **production trust and transaction gap** with FACT-1.A/B (canonical candidate, signed decision verifier, pinned-source recheck and atomic committer), keeping production S2/HOLD until independent authority, IAM and revoke protocol are available. No warehouse/Kafka/Redis/new methods in this slice.
+
+**Readiness note:** The applied storage tables are real, but a verified typed source is **not** a financially approved candidate. The F02 test-only issuer is confined to `src/test`; production FACT-1.A/B must be fail-closed until signed independent S2. `FormFactCandidateService.extractExact` uses `REQUIRES_NEW`; TX-Q must revalidate source/scope/version in its own transaction. A local epoch cannot atomically guard external S2 revocation; production CURRENT must require live trusted authority proof.
 
 ## 2. Exact data flow and transaction boundaries
 
@@ -19,11 +21,11 @@ Previous R0 specified `F02 revision → TEST_QUALIFIED FactSet → DAG → job �
 React F02 edit → PREVIEW_UNQUALIFIED (no fact writes)
   |
 TX-A: FormDraftService.save() → immutable fin_intake revision N
-      + fin_calc.calc_outbox_event(DRAFT_REVISION_SAVED)
+      + proposed draft outbox DRAFT_REVISION_SAVED (NOT YET PRODUCED by save path)
   |
 Draft event consumer → integrity/staging only, never qualification
   |
-Independent qualified command (test fixture ONLY in R0)
+Independent qualified command (existing in test fixture only; runtime FACT-1.A/B NOT YET BUILT)
   → PinnedSourceReader(revision_id, full scope, formVersion, content SHA)
   → SourceFactAssembler(F02 field→typed observation + approved-for-test mapping)
   → canonical candidate FactSet digest, no persistence yet
@@ -205,6 +207,6 @@ For all 166 forms use source mode strategies: 3 SINGLE_RECORD, 151 ROWSET (prese
 | STF-13 | Revoke during worker/publication/current read | fail closed, historical result retained |
 | STF-14 | ROWSET/EVIDENCE/ReportGrid offered to F02 assembler | UNSUPPORTED_SOURCE_ADAPTER, never collapsed |
 | STF-15 | Already-existing draft saved before outbox feature | discovery/backfill status visible; never auto approved |
-| STF-16 | Full PG migration 001–020 and upgrade from 018 | checksum-compatible, FK, unique and immutability proofs |
+| STF-16 | Full PG migration 001–021 already GREEN; 018→022+ upgrade after FACT-1/B | 001–021 immutable checksums, new receipt FK/unique and source integrity negative tests |
 
 **DoD:** completion of master A01–A31 is not sufficient without STF-01–STF-16 and PFT-01–PFT-18 (monthly partitions, multi-source extraction). Qualified end-to-end remains BLOCKED until implemented and PostgreSQL GREEN. For small isolated B1 pure Java DAG tests, five-table kernel can proceed independently. The new three tables are **minimum storage for an actual test-only source→fact chain**, not a full HTAP warehouse.
