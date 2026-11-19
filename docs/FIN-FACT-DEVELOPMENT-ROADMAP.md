@@ -128,3 +128,11 @@ NEXT authorized slice and remaining HOLD
 - **Java:** `HybridMethodRegistry` validates physical form/metric/schema/units and independent method-contract SHA, `HybridF02ComparisonService` can compare JAVA_ONLY / SQL_ONLY / SQL_AGG_JAVA_FINAL over verified F02 FactSet only behind `fin.calc.hybrid.uat.compare.enabled=false` default. Diagnostic returns no published result and never mutates CURRENT.
 - **PostgreSQL evidence:** seven new tests in `CalcR02PostgresqlTest` (r02_13–19) check parity, candidate refusal, drift, append-only constraints, duplicates, forged SHA, cross-project binding and retroactive strategy rejection. CI must show 21/21 F02 cases and full PG16 regression on the exact commit; this paragraph alone does not prove GREEN.
 - **Next:** HYB-2B requires immutable strategy-aware plan fingerprint + transactionally inserted plan/executor binding, independent S2 method approval and a true ROWSET FactSet projection. Until those are proven, additional 153 data forms remain blocked.
+
+
+## HYB-2B strategy-aware atomic plan and F01/F03 provisional calculations (2026-11-19)
+
+- **Migration 029:** strategy-pinned DAG + method/FactSet binding gates; HYB jobs are BLOCKED until a new worker and independent method authority are accepted. Existing F02 jobs untouched.
+- **UAT planner:** `UatHybridPlanCommitter` creates immutable plan + factset binding + execution binding + blocked job in one short transaction after exact source/epoch/method verification. Distinct strategies generate different execution fingerprints. Has rollback faultpoints and concurrency/idempotency acceptance.
+- **F01/F03:** [provisional contract audit](../form-library/docs/FIN-R16-F01-F03-CANDIDATE-CALCS.md); additive migration 030 + pure Java decimal residuals + PG16 parity. **Not financially approved; no F01/F03 FactSet E2E yet.**
+- **Release gate:** PostgreSQL 16 tests r02_20..27 (including four rollback failpoints), five independent F01/F03 parity/negative tests, old F02 regression and all 166 structural forms. Do not claim GREEN until a same-SHA GitHub Actions result is verified.

@@ -102,13 +102,15 @@ jobs:
       - name: Run isolated PostgreSQL Testcontainers integration
         run: >-
           mvn -B -ntp -f form-library/pom.xml
-          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,CalcR02PostgresqlTest,SqlF02ParityPostgresqlTest,Calc166ReadinessPostgresqlTest,FactR0PostgresqlUpgradeTest
+          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,CalcR02PostgresqlTest,R16F01F03CandidatePostgresqlTest,SqlF02ParityPostgresqlTest,Calc166ReadinessPostgresqlTest,FactR0PostgresqlUpgradeTest
           -Dfin.postgres.uat.enabled=true
           test
       - name: Fail closed on FACT-1.B PG16 source/commit/replay matrix
         run: python3 scripts/check-fin-fact1b-junit.py --out-dir target/fin-fact1b
       - name: Fail closed on CALC-R0.1 PostgreSQL TX-B matrix
         run: python3 scripts/check-fin-calc-r01-junit.py --out-dir target/calc-r01
+      - name: Fail closed on F01 and F03 PG16 provisional finance parity (no S2)
+        run: python3 scripts/check-fin-r16-f01-f03-junit.py
       - name: Fail closed on CALC-R0.2 PostgreSQL full E2E
         run: python3 scripts/check-fin-calc-r02-junit.py --out-dir target/calc-r02
       - name: Fail closed on native SQL F02 versus Java HALF_EVEN and SHA parity
@@ -133,6 +135,7 @@ jobs:
             form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.worker.CalcR02PostgresqlTest.xml
             target/calc-r02/calc-r02-coverage.json
             form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.kernel.SqlF02ParityPostgresqlTest.xml
+            form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.hybrid.R16F01F03CandidatePostgresqlTest.xml
             target/calc-sql-f02/calc-sql-f02-coverage.json
             form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.readiness.Calc166ReadinessPostgresqlTest.xml
             form-library/target/fin-calc166/166-form-calculation-readiness.tsv
