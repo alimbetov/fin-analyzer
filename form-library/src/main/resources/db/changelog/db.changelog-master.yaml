@@ -55,3 +55,5 @@ databaseChangeLog:
       file: db/changelog/027-fin-calc-hybrid-method-contracts-postgresql.sql
   - include:
       file: db/changelog/028-fin-calc-hybrid-plan-admission-postgresql.sql
+  - include:
+      file: db/changelog/029-fin-calc-hyb2b-pinned-admission-postgresql.sql
