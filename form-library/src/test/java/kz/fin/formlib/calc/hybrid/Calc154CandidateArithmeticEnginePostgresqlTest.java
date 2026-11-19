@@ -12,6 +12,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -163,4 +166,70 @@ class Calc154CandidateArithmeticEnginePostgresqlTest {
     assertThrows(IllegalArgumentException.class,()->engine.preview("F02",version("F02"),input));
     noWrites();
   }
+  private static String sha(String text){
+    try{
+      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+        .digest(text.getBytes(StandardCharsets.UTF_8)));
+    }catch(Exception e){throw new IllegalStateException(e);}
+  }
+
+  private UUID addUnqualifiedSyntheticC08Formula(String formulaVersion,
+      String evidence) {
+    UUID v=version("C08"),id=UUID.randomUUID();
+    String schema=sql.queryForObject(
+      "SELECT schema_sha256 FROM fin_lib.lib_form_version WHERE id=?",
+      String.class,v);
+    String defSha=sha("SYNTHETIC_CALC4B_TEST_ONLY|"+formulaVersion+"|"+evidence);
+    String bindSha=sha("FIN-CALC154-FORMULA-BINDING-V1|"+
+      v+"|"+schema+"|"+defSha);
+    sql.update("""
+      INSERT INTO fin_calc.formula_contract_revision(
+        id,form_code,form_version_id,source_schema_sha256,
+        output_metric_code,formula_version,operation_code,source_metrics_jsonb,
+        period_semantics,dimension_policy,currency_policy,unit_policy,
+        rounding_policy,missing_policy,zero_policy,review_state,
+        blocker_codes,source_evidence,definition_sha256,binding_sha256)
+      VALUES (?,?,?,?,'C08.syntheticDiffProbe',?,'SUBTRACT',
+        '["C08.fixedCost","C08.variableCost"]'::jsonb,
+        'INTERVAL_REQUIRED','UNREVIEWED','UNREVIEWED',
+        'FORM_CURRENCY_REVIEW_REQUIRED','UNREVIEWED',
+        'REQUIRE_PRESENT_CANDIDATE','NOT_APPLICABLE',
+        'CANDIDATE_UNQUALIFIED',
+        'FINANCE_S2;SYNTHETIC_TEST_FORMULA_NOT_FINANCIAL',
+        'CALC4B_SYNTHETIC_TEST_ONLY',?,?)
+      """,id,"C08",v,schema,formulaVersion,defSha,bindSha);
+    for(int ordinal=0;ordinal<2;ordinal++){
+      String field=ordinal==0?"fixedCost":"variableCost";
+      sql.update("""
+        INSERT INTO fin_calc.formula_typed_input_binding(
+          formula_revision_id,ordinal,source_metric_code,source_kind,
+          source_form_version_id,source_schema_sha256,
+          source_field_code,field_type,period_policy,
+          requiredness_state,binding_sha256)
+        VALUES (?,?,?,'PHYSICAL_NUMERIC_FIELD',?,?,?,
+          'MONEY','INTERVAL_REQUIRED','REVIEW_REQUIRED',?)
+        """,id,ordinal,"C08."+field,v,schema,field,
+        sha("SYNTHETIC_C08_INPUT|"+formulaVersion+"|"+field));
+    }
+    return id;
+  }
+
+  @Test void genericCompilerRunsNewC08ContractWithoutAnyPerFormJavaHandler(){
+    UUID v=version("C08");
+    assertThrows(IllegalArgumentException.class,()->engine.compile("C08",v));
+    addUnqualifiedSyntheticC08Formula("CALC4B_SYNTHETIC_V1","REVIEW_NOT_APPROVED");
+    var compiled=engine.compile("C08",v);
+    var computed=engine.preview("C08",v,inputs(
+      "C08.fixedCost","12.00","C08.variableCost","3.00"));
+    eq("9.00",result(computed,"C08.syntheticDiffProbe"));
+    assertFalse(computed.financiallyApproved());
+    assertEquals(compiled.compilationSha256(),computed.compilationSha256());
+    // Adding a second revision must prevent a silent 'latest' selection.
+    addUnqualifiedSyntheticC08Formula("CALC4B_SYNTHETIC_V2","REVIEW_NOT_APPROVED");
+    assertThrows(IllegalStateException.class,()->engine.compile("C08",v));
+    var pinned=engine.compile("C08",v,"CALC4B_SYNTHETIC_V1");
+    assertEquals(compiled.compilationSha256(),pinned.compilationSha256());
+    noWrites();
+  }
+
 }
