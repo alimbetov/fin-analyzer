@@ -157,7 +157,7 @@ def build():
             form, metric, "CALCULATED_CANDIDATE", sources, operation, version,
             status, blocker, semantic, "FORM_CURRENCY_REVIEW_REQUIRED", evidence,
         ])
-    rows.sort(key=lambda r: (r[0], r[1], r[2]))
+    rows.sort(key=lambda r: (r[0].casefold(), r[1].casefold(), r[2].casefold()))
     require(len(rows) == 804, "metric coverage != 804")
 
     summary = []
