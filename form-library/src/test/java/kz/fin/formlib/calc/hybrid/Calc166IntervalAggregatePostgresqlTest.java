@@ -50,6 +50,7 @@ class Calc166IntervalAggregatePostgresqlTest {
   @Autowired JdbcTemplate jdbc;
   @Autowired FactMonthlyPartitionService partitions;
   @Autowired FormDraftService drafts;
+  @Autowired PlanBoundCandidateSqlReader planBound;
 
   private static String sha(String s) {
     try {
@@ -277,6 +278,17 @@ class Calc166IntervalAggregatePostgresqlTest {
     assertNotNull(ratio);
     assertEquals(0,new BigDecimal("2").compareTo(ratio));
     assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM fin_calc.calc_result",Integer.class));
+  }
+
+  @Test void planBoundJdbcCannotBypassImmutablePlanAndMethodAdmission() {
+    var f=source();
+    assertThrows(IllegalStateException.class,()->
+      planBound.groupBy(UUID.randomUUID(),f.org(),sha("MISSING_SCOPE"),0,"KZT"));
+    assertThrows(IllegalStateException.class,()->
+      planBound.ratioOfSums(UUID.randomUUID(),f.org(),sha("MISSING_SCOPE"),
+        0,1,f.dimension(),"KZT"));
+    assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM fin_calc.calc_result",
+      Integer.class));
   }
 
 }
