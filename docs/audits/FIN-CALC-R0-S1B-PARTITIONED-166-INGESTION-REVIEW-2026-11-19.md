@@ -89,6 +89,11 @@ F02 annual 2022 backfill targets `fact_observation_2022_01` (period_start=2022-0
 
 Also the source utility uses `IF NOT EXISTS`, which alone does not prove the existing relation has correct partition bounds. PostgreSQL parent/child DDL locking under load must be profiled; for high-write load consider prepared child + ATTACH workflow.
 
+### Additional integrity gates from final review
+
+- Row-level `BEFORE UPDATE OR DELETE` triggers **do not block TRUNCATE or DDL DROP/DETACH**. Production financial application role must not own partition tables and must lack TRUNCATE/DDL privileges; validate by SQL-negative tests and archive/backup policy. The attached utility's `cleanDailyPartitions` cannot be copied to the financial service.
+- A multisource `source_revisions_jsonb` header offers deterministic canonical membership for F02, but cannot enforce typed foreign keys for each heterogeneous source/evidence membership. Before **166-form multi-source production qualification**, decide whether to add an immutable `fact_set_source_member` relational table and indexed reverse-lookup (additional R1-INGEST migration) with measured join cost; do not silently claim full lineage from JSONB alone.
+
 ## 7. Required acceptance
 
 - Extend existing A01–A31 + STF-01..16 with **PFT-01..18** in partitioned ingestion contract.
