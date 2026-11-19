@@ -185,17 +185,20 @@ public class Calc154FormulaContractBootstrap implements ApplicationRunner {
     List<Contract> contracts=readSource();
     var versions=liveForms(contracts);
     validateInputs(contracts,versions);
-    Integer count=jdbc.queryForObject(
-        "SELECT count(*) FROM fin_calc.formula_contract_revision",Integer.class);
-    if(count==null||(count!=0&&count!=contracts.size()))
-      throw new IllegalStateException("CALC154_FORMULA_PARTIAL_SEED");
-
+    // Seed ONLY the exact canonical revision keys. Extra historical or future
+    // versions are never overwritten and must not break application startup.
     for(var c:contracts) {
       Version version=versions.get(c.form());
       String bindingSha=hash("FIN-CALC154-FORMULA-BINDING-V1|"+
           version.id()+"|"+version.schema()+"|"+c.definitionSha());
       String json=mapper.writeValueAsString(c.inputs());
-      if(count==0){
+      Integer existing=jdbc.queryForObject("""
+          SELECT count(*) FROM fin_calc.formula_contract_revision
+          WHERE form_version_id=? AND output_metric_code=? AND formula_version=?
+          """,Integer.class,version.id(),c.output(),c.version());
+      if(existing==null||existing>1)
+        throw new IllegalStateException("CALC154_FORMULA_REVISION_DUPLICATE:"+c.output());
+      if(existing==0){
         jdbc.update("""
           INSERT INTO fin_calc.formula_contract_revision(
             id,form_code,form_version_id,source_schema_sha256,
