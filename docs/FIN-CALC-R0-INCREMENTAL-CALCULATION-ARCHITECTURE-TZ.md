@@ -1,6 +1,6 @@
 # ТЗ FIN CALC-R0 — Incremental Calculation Architecture Foundation (FIN HTAP v2)
 
-**Статус:** SPECIFICATION REVISED AFTER S1 + MULTITHREADED EXECUTION AND CACHE ARCHITECTURE / 166-FORM + 794-FIELD BASELINES / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
+**Статус:** SPECIFICATION HARDENED AFTER SOURCE→FACT S1 DATA-FLOW REVIEW / 166-FORM + 794-FIELD BASELINES / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
 **Репозиторий:** `alimbetov/fin-analyzer`  
 **Единственная рабочая ветка:** `feat/fin-form-library-standalone`; без создания ветки, merge в `main`, изменения старых миграций или переноса старого FIN Analyzer Backend.  
 **Роль:** новая минимальная расчётная основа в standalone FIN Form Library, а не заявление о готовом production HTAP.  
@@ -17,7 +17,7 @@ Transactional outbox доставляет события, PostgreSQL queue да�
 
 **Фазовая cache-архитектура:** `CALC-R0 = PostgreSQL + incremental DAG + fingerprints + Caffeine L1`; `CALC-R1 = CalculationCache port + optional Redis L2 adapter`; `CALC-R2 = activation by measured benchmark`. Redis по умолчанию OFF, Redis не является ни authority, ни job broker, ни source of truth. Для правильного выполнения сначала проверяется trusted binding, затем выполняется поиск reuse/cache; **публикация CURRENT всегда проверяет актуальный допуск в PostgreSQL/authority, а не кеш**.
 
-**R0 MVP:** один вертикальный сценарий `F02 → immutable revision → independent qualification/test fixture → FactSet → 3-node DAG → PostgreSQL job → immutable result`. Не строить универсальный конструктор 166 форм, distributed scheduler, UI администратора методик или Kafka до функционального доказательства этого сценария.
+**R0 MVP:** один вертикальный сценарий `F02 → immutable revision → exact source reader → typed F02 source-to-fact mapping → independent qualification/test fixture → persisted fin_fact FactSet + 3 observations → 3-node DAG → PostgreSQL job → immutable result`. Не строить универсальный конструктор 166 форм, distributed scheduler, UI администратора методик или Kafka до функционального доказательства этого сценария.
 
 ## 2. Проверенное исходное состояние (source inventory)
 
@@ -26,7 +26,7 @@ Transactional outbox доставляет события, PostgreSQL queue да�
 - 794 **публикационных/кандидатных** описания полей в R6 для 154 форм; 12 EVIDENCE форм не имеют R6 строк, хотя runtime bootstrap создаёт для них metadata-поля. Эти 794 нельзя приравнивать к физическим полям: FIN-EDIT-R1 фиксирует отдельную проверку ~877 runtime fields.
 - Runtime bootstrap на чистой БД задаёт 3 `SINGLE_RECORD` (`F01/F02/F03`), 151 `ROWSET`, 12 `EVIDENCE`. Это **bootstrap baseline**, не верификация конкретной существующей БД и не финансовое утверждение.
 - Из 42 каталогизированных аналитических моделей 37 `DESIGN_ONLY`, 5 `CALC_PILOT`; эти статусы **не подтверждают исполнение алгоритмов**.
-- Существующий `ReportDerivedTotalService` поддерживает только `SUM`/`LAST_VALUE` для Report Grid как `UNQUALIFIED_DRAFT`. `FormDraftService` отдельно сохраняет immutable JSON/ROWSET в `fin_intake`. Автоматической единой проекции и FIN HTAP writer в этой ветке нет.
+- Существующий `ReportDerivedTotalService` поддерживает только `SUM`/`LAST_VALUE` для Report Grid как `UNQUALIFIED_DRAFT`. `FormDraftService` отдельно сохраняет immutable JSON/ROWSET в `fin_intake`. **В коде этой ветки отсутствуют `fin_fact` таблицы, source-to-fact mapper и qualified FactSet producer**; автоматической единой проекции и FIN HTAP writer нет. Указанные далее fact-таблицы — новые планируемые DDL, не существующие.
 - У standalone нет production IAM/S2 authority. `X-FIN-UAT-Token` — метка корреляции, не разрешение. Выполнение на реальных персональных/банковских финансовых данных и открытый production доступ запрещены.
 
 **Приложения:** `docs/FIN-CALC-R0-COVERAGE-166-BASELINE.tsv` — одна строка на каждую форму; `docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv` — одна строка на каждое из 794 R6 кандидатных полей с явными пробелами по time semantics, units, source metric binding, aggregation и qualification. 84 runtime evidence metadata и расхождения с фактическими физическими таблицами должны быть отдельно reconciled по DB, а не замаскированы автоматически. Сводная form-matrix не является исполняемым calculation coverage contract. Поля `candidate_operations_not_approved` являются **гипотезами для ревью**, а не готовыми формулами. `consumer_models_declared` — обратные ссылки из каталога моделей; НЕ прямые зависимости между формами. Значение `NOT_DECLARED` означает отсутствие утверждённого формального form→form dependency. `NOT_AUTHORED` / `NOT_PROVEN_PER_FORM` запрещают интерпретировать строку как реализованную методику.
@@ -143,9 +143,25 @@ Change impact:
 - Для локальных cache races нужен bounded single-flight с собственным лимитом памяти; для разных инстансов возможны дубли **чистых вычислений**, но не duplicate accepted immutable results. Redis distributed lock и Redis job queue запрещены в R0–R2.
 - Наблюдаемость: `calc_cache_get_total{tier,hit_or_miss}`, `calc_cache_corrupt_total`, `calc_cache_timeout_total`, `calc_cache_evictions_total`, `calc_node_reused_total`, `calc_node_recomputed_total`, `calc_cpu_active_workers`, `calc_cpu_executor_queue_depth`, `calc_job_queue_lag_seconds`, `calc_tenant_backpressure_total`. Метрики не содержат организационных идентификаторов, fingerprint или финансовых значений.
 
-## 5. Минимальная модель хранения (новая схема `fin_calc`)
+### CALC-FR-12. ОБЯЗАТЕЛЬНЫЙ Source→Fact / FactSet boundary (P0)
 
-R0 придерживается **пяти таблиц**, без отдельного Kafka и без таблицы на каждый узел DAG:
+**Структурный разрыв выявлен при S1 data-flow review**: исходное ТЗ имело абстрактный "Approved FactSet", но не определяло, как значения F02 переходят из `fin_intake.lib_form_revision.values_json TEXT` в проверенные факт-таблицы. Полный контракт, Java интерфейсы, DDL и тесты F01–F16: [Source-to-Fact Pipeline TЗ](temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md).
+
+1. **TX-A**: сохранение новой `fin_intake` revision + `DRAFT_REVISION_SAVED` outbox. Это событие **не публикует** fact и не запускает квалифицированный DAG.
+2. **PinnedSourceReader**: читает точный revision UUID, `form_version_id`, полный scope из DB и верифицирует существующий `FIN-LIB-CONTENT-V1` canonical hash (не `SHA256(values_json)`). Не читает `current_revision_id` для пинованного плана.
+3. **SourceFactAssembler**: versioned field→metric mapping, типизированные значения `BigDecimal`, period/grain/currency/unit/sign/missing policy; F02 тестовый scope: строго три источника `netRevenue,cogs,operatingExpenses`. `F02.netProfit` — legacy derived candidate, не четвёртый факт; не продвигать `CANDIDATE_UNQUALIFIED` mapping как S2. Детерминированно строит source+mapping+value digest.
+4. **Independent qualification**: только доверенный `TrustedQualificationGateway` проверяет exact candidate factset SHA, issuer/epoch. В R0 разрешён лишь тестовый `TEST_QUALIFIED` в изолированной среде, в production — fail closed.
+5. **TX-Q**: одной PostgreSQL-транзакцией сохраняет immutable `fin_fact.fact_set`, три `fin_fact.fact_observation`, обновляет локальный TEST_ONLY `fin_fact.factset_control` (active factset/epoch) и пишет trusted `FACTSET_QUALIFIED` outbox. Отказ любой операции откатывает всё; idempotent replay не дублирует observation.
+6. **TX-B**: квалифицированный event dispatcher заново загружает persisted FactSet, проверяет SHA, mapping, authority epoch и completeness, затем создаёт `calc_plan`/`calc_job`. Worker читает **только pinned `fin_fact` наблюдения** через `QualifiedFactReader`, не черновой JSON и не latest редакцию.
+7. **TX-E**: при публикации current проверяет именно active `factset_control`/epoch в локальном тесте. При новой квалификации старый current становится историческим до нового успешного расчёта; непринятая черновая правка не меняет active binding. Production внешний S2 без общей транзакции остаётся HOLD.
+8. **Временные периоды и инвалидация**: new qualified binding → new `executionFingerprint`; dirty `nodeFingerprint` лишь по потребляемым значениям; time-window dependencies и AS_OF/INTERVAL задаются версионированными формулами. Никакого `SUM` остатков по месяцам, авто-FX и безусловной "чистки старых периодов".
+9. **Предыдущие редакции/источники**: backfill существующих `fin_intake` данных, для которых нет новых outbox events, должен быть отдельным idempotent discovery/staging процессом без автоматического S2. `ROWSET`, EVIDENCE, `ReportGridService` — явно не входят в F02 assembler, требуют отдельных source adapters перед масштабированием на 166 форм.
+
+**Новая минимальная модель R0**: пять таблиц `fin_calc` **плюс три** `fin_fact` (`fact_set`, `fact_observation`, `factset_control`). Это не отдельный DWH и не допуск к реальным банковским данным. Наличие Redis/Caffeine не изменяет trust boundary.
+
+## 5. Минимальная модель хранения (схемы `fin_calc` + `fin_fact`)
+
+R0 имеет **восемь новых таблиц**: пять `fin_calc` ниже и три `fin_fact` по CALC-FR-12. Это минимальный полный source→fact→calculate пилот, без Kafka, DWH и отдельной таблицы на каждый узел DAG. `019-fin-calc-r0-postgresql.sql` создаёт calc-контур, `020-fin-fact-r0-pilot-postgresql.sql` — факт-контур и FK `calc_plan.factset_id → fin_fact.fact_set.id`:
 
 | Таблица | Минимальные поля и ограничения |
 |---|---|
@@ -160,13 +176,15 @@ R0 придерживается **пяти таблиц**, без отдельн
 ## 6. Транзакционные границы и concurrency
 
 1. **TX-A**: сохранить `fin_intake` revision + append outbox event **в том же PostgreSQL и физической транзакции**; rollback удаляет оба. У исходного `FormDraftService` должны сохраниться no-op/409/idempotency правила.
-2. **TX-B**: dispatcher забирает DB-local unprocessed events через `SKIP LOCKED`, дедуплицирует по `producer_event_id`, создаёт план/job только для доверенного `FACTSET_QUALIFIED` и помечает `processed_at` **в том же COMMIT**. Для `DRAFT_REVISION_SAVED` разрешено только локальное read-model действие; на неутверждённом черновике qualified job запрещён.
+2. **Pinned read + Assemble (no write)**: по exact revision ID + исходным canonical SHA и versioned mapping извлечь типизированные F02 source observations; сформировать candidate FactSet digest. **Independent test-only qualification** verifies the exact digest/issuer.
+3. **TX-Q (qualified fact commit)**: вставить `fin_fact.fact_set` + `fact_observation`, обновить local `factset_control`, создать trusted `FACTSET_QUALIFIED` outbox **в одной DB транзакции**, не раньше доверенного допуска.
+4. **TX-B**: dispatcher забирает DB-local unprocessed events через `SKIP LOCKED`, проверяет **persisted fin_fact digest/epoch**, дедуплицирует по `producer_event_id`, создаёт план/job только для доверенного `FACTSET_QUALIFIED` и помечает `processed_at` **в том же COMMIT**. Для `DRAFT_REVISION_SAVED` разрешено только локальное read-model действие; на неутверждённом черновике qualified job запрещён.
 3. **TX-C**: claim очереди по `FOR UPDATE SKIP LOCKED`, обновить lease, token, status; COMMIT.
-4. **Compute (вне TX)**: загрузить только точную pinned revision, проверить source schema/binding SHA и typed values; выполнить DAG и per-node dirty/reuse; подготовить output snapshot и SHA без DB UPDATE.
-5. **TX-D (result commit)**: в одной DB транзакции условно по `lease_owner + fencing_token + lease_until + plan state` записать новый immutable result и `SUCCEEDED`/`result_id`; при rollback нет ни результата, ни SUCCEEDED. Если `executionFingerprint` уже закоммичен, возвращать исходный plan/result, не делать cross-plan rebinding.
-6. **TX-E (publication)**: отдельная короткая транзакция, revalidate trusted authority/epoch, exact binding, config/artifact, plan state и CAS pointer, затем отметить план опубликованным. Это делает проверяемым crash **между результатом и публикацией**. Повтор TX-E идемпотентен.
-7. **Recovery**: reaper находит просроченные RUNNING, переоткрывает задачи с увеличением token; retry и crash after TX-D before TX-E не дублируют результат и не создают phantom CURRENT.
-8. **Revocation race**: отзыв должен сериализоваться с publication по общей версии/locking authority **в рамках допускаемого local test trust boundary**. Простое `SELECT approved` перед `INSERT` без блокировки — НЕПРИЕМЛЕМО. Чтение current также проверяет действующий admission; для внешней production authority без общей транзакции остаётся HOLD.
+6. **Compute (вне TX)**: загрузить строго закреплённые `fin_fact.fact_observation` по FactSet ID, проверить canonical factset SHA, точный scope/mapping/period и active binding epoch; выполнить DAG и per-node dirty/reuse; подготовить output snapshot и SHA без DB UPDATE. **Никакого fallback к raw draft JSON** при ошибке фактов.
+7. **TX-D (result commit)**: в одной DB транзакции условно по `lease_owner + fencing_token + lease_until + plan state` записать новый immutable result и `SUCCEEDED`/`result_id`; при rollback нет ни результата, ни SUCCEEDED. Если `executionFingerprint` уже закоммичен, возвращать исходный plan/result, не делать cross-plan rebinding.
+8. **TX-E (publication)**: отдельная короткая транзакция, revalidate trusted authority/epoch, exact binding, config/artifact, plan state и CAS pointer, затем отметить план опубликованным. Это делает проверяемым crash **между результатом и публикацией**. Повтор TX-E идемпотентен.
+9. **Recovery**: reaper находит просроченные RUNNING, переоткрывает задачи с увеличением token; retry и crash after TX-D before TX-E не дублируют результат и не создают phantom CURRENT.
+10. **Revocation race**: отзыв должен сериализоваться с publication по общей версии/locking authority **в рамках допускаемого local test trust boundary**. Простое `SELECT approved` перед `INSERT` без блокировки — НЕПРИЕМЛЕМО. Чтение current также проверяет действующий admission; для внешней production authority без общей транзакции остаётся HOLD.
 
 ## 7. REST и локальные UI-контракты
 
@@ -183,7 +201,7 @@ R0 придерживается **пяти таблиц**, без отдельн
 
 - Детерминированные BigDecimal операции; no floating-point для финансов; explicit currency/units/rounding, no implicit zero; stable input ordering.
 - Isolation: tenant/project/period/form version и reporting basis обязательны в fingerprint и доступе; нет прямого `fin_intake → fin_fact` writer. Preview в R0 только на loopback с feature flag, bounded payload (3 F02 inputs), без публичного Swagger write API для S2; rate limit и auth обязателен для внешнего размещения.
-- **R0 source reader:** только `fin_intake` pinned `revision_id + form_version_id + exact instance scope` через существующий `FormDraftService`/репозитории; в R0 **не создавать** третью параллельную fact таблицу. Snapshot canonical values валидируются с реальным source SHA и текущими immutable field definitions; не читать `current_revision_id` для уже pinned plan. Отдельный `ReportGridService` (`fin_intake.lib_report_revision_cell`) остаётся вне MVP с явным interface-adapter TODO.
+- **R0 source-to-fact boundary:** PinnedSourceReader читает точную `fin_intake` revision для assembler, а **worker читает уже типизированные `fin_fact.fact_observation` из пинованного FactSet**. Не использовать `current_revision_id` для pinned plan. Три новые fact-таблицы **не** заменяют `fin_intake` и не сливают его с `ReportGridService`; последний требует отдельного adapter + разрешения source conflict. Статусы `CANDIDATE_UNQUALIFIED` и `READY_FOR_REVIEW` не дают права на квалифицированный fact writer.
 - **Hardening prerequisite:** existing `fin_intake` исторические revision/row/evidence таблицы не имеют доказанного PostgreSQL UPDATE/DELETE deny trigger. До production qualification обязателен DB-level append-only guard или equivalent access segregation и негативный SQL-тест; наличие Java immutable flow недостаточно.
 - Observability: `eventId`, `planId`, `jobId`, `executionId`, `fingerprint`, `factSetSha`, `methodId`, error code, duration, nodes total/recomputed/skipped, queue lag, retry/fence counters, active/queued CPU workers, tenant backpressure, cache L1/L2 hits/misses/timeouts. Не логировать финансовые значения, tenant identifiers или PII как высококардинальные labels.
 - Целевые **гипотезы для нагрузочной квалификации**, не SLA текущего проекта: p95 preview ≤ 300 ms для 3 полей; p95 от trusted event до результата ≤ 2 s в локальном 1-проектном пилоте; zero unauthorized current publications; zero duplicate results for same scope/fingerprint. Измерять p95/p99 и throughput PostgreSQL/worker; отклонения не скрывать.
@@ -221,6 +239,9 @@ R0 придерживается **пяти таблиц**, без отдельн
 | A26 | Redis disabled, timeout, outage and restart (R1/R2 only) | seamless PostgreSQL/compute fallback; no skipped authorization or phantom CURRENT |
 | A27 | CPU worker crash, heartbeat expiry, cancellation race | no stale owner result, no published partial DAG; reaper and idempotent retry |
 | A28 | Identical benchmark workloads Redis OFF vs Caffeine vs Caffeine+Redis (R2) | store p95/p99, CPU, PG load, cache hit/miss, error budget, compare exact `outputValuesSha256`, and record release decision |
+| A29 | Source-to-Fact qualification seam: test-only F02 revision | `fin_fact.fact_set` + exactly 3 typed observations + trusted event atomically committed, exact SHA/lineage |
+| A30 | Source correction, stale mapping, source SHA mismatch and out-of-order qualification | reject wrong facts/current, preserve history, no implicit draft promotion |
+| A31 | Full PostgreSQL migration 001–020, failed TX-Q, replay, source tampering and backfill discovery | F01–F16 in source-to-fact appendix GREEN; no historical checksums rewritten |
 
 ### Проверяемые SQL-постусловия
 - Счётчик `fin_intake.lib_form_revision` соответствует коммитам save; rollback не оставляет `calc_outbox_event`.
@@ -233,9 +254,9 @@ R0 придерживается **пяти таблиц**, без отдельн
 | Этап | Содержимое | Условие завершения |
 |---|---|---|
 | **R0.A — Contract + Coverage** | Данное ТЗ, baseline 166 форм, 3 F02 formulas, аудит исходников | Полнота и неизобретённые зависимости подтверждены; DESIGN READY |
-| **R0.B — Minimal Calculation Kernel** | Typed F02 DAG, preview, additive tables, outbox, bounded **multithreaded worker pool**, Caffeine descriptor/DAG L1 | A02–A09 + A22 PostgreSQL + React GREEN |
+| **R0.B — Minimal Calculation Kernel + Fact boundary** | Typed F02 DAG, preview, additive calc 019 + fact 020 tables, pinned source→fact assembler, TEST_ONLY qualification, outbox, bounded multithreaded workers, Caffeine descriptor/DAG L1 | A02–A09 + A22 + A29 PostgreSQL + React GREEN |
 | **R0.C — Incremental + Safety** | Field-level impact, per-node + execution fingerprints, stale/lease/fencing, revoke, method changes, parallel DAG branches above measured threshold | A10–A17 + A23/A24/A27 PostgreSQL concurrency GREEN |
-| **R0.D — Qualification** | CI full regression, browser, measurements and technical review; bounded Caffeine cache | A18–A25/A27 GREEN на одном SHA, локальный TEST_ONLY пилот разрешён |
+| **R0.D — Qualification** | CI full regression, browser, source→fact+recalculation PostgreSQL E2E, measurements, technical review | A18–A25/A27/A29–A31 и F01–F16 GREEN на одном SHA, локальный TEST_ONLY пилот разрешён |
 | **CALC-R1 — Cache Adapter (вне R0)** | Port `CalculationCache`, optional Redis L2 adapter, OFF by default | A25/A26 GREEN, fallback и безопасность доказаны |
 | **CALC-R2 — Redis Performance Gate (вне R0)** | Benchmark Redis OFF / L1 / L1+L2 для multi-worker workloads | A28 GREEN и статистически обоснованное enable/disable решение |
 | **Production S2/IAM Gate (отдельно)** | Реальный S2/IAM, FactSet authority, approved publish, масштабирование на 166 форм | Нет HOLD; финансовый выпуск отдельно |
@@ -253,7 +274,7 @@ R0 придерживается **пяти таблиц**, без отдельн
 ## 12. Definition of Done
 
 **R0.A**: ТЗ + две baseline-матрицы в ветке, точно 166 form rows и 794 unique R6 field rows, все формы включены, отсутствующие поля/semantics видны, формулы/зависимости честно кандидатные, без изменений исполняемого кода/миграций.  
-**R0.D**: F02 preview + synthetic qualified E2E + DAG + PostgreSQL queue + bounded multithreaded workers + fencing + immutable result + Caffeine L1, тесты A01–A25 и A27 (A26 — R1, A28 — R2) CI GREEN на одном SHA.  
+**R0.D**: F02 preview + **persisted immutable fin_fact with 3 typed F02 observations** + synthetic qualified E2E + DAG + PostgreSQL queue + bounded multithreaded workers + fencing + immutable result + Caffeine L1; тесты A01–A25, A27, A29–A31, F01–F16 (A26 — R1, A28 — R2) CI GREEN на одном SHA.  
 **Production**: НЕ READY, пока нет независимого финансового S2, IAM/ABAC и реального approved FactSet admission.
 
 ### Review reference
@@ -262,7 +283,8 @@ R0 придерживается **пяти таблиц**, без отдельн
 
 ### Temporary code-level implementation workpacks
 
-- `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migration 019, F02 DAG, bounded workers, outbox, tests.
+- `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migrations 019/020, F02 DAG, bounded workers, outbox, tests.
+- `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, tx-Q and tests F01–F16.
 - `docs/temporary/FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md` — CalculationCache interfaces, Caffeine node values, optional Redis L2, feature flags, fallback.
 - `docs/temporary/FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md` — 3-mode benchmark scripts/fixtures, telemetry, correctness and Redis activation gate.
 
