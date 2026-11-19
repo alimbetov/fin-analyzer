@@ -279,10 +279,11 @@ class FormFact166CatalogMocksTest {
           var fieldOutputs=result.numeric().stream()
               .filter(x->x.sourceFieldCode().equals(field.fieldCode())).toList();
           assertEquals(2,fieldOutputs.size(),p.formCode());
-          assertEquals(stable(p.formCode()+"-row-1"),fieldOutputs.get(0).rowId());
-          assertEquals(stable(p.formCode()+"-row-2"),fieldOutputs.get(1).rowId());
-          assertTrue(fieldOutputs.get(0).numericValue().signum()>0);
-          assertEquals(0,fieldOutputs.get(1).numericValue().signum());
+          var valuesByRow=new HashMap<UUID,java.math.BigDecimal>();
+          fieldOutputs.forEach(out->assertNull(valuesByRow.put(out.rowId(),out.numericValue())));
+          assertEquals(2,valuesByRow.size(),p.formCode());
+          assertTrue(valuesByRow.get(stable(p.formCode()+"-row-1")).signum()>0);
+          assertEquals(0,valuesByRow.get(stable(p.formCode()+"-row-2")).signum());
         }
     }
   }
