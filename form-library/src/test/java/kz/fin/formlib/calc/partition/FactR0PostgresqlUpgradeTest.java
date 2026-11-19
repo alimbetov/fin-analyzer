@@ -76,6 +76,16 @@ class FactR0PostgresqlUpgradeTest {
     jdbc.update("""
         UPDATE fin_lib.lib_form_definition SET current_version_id=? WHERE id=?
         """,versionId,formId);
+    // Historical 002 catalog constraints are real FKs, even in an
+    // isolated upgrade rehearsal: never bypass or disable them.
+    jdbc.update("""
+        INSERT INTO fin_lib.lib_currency(code,iso_numeric,minor_units,status)
+        VALUES ('KZT','398',2,'ACTIVE')
+        """);
+    jdbc.update("""
+        INSERT INTO fin_lib.lib_period_type(code,sort_order,iso_calendar,status)
+        VALUES ('M',1,'GREGORIAN','ACTIVE')
+        """);
     jdbc.update("""
         INSERT INTO fin_intake.lib_form_instance
           (id,organization_id,economic_entity_id,business_scope_id,project_id,
