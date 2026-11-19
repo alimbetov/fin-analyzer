@@ -521,3 +521,7 @@
 .mobile-decision-link{display:none;align-items:center;gap:6px;border:1px solid #c9d9ef;color:#28558c;background:#eef4ff;border-radius:9px;padding:8px 10px;font-size:12px;font-weight:700}
 @media(max-width:920px){.mobile-decision-link{display:inline-flex}}
 @media(max-width:460px){.mobile-decision-link{font-size:11px;padding:8px}.top-left,.top-right{gap:6px}.topbar{padding:0 8px}.top-right .local-state{display:none}}
+
+/* Fullscreen editor retains a visible route back to financial decisions. */
+.editor-focus .mobile-decision-link{display:inline-flex}
+@media(max-width:460px){.editor-focus .mobile-decision-link{max-width:164px}}
