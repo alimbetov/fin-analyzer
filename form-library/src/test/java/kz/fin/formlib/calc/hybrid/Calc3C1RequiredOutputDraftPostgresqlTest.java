@@ -138,8 +138,8 @@ class Calc3C1RequiredOutputDraftPostgresqlTest {
 
   @Test void postgresBlocksMutationDirectS2AndInvalidSource() throws Exception {
     var saved=review.appendUnqualified(new RequiredOutputReviewDraftService.DraftRequest(
-      "F02",version("F02"),null,List.of(new RequiredOutputReviewDraftService.OutputDecision(
-        "F02.netRevenue","REQUIRED","SOURCE",null)),
+      "C09",version("C09"),null,List.of(new RequiredOutputReviewDraftService.OutputDecision(
+        "C09.amount","REQUIRED","SOURCE",null)),
       "reviewer-uat","Nonapproved draft for mutation testing"));
     assertThrows(DataAccessException.class,()->db.update("""
       UPDATE fin_calc.required_output_review_draft_revision
@@ -167,7 +167,7 @@ class Calc3C1RequiredOutputDraftPostgresqlTest {
         definition_sha256,binding_sha256)
       SELECT gen_random_uuid(),form_code,form_version_id,source_schema_sha256,
         revision_number+1,id,
-        '[{"metricCode":"F02.fake","requiredness":"REQUIRED","sourceKind":"SOURCE"}]'::jsonb,
+        '[{"metricCode":"C09.fake","requiredness":"REQUIRED","sourceKind":"SOURCE"}]'::jsonb,
         reviewer_ref,rationale,definition_sha256,binding_sha256
       FROM fin_calc.required_output_review_draft_revision WHERE id=?
       """,saved.id()));
