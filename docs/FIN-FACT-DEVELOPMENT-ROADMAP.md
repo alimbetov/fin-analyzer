@@ -3,7 +3,7 @@
 **Branch:** `feat/fin-form-library-standalone`. **Scope:** single Spring Boot modular monolith / PostgreSQL 16.  
 **Review baseline:** HEAD `38ea42877abd37df15335d4e4729242959d887be` (2026-11-19).  
 **Baseline:** 166 form profiles: **3 SINGLE_RECORD, 151 ROWSET, 12 EVIDENCE**; 794 R6 field candidates, **400** numeric candidate fields; **0 approved mapping contracts proved**.  
-**Status:** roadmap is normative for this branch, not a claim of completed financial S2.
+**Status:** authoritative implementation roadmap. **INGEST-0/INGEST-1 implementation started 2026-11-19** (read-only candidates, no physical fin_fact). No real S2, no qualified fact persistence or CI qualification beyond runs expressly linked below.
 
 ## 1. Architecture boundaries
 
@@ -15,8 +15,8 @@ Never promote a numeric candidate into a financial metric merely by fieldType. N
 
 | Stage | Goal | Deliverables | Acceptance |
 |---|---|---|---|
-| **INGEST-0** | Complete, accurate registry of **166 forms** | Versioned manifest `catalog/fin-fact-ingestion-strategy-r0.tsv`, docs matrix 166, existing field matrix 794, no claimed S2 | Every form classified exactly once as SINGLE_RECORD, ROWSET or EVIDENCE, no duplicate code; 3/151/12 consistent |
-| **INGEST-1** | Real **read-only JSON→typed candidate** transformation | `FormFactSourceReader`, `FormFactCandidateExtractor`, `FormFactIngestionRegistry`; numeric BigDecimal, missing vs blank vs zero, row UUID, evidence SHA/refs, no source update or fact write | JUnit positive/negative for 3 modes; F02 excludes derived netProfit; no implicit metricCode; all outputs `UNQUALIFIED_SOURCE_PROJECTION` and `SOURCE_SHA_NOT_REVERIFIED` |
+| **INGEST-0** | Complete, accurate registry of **166 forms** | **CODE COMMITTED:** `catalog/fin-fact-ingestion-strategy-r0.tsv`, registry, 166-profile matrix and new [per-field review worklist](FIN-FACT-166-FORM-FIELD-MAPPING-WORKLIST.tsv) | Registry 166/166 (3/151/12) checked; synthetic exact-mode routing test added; all mappings still UNREVIEWED |
+| **INGEST-1** | Real **read-only JSON→typed candidate** transformation | **CODE COMMITTED:** `calc/ingest/FormFactSourceReader`, `FormFactCandidateExtractor`, `FormFactIngestionRegistry`, `FormFactCandidateService`; exact scoped revision ID, BigDecimal, absence/blank/zero, row UUID, evidence SHA/refs | Java/H2 + backend regression GREEN on `8df2468a`; 166 synthetic routing test added later (check its own SHA CI). Outputs remain `UNQUALIFIED_SOURCE_PROJECTION` / `SOURCE_SHA_NOT_REVERIFIED`; no financial metricCode or fin_fact writes |
 | **INGEST-2** | Prove exact immutable source identity | Deterministic `FIN-LIB-CONTENT-V1` canonical rehash shared with FormDraftService; verify row order/evidence; raw canonical DB/source mismatches BLOCK | Test against actual `FormDraftService.save` on PG16 for all 3 modes incl attachment; no fallback to latest revision |
 | **FACT-0** | Physical source→fact storage (PG16) | Additive migrations 019+020, `fin_fact.fact_set` and control unpartitioned, `fact_observation PARTITION BY RANGE(period_start)` monthly composite PK; `FactMonthlyPartitionService` | PG PFT-01..08, append-only/privilege checks, catalog bounds, 001–020 clean & upgrade; no DROP |
 | **FACT-1** | First qualified end-to-end F02 | Exact test-only reviewed F02 3-input mapping, pinned candidate FactSet, trusted issuer, TX-Q facts+event, worker reads exact FactSet, SHA and lineage | F02 three fact rows, replay, rollback, revoke, out-of-order epoch, single-field delta, clean PG & concurrency GREEN |
@@ -27,6 +27,16 @@ Never promote a numeric candidate into a financial metric merely by fieldType. N
 | **CALC-R2** | Measure optional Redis benefit | Repeatable OFF/L1/L1+L2 PG workload benchmark | Redis ON only after verified latency/DB improvement, zero correctness regression |
 
 **Implementation freeze:** start **INGEST-1 now** without touching 001–018, database tables, public APIs, S2, financial methods or unreviewed mapping statuses. This is a real implementation of **unqualified source projection**, not completion of 166 financial transformations.
+
+## 2.1 INGEST-1 implementation delivery and boundaries (2026-11-19)
+
+- **Java:** `form-library/src/main/java/kz/fin/formlib/calc/ingest/`: `FormFactIngestionRegistry` (166 exact source modes, manifest SHA), `FormFactSourceReader` (DB joins by **exact** revision UUID + organizationId + projectId, rejects foreign scope, strict JSON **string** leaves), `FormFactCandidateExtractor` (3 strategies), `FormFactCandidateService` (read-only transactional boundary).
+- **Tests:** `FormFactCandidateExtractorTest` (nine positive/negative scenarios), `FormFactSourceReaderTest` (exact historical read, foreign organization/project, invalid JSON, unqualified façade), `FormFact166ModeRoutingTest` (all **166 synthetic mode routing** cases). These prove structural candidate extraction, **NOT** per-form qualified mappings or DB fin_fact.
+- **Field-level worklist:** [FIN-FACT-166-FORM-FIELD-MAPPING-WORKLIST.tsv](FIN-FACT-166-FORM-FIELD-MAPPING-WORKLIST.tsv) has **806 worklist rows:** 793 R6 candidate source fields + 1 `F02.netProfit` derived exclusion + 12 evidence-mode placeholders. Of 400 R6 numeric entries, **399** are provisional source numeric candidates, one is a derived candidate. Runtime still has additional evidence metadata fields needing versioned contract mapping; the placeholders are NOT full evidence field contracts.
+- **Known limitation:** source canonical SHA is a **stored claim**, not recalculated from the full `FIN-LIB-CONTENT-V1` source identity. Ingestion stage deliberately returns `SOURCE_SHA_NOT_REVERIFIED`, cannot write `fin_fact` and cannot qualify. **INGEST-2 MUST** share canonical hash implementation with `FormDraftService`, including original `version_label`, rows and evidence fileName/mediaType/SHA.
+- **Delivery policy:** no new external REST endpoint; candidate attributes may include confidential source metadata and must not be logged or returned to unauthorized callers. Do not cache tenant values in public catalog Caffeine.
+- **CI evidence:** [Java 21/H2 run on `8df2468a`](https://github.com/alimbetov/fin-analyzer/actions/runs/44465949899) and [backend regression on `8df2468a`](https://github.com/alimbetov/fin-analyzer/actions/runs/44465949933) completed GREEN. Earlier Spring proxy failure was corrected by making `@Transactional` services non-final. Tests added **after** that commit require their own GREEN before INGEST-1 acceptance.
+- **Suggested focused run:** `mvn -f form-library/pom.xml -Dtest=FormFactCandidateExtractorTest,FormFactSourceReaderTest,FormFact166ModeRoutingTest test`. CI workflow executes on branch push; capture exact head SHA before claiming GREEN.
 
 ## 3. Mandatory INPUT/OUTPUT contract for INGEST-1
 
