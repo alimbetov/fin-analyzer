@@ -1,0 +1,51 @@
+name: FIN CALC-3C.2 — Control Examples PostgreSQL 16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/resources/db/changelog/040-fin-calc3c2-control-examples-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/main/resources/catalog/calc3c2-f02-uat-control-v1.tsv'
+      - 'form-library/src/main/java/kz/fin/formlib/bootstrap/Calc3C2ControlExampleBootstrap.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/hybrid/Calc3C2ControlExamplePostgresqlTest.java'
+      - '.github/workflows/fin-calc3c2-control-pg16.yml'
+      - 'form-library/pom.xml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Execute PostgreSQL 16 immutable control fixture tests
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc3C2ControlExamplePostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Prove five test cases ran without skipping
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          reports=glob.glob('form-library/target/surefire-reports/TEST-*Calc3C2ControlExamplePostgresqlTest.xml')
+          if len(reports)!=1:
+              sys.exit('FAIL: CALC3C2 control PG16 report missing')
+          x=ET.parse(reports[0]).getroot()
+          counts={k:int(x.attrib.get(k,0)) for k in ('tests','failures','errors','skipped')}
+          print(counts)
+          if counts!={'tests':5,'failures':0,'errors':0,'skipped':0}:
+              sys.exit('FAIL: five real PostgreSQL tests required')
+          PY
