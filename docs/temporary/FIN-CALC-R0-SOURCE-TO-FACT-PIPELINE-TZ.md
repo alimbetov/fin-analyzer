@@ -3,6 +3,7 @@
 **Date:** 2026-11-19. **Status:** P0 SPECIFICATION HARDENING / NOT IMPLEMENTED / PRODUCTION S2 HOLD.
 **Scope:** `alimbetov/fin-analyzer`, branch `feat/fin-form-library-standalone`.
 **Normative parent:** `docs/FIN-CALC-R0-INCREMENTAL-CALCULATION-ARCHITECTURE-TZ.md`.
+**Binding physical partitioned design:** `docs/temporary/FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md` and draft `docs/temporary/sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql`. Where earlier single-source headers or `UUID PRIMARY KEY` observations conflict, **the newer multi-source monthly-partition contract prevails**. This is specification only; not an applied migration.
 
 ## 1. P0 gap and architectural decision
 
@@ -64,14 +65,14 @@ F02 R0 accepts only `SINGLE_RECORD`, exactly these 3 required numeric fields, sa
 
 ## 4. Minimum physical fact tables (NEW, not existing)
 
-**Migration contract:** keep `019-fin-calc-r0-postgresql.sql` for five fin_calc tables; add PostgreSQL-only `020-fin-fact-r0-pilot-postgresql.sql` in the master changelog, without editing 001–018. Migration 020 introduces 3 tables below and adds FK `calc_plan.factset_id → fin_fact.fact_set.id`.
+**Migration contract:** keep `019-fin-calc-r0-postgresql.sql` for five fin_calc tables; add PostgreSQL-only `020-fin-fact-r0-pilot-postgresql.sql` in the master changelog, without editing 001–018. Migration 020 introduces 3 tables below and adds FK `calc_plan.factset_id → fin_fact.fact_set.id`. **Partition only `fact_observation` monthly RANGE(period_start); header/control remain unpartitioned.** The following schemas are conceptual; precise physical columns and PK/UNIQUE constraints are governed by `FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md`.
 
 ### 4.1 fin_fact.fact_set — immutable qualified snapshot header
 
 ```text
 id uuid PK
 organization_id, economic_entity_id, business_scope_id, project_id uuid NOT NULL
-source_form_code, form_version_id, source_revisions_jsonb NOT NULL
+dataset_code, source_revisions_jsonb NOT NULL  # multiple source forms/versions, not one
 period_type, period_code, period_start, period_end_exclusive NOT NULL
 currency, coverage, reporting_basis, data_space NOT NULL
 source_set_sha256 char(64), mapping_sha256 char(64) NOT NULL
@@ -88,10 +89,13 @@ UNIQUE(organization_id, factset_sha256, qualification_binding_sha256)
 ### 4.2 fin_fact.fact_observation — immutable typed facts
 
 ```text
-id uuid PK
+period_start DATE NOT NULL,
+observation_id UUID NOT NULL,
+PRIMARY KEY (period_start, observation_id),
 factset_id uuid NOT NULL FK -> fact_set(id)
 metric_code varchar(160), metric_contract_version varchar(64) NOT NULL
 source_revision_id uuid NOT NULL FK -> fin_intake.lib_form_revision(id)
+source_form_code varchar NOT NULL
 source_row_key varchar(128) NOT NULL DEFAULT 'SINGLE'
 source_field_code varchar(128), form_version_id uuid NOT NULL
 source_content_sha256 char(64) NOT NULL
@@ -103,8 +107,9 @@ value_state varchar(24) CHECK = PRESENT
 numeric_value numeric(38,12) NOT NULL
 unit_code varchar(64), currency_code char(3) NOT NULL
 canonical_value_sha256 char(64) NOT NULL
-UNIQUE(factset_id, metric_code, source_revision_id,
-       source_row_key, source_field_code, period_start, dimension_digest)
+observation_key_sha256 CHAR(64) NOT NULL,
+UNIQUE(period_start, factset_id, observation_key_sha256)
+-- PostgreSQL 16 partitioned PK/UNIQUE must include period_start
 ```
 
 F02 uses `source_row_key='SINGLE'` and stable empty-dimension digest. For general ROWSET later, preserve row UUID, true dimensions and grain; do not SUM STOCK across months or ignore YTD/LTD/AS_OF semantics. Null observations and explicit MISSING/NOT_APPLICABLE states will require a separate field policy; do not silently replace missing values by zero. Validate precision, scale, currency units, sign and duplicate business identity before insert.
@@ -172,6 +177,9 @@ interface QualifiedFactReader {
 
 ## 6. Change impact, period scope, reuse and backfill
 
+For all 166 forms use source mode strategies: 3 SINGLE_RECORD, 151 ROWSET (preserve row UUID and dimensions), 12 EVIDENCE (zero numeric facts by default). R0 still proves only F02. `fact_set` must allow **multiple source revisions/formVersions**, because multi-form methodology input cannot fit a single-form FactSet header. Numeric facts retain exact source form+revision+field+row+period+dimensions; financial meaning is governed by reviewed policies, not SQL MERGE. See `FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md` for full contract.
+
+
 - Exact qualified FactSet change → new `executionFingerprint` and new full immutable `calc_result` with lineage to new factset and source revisions.
 - Only changed typed consumed inputs + relevant algorithm/config/period → changed `nodeFingerprint` and recompute. For F02 changing only operatingExpenses → 1 node recomputed, 2 safely reused.
 - Per-method temporal dependency contract: same-month F02 only that month; trailing 12 months recompute windows that contain changed month; YTD recalculates downstream periods to year boundary; STOCK/AS_OF not blindly summed. Multi-form joins require same tenant, entity, basis, coverage, currency and approved mapping/grain policies.
@@ -199,4 +207,4 @@ interface QualifiedFactReader {
 | STF-15 | Already-existing draft saved before outbox feature | discovery/backfill status visible; never auto approved |
 | STF-16 | Full PG migration 001–020 and upgrade from 018 | checksum-compatible, FK, unique and immutability proofs |
 
-**DoD:** completion of master A01–A28 is not sufficient without STF-01–STF-16. Qualified end-to-end remains BLOCKED until implemented and PostgreSQL GREEN. For small isolated B1 pure Java DAG tests, five-table kernel can proceed independently. The new three tables are **minimum storage for an actual test-only source→fact chain**, not a full HTAP warehouse.
+**DoD:** completion of master A01–A31 is not sufficient without STF-01–STF-16 and PFT-01–PFT-18 (monthly partitions, multi-source extraction). Qualified end-to-end remains BLOCKED until implemented and PostgreSQL GREEN. For small isolated B1 pure Java DAG tests, five-table kernel can proceed independently. The new three tables are **minimum storage for an actual test-only source→fact chain**, not a full HTAP warehouse.
