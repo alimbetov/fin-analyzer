@@ -15,7 +15,7 @@
 **Подтверждение на точном SHA:**
 - [FIN Form Library Java 21 H2 — GREEN](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526181). В логах: `FormFact166CatalogMocksTest: 665 run, 0 failures, 0 errors, 0 skipped`; полный модуль `Tests run: 863, Failures: 0, Errors: 0, Skipped: 10`, `BUILD SUCCESS`.
 - [FIN Form Studio React/Backend — GREEN](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526183): также GREEN в отдельном `PostgreSQL 16 / fin_intake REST qualification` job, Spring Boot / H2 regression и React typecheck/build.
-- [FIN UX-R1.1 Chromium browser](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526160) — workflow status at S1 observation: **IN_PROGRESS**, do not count GREEN until terminal success. Это UI регрессия и не новый qualified fact pipeline.
+- [FIN UX-R1.1 Chromium browser — GREEN](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526160) — terminal workflow **SUCCESS** on the same code SHA. Это подтверждает пользовательскую регрессию, но не новый qualified fact pipeline.
 
 ## 2. Исходные данные тестов — не выдуманные произвольные поля
 
