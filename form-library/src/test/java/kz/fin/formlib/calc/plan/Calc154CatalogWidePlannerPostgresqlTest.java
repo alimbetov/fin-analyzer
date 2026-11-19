@@ -61,20 +61,20 @@ class Calc154CatalogWidePlannerPostgresqlTest {
       Path folder=Path.of("target/fin-calc154");
       Files.createDirectories(folder);
       var out=new StringBuilder(
-        "formCode\\tformVersionId\\tcontentMode\\tschemaSha256\\t"+
-        "directNumericFields\\tformulaCandidates\\toperations\\t"+
-        "mandatoryOutputStatus\\tfinanciallyApproved\\texecutable\\t"+
-        "blockers\\tmanifestSha256\\n".replace("\\\\t","\\t"));
+        "formCode\tformVersionId\tcontentMode\tschemaSha256\t"+
+        "directNumericFields\tformulaCandidates\toperations\t"+
+        "mandatoryOutputStatus\tfinanciallyApproved\texecutable\t"+
+        "blockers\tmanifestSha256\n".replace("\\\t","\t"));
       for(var form:inv.forms()){
         String ops=form.candidates().stream()
           .map(Calc154CatalogWidePlanner.FormulaCandidate::operation)
           .distinct().sorted().collect(java.util.stream.Collectors.joining(";"));
-        out.append(String.join("\\t",form.formCode(),form.formVersionId().toString(),
+        out.append(String.join("\t",form.formCode(),form.formVersionId().toString(),
           form.contentMode(),form.schemaSha256(),
           Integer.toString(form.directNumericFields()),
           Integer.toString(form.candidates().size()),ops,
           "REVIEW_REQUIRED","false","false",
-          String.join(";",form.blockers()),form.manifestSha256())).append('\\n');
+          String.join(";",form.blockers()),form.manifestSha256())).append('\n');
       }
       Files.writeString(folder.resolve("154-form-calc4b-coverage.tsv"),
         out.toString(),StandardCharsets.UTF_8);
