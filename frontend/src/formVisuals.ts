@@ -1,6 +1,6 @@
 import type {Locale} from './api';
 import type {LucideIcon} from 'lucide-react';
-import {BookOpen,FileText,Landmark,Wallet,Calculator,Building2,Users,ShieldCheck,BriefcaseBusiness,Megaphone,Factory,FolderKanban,ShoppingCart,Package,ChartNoAxesCombined,CalendarRange,Globe} from 'lucide-react';
+import {BookOpen,FileText,Wallet,Calculator,Building2,Users,ShieldCheck,BriefcaseBusiness,Megaphone,Factory,FolderKanban,ShoppingCart,Package,ChartNoAxesCombined,CalendarRange} from 'lucide-react';
 
 /** UI presentation keys only. No financial classifications or contract changes. */
 export type FormVisualKey='ledgers'|'documents'|'assets'|'cash'|'costs'|'business'|'customers'|'governance'|'people'|'marketing'|'operations'|'projects'|'sales'|'inventory'|'finance'|'planning'|'sector';
@@ -21,7 +21,7 @@ export const formVisuals:Record<FormVisualKey,{icon:LucideIcon;tone:string}>={
   inventory:{icon:Package,tone:'amber'},
   finance:{icon:ChartNoAxesCombined,tone:'blue'},
   planning:{icon:CalendarRange,tone:'violet'},
-  sector:{icon:Globe,tone:'blue'}
+  sector:{icon:Factory,tone:'blue'}
 };
 const domainVisuals:Record<string,FormVisualKey>={
   ACCOUNTING_REGISTERS:'ledgers',EVIDENCE_AND_DOCUMENTS:'documents',
