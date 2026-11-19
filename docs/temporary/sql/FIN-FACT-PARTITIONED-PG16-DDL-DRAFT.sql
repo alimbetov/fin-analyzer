@@ -1,7 +1,11 @@
 -- FIN HTAP v2 / fin_fact DDL PROPOSAL — PostgreSQL 16
--- DOCUMENTATION ONLY; NOT a Liquibase included migration and NOT executed.
--- Proposed final path after validation: form-library/src/main/resources/db/changelog/020-fin-fact-r0-pilot-postgresql.sql
--- Requires prior 019-fin-calc-r0-postgresql.sql for the final FK from fin_calc.calc_plan.
+-- HISTORICAL DESIGN DRAFT ONLY, NOT executed as a Liquibase changeset.
+-- Source of truth is now the ACTUAL runtime migrations in form-library:
+--   019-fin-calc-r0-postgresql.sql
+--   020-fin-fact-r0-pilot-postgresql.sql
+--   021-fin-fact-scope-source-immutability-postgresql.sql
+-- This draft still contains hard-coded example partitions; actual runtime
+-- partitions are created by FactMonthlyPartitionService with bound verification.
 -- DDL is deliberately non-destructive and does not auto-create a DEFAULT partition.
 -- Genuine S2 approval, IAM and tenant isolation are NOT supplied by this SQL.
 
