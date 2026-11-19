@@ -279,12 +279,12 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 
 ### Review reference
 
-Выполнен технический S1 review: `docs/audits/FIN-CALC-R0-S1-ARCHITECTURE-REVIEW-2026-11-19.md`. Не является независимым финансовым S2.
+Выполнены документационные S1 review: `docs/audits/FIN-CALC-R0-S1-ARCHITECTURE-REVIEW-2026-11-19.md` и **P0 source→fact gap review** `docs/audits/FIN-CALC-R0-S1-SOURCE-FACT-CALC-FLOW-REVIEW-2026-11-19.md` (9 P0 / 7 P1). Это **не** независимое финансовое S2 и не результаты исполняемых PostgreSQL-тестов.
 
 ### Temporary code-level implementation workpacks
 
 - `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migrations 019/020, F02 DAG, bounded workers, outbox, tests.
-- `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, tx-Q and tests F01–F16.
+- `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, TX-Q and tests F01–F16.
 - `docs/temporary/FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md` — CalculationCache interfaces, Caffeine node values, optional Redis L2, feature flags, fallback.
 - `docs/temporary/FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md` — 3-mode benchmark scripts/fixtures, telemetry, correctness and Redis activation gate.
 
