@@ -3,7 +3,7 @@
 > **Status:** DRAFT FOR CODE IMPLEMENTATION; not a report of completed work. Supersede this document after R0 acceptance.  
 > **Branch:** `feat/fin-form-library-standalone` only. **Module:** `form-library` (Spring Boot 3.5.7, Java 21, PostgreSQL 16, Liquibase).  
 > **Normative architecture:** [FIN CALC-R0 master TЗ](../FIN-CALC-R0-INCREMENTAL-CALCULATION-ARCHITECTURE-TZ.md). The master S1 safety gates take precedence.  
-> **Delivery:** `CALC-R0 = PostgreSQL + incremental DAG + executionFingerprint/nodeFingerprint + bounded Caffeine L1 + multithreaded workers + immutable result`. **No Redis, Kafka, DSL or new fact warehouse**. Local `TEST_QUALIFIED` only until an independent S2 authority exists.
+> **Delivery:** `CALC-R0 = PostgreSQL + incremental DAG + executionFingerprint/nodeFingerprint + bounded Caffeine L1 + multithreaded workers + immutable result`. **No Redis, Kafka, DSL or full fact warehouse**. R0 **does require minimal persisted fin_fact pilot tables** (3 tables in migration 020) for a real source→fact→worker E2E. Local `TEST_QUALIFIED` only until an independent S2 authority exists.
 
 ## 0. Real integration points, never invent existing implementation
 
@@ -27,11 +27,12 @@ Use package root `kz.fin.formlib.calc`; **all names below are NEW** (not claims 
 |---|---|---|
 | **R0.B1 — Pure kernel** | `domain/TypedValue.java`, `domain/ValueState.java`, `domain/CalcScope.java`, `domain/NodeDescriptor.java`, `domain/FormulaDescriptor.java`, `domain/NodeResult.java`, `kernel/F02CalculationKernel.java`, `kernel/DagValidator.java`, `kernel/DagPlanner.java`, `kernel/FingerprintService.java` | No Spring/DB dependency in pure kernel; identical operands+versions yield identical SHA; changed operatingExpenses affects only operatingResult |
 | **R0.B2 — Preview** | `api/CalculationPreviewController.java`, `service/PreviewCalculationService.java`, `config/CalculationProperties.java` | Explicit loopback-only and feature flag, bound request body, no DB writes; frontend sequence/debounce protection |
-| **R0.B3 — DB/outbox** | Liquibase 019, `persistence/CalcJdbcRepository.java`, `outbox/OutboxAppender.java`, `outbox/CalcOutboxDispatcher.java` | Same TX as revision; additive PostgreSQL tables; idempotent event claim and plan/job enqueue |
-| **R0.B4 — Worker** | `worker/CalcWorkerScheduler.java`, `worker/CalcJobClaimer.java`, `worker/CalcJobExecutor.java`, `worker/CalcLeaseHeartbeat.java`, `worker/CalcJobReaper.java`, `worker/CalcPublicationGate.java` | Bounded 2–4-way parallel execution; claim, heartbeat, fenced commit and separate publication; recovery |
+| **R0.B3 — DB/outbox** | Liquibase 019, `persistence/CalcJdbcRepository.java`, `outbox/OutboxAppender.java`, `outbox/CalcOutboxDispatcher.java` | Same TX as revision; five additive PostgreSQL calc tables; idempotent draft event, no qualified job without FactSet |
+| **R0.B3F — Source→Fact pilot (P0)** | Liquibase **020**, `ingest/SourceRevisionReader.java`, `SourceFactAssembler.java`, `TrustedQualificationGateway.java`, `FactSetCommitter.java`, `QualifiedFactReader.java`; 3 fact tables | Reads pinned F02 source, validates exact canonical source/field/mapping SHA; commits TEST_ONLY FactSet + 3 observations + trusted outbox in TX-Q; worker reads facts, not draft JSON; F01–F16 PG tests |
+| **R0.B4 — Worker** | `worker/CalcWorkerScheduler.java`, `worker/CalcJobClaimer.java`, `worker/CalcJobExecutor.java`, `worker/CalcLeaseHeartbeat.java`, `worker/CalcJobReaper.java`, `worker/CalcPublicationGate.java` | Bounded 2–4-way parallel execution; **QualifiedFactReader** pins trusted observations for CPU calculation; claim, heartbeat, fenced commit and separate publication; recovery |
 | **R0.C1 — Reuse** | `service/NodeChangeImpactService.java`, `cache/CalcDescriptorCache.java`, `service/PreviousResultNodeLookup.java` | Caffeine **descriptor/graph only**. Node value reuse from verified PostgreSQL immutable result, different output snapshot for new FactSet |
 | **R0.C2 — Guard/metrics** | `admission/TrustedQualificationGateway.java`, `admission/RejectingQualificationGateway.java`, `admission/TestOnlyQualificationGateway.java` (**test source set only**), `service/CalcObservability.java` | No HTTP approve; production default fail closed; trace retries/latency without PII |
-| **R0.D — Gate** | `test/.../F02KernelTest.java`, `FingerprintServiceTest.java`, `CalcR0PostgresqlIntegrationTest.java`, browser acceptance test | All A01–A25,A27 and legacy regression GREEN on exact SHA |
+| **R0.D — Gate** | `test/.../F02KernelTest.java`, `FingerprintServiceTest.java`, `CalcR0PostgresqlIntegrationTest.java`, `SourceToFactPostgresqlIntegrationTest.java`, browser acceptance test | All A01–A25,A27,A29–A31,F01–F16 and legacy regression GREEN on exact SHA |
 
 No new Kafka, Redis, Flink, ClickHouse, web sockets, general-purpose formula parser, multi-tenancy IAM simulator or 166-form runtime generator.
 
@@ -126,7 +127,7 @@ final class F02CalculationKernel {
 
 ## 3. PostgreSQL 16 migration 019 — physical contract
 
-Create `form-library/src/main/resources/db/changelog/019-fin-calc-r0-postgresql.sql` with Liquibase `dbms:postgresql` and include at end of master YAML. New schema `fin_calc`. **JDBC-only mappings** for R0 (no new Hibernate entities), so existing H2 defaults + `ddl-auto: validate` remain possible when calc flag OFF. Never edit changelogs 001–018.
+Create `form-library/src/main/resources/db/changelog/019-fin-calc-r0-postgresql.sql` with Liquibase `dbms:postgresql` and include at end of master YAML. New schema `fin_calc`. **Then** create `020-fin-fact-r0-pilot-postgresql.sql` for `fin_fact.fact_set`, `fin_fact.fact_observation`, `fin_fact.factset_control` and add FK `fin_calc.calc_plan.factset_id → fin_fact.fact_set.id`. Detailed columns, strict TEST_ONLY qualification, and transactional tests: [Source-to-Fact contract](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md). R0 has **5 calc + 3 fact = 8 physical tables**. **JDBC-only mappings** (no new Hibernate entities) so H2 can remain supported when calc is OFF. Never edit changelogs 001–018.
 
 Five tables required; this is a **column-level specification**, not a claim that the SQL exists.
 
@@ -136,7 +137,7 @@ Five tables required; this is a **column-level specification**, not a claim that
 4. `fin_calc.calc_result`: `id uuid pk`, `organization_id uuid`, full scope, `plan_id uuid fk`, `execution_fingerprint char(64)`, `output_values_sha256 char(64)`, `result_sha256 char(64)`, `result_json jsonb` (all outputs, node SHA/value/state/reuse marker), `lineage_json jsonb` (this exact binding), `computed_at`, `qualification_mode varchar(32)`; UNIQUE(`organization_id,execution_fingerprint`). PostgreSQL append-only UPDATE/DELETE deny trigger; validate FK to plan and scope in service + negative tests.
 5. `fin_calc.calc_current_result`: stable full scope + `method_code/version policy`, `result_id uuid fk`, `pointer_version bigint`, `approval_epoch bigint`, `activated_at`; UNIQUE(stable full scope including method variant). CAS and trusted authority guard; **no caching of this table**.
 
-**Mandatory constraints:** non-null for identity columns; `CHECK(attempt_count>=0, fencing_token>=0, pointer_version>=0)`; SHA-256 regexp/length checks where suitable; checked status transitions in code+tests; FK to plan/result; result immutability enforced by PG trigger or restricted DB role; no direct `fin_fact` inserts. Schema tables are test-local `LOCAL_TEST_ONLY` without a real S2 authority. To keep R0 at five tables, serialized test-only admission state can be attached to a locked plan/test fixture row; **do not pretend this is a production external approval transaction**.
+**Mandatory constraints:** non-null for identity columns; `CHECK(attempt_count>=0, fencing_token>=0, pointer_version>=0)`; SHA-256 regexp/length checks where suitable; checked status transitions in code+tests; FK to plan/result; result immutability enforced by PG trigger or restricted DB role; **no inserts to `fin_fact` except via trusted `FactSetCommitter` TX-Q**. `fin_fact.factset_control` is the required LOCAL_TEST_ONLY authority epoch lock; **do not treat calc_plan as authorization state** or pretend this is a production external approval transaction.
 
 ### Outbox integration
 
@@ -148,7 +149,7 @@ outboxAppender.revisionSaved(
     revision.getCanonicalContentSha256(), version.getId());
 ```
 
-`OutboxAppender` uses same Spring-managed DataSource/JdbcTemplate + transaction; fail save on failed outbox insert so **no committed revision lacks an event**. Idempotent replay exits earlier, emits zero events. On H2 with calc disabled, use `NoopOutboxAppender` (no hidden network calls). With PostgreSQL and calc enabled, real appender. Outbox payload references IDs/digests only. Local dispatcher uses `FOR UPDATE SKIP LOCKED`, in one TX inserts plan+job **only for independent trusted `FACTSET_QUALIFIED`**, and marks event processed; replay dedup via producer event ID. A draft event is never a qualification event.
+`OutboxAppender` uses same Spring-managed DataSource/JdbcTemplate + transaction; fail save on failed outbox insert so **no committed revision lacks an event**. Idempotent replay exits earlier, emits zero events. On H2 with calc disabled, use `NoopOutboxAppender` (no hidden network calls). With PostgreSQL and calc enabled, real appender. Outbox payload references IDs/digests only. Local dispatcher uses `FOR UPDATE SKIP LOCKED`; after **TX-Q** has committed persisted `fin_fact` rows and `FACTSET_QUALIFIED` outbox, dispatcher verifies FactSet digest+binding+epoch and creates plan+job in one TX with event processed. Replay dedup via producer event ID. A draft event is never a qualification event; never enqueue on mere `READY_FOR_REVIEW`.
 
 ### Job claim SQL sketch
 
@@ -176,13 +177,16 @@ RETURNING j.id,j.plan_id,j.fencing_token;
 ### Commit and publication
 
 ```text
+TX-Q  after verified TEST_ONLY decision: INSERT immutable factset+3 observations
+      + update locked factset_control + append FACTSET_QUALIFIED outbox, COMMIT
+TX-B  verify persisted factset+digest+active epoch, enqueue job + process outbox, COMMIT
 TX-C  claim a job + fence; COMMIT
-CPU   load pinned F02 revision + validate scope/digest; evaluate DAG
+CPU   load pinned fin_fact observations (not raw F02 draft) + validate digest; evaluate DAG
 TX-D  lock job; test lease_owner, fencing_token, lease_until > now(), status=RUNNING
       lock/validate plan; INSERT immutable result; set job.result_id,status=SUCCEEDED
       COMMIT (no result if ownership check fails)
-TX-E  independent transaction; lock plan+local authority guard in prescribed order
-      assert current TEST_ONLY epoch, config and fact binding unchanged
+TX-E  independent transaction; lock plan+fin_fact.factset_control in prescribed order
+      assert active TEST_ONLY factset and epoch, config and fact binding unchanged
       CAS current_result pointer, mark plan PUBLISHED; COMMIT
 ```
 
@@ -259,14 +263,14 @@ mvn -f form-library/pom.xml -Dtest=CalcR0PostgresqlIntegrationTest test -Dfin.po
 cd frontend && npm ci && npm run check
 ```
 
-The final CI must use **one exact commit SHA**, with real PostgreSQL migration 001–019 on a clean DB and a documented upgrade path. `mvn verify` in H2 alone is not proof of PG concurrency.
+The final CI must use **one exact commit SHA**, with real PostgreSQL migration **001–020** on a clean DB and a documented upgrade path from 018. `mvn verify` in H2 alone is not proof of PG concurrency.
 
-**R0 acceptance gates:** A01–A25/A27 in master spec; 0 invalid published current pointers; 0 committed revisions without outbox on the enabled PostgreSQL path; 0 duplicate immutable results for the same exact full binding; 100% determinism; 2–4 **actual concurrently executing** jobs; rollback/no-op produces no outbox event; no cache influence on admission. No performance number is considered achieved without measured test evidence.
+**R0 acceptance gates:** A01–A25/A27/A29–A31 and Source-to-Fact F01–F16 in master/addendum; 0 invalid published current pointers; 0 committed revisions without outbox on the enabled PostgreSQL path; 0 duplicate immutable results for the same exact full binding; 100% determinism; 2–4 **actual concurrently executing** jobs; rollback/no-op produces no outbox event; no cache influence on admission. No performance number is considered achieved without measured test evidence.
 
 ## 6. Handoff checklist for Codex
 
 1. Work only on `feat/fin-form-library-standalone`; capture initial HEAD, don't merge or change old migrations.
-2. Deliver B1 first and run pure unit tests; then B2 preview; B3 additive schema+outbox; B4 bounded workers; C1 node reuse; C2 resilience; D qualification.
+2. Deliver B1 first and run pure unit tests; then B2 preview; B3 calc schema+outbox; **B3F fact migration/assembler/qualification TX-Q**; B4 bounded workers consuming `fin_fact`; C1 node reuse; C2 resilience; D qualification. R0 B1 pure kernel may GREEN independently, but full end-to-end must NOT be marked GREEN before FactSet.
 3. After each slice post: changed file list, exact SHA, tests executed/not executed, SQL negative evidence, bugs fixed.
 4. Do **not** represent a synthetic `TEST_QUALIFIED` as independent financial S2. Do not mark release READY without real authority and IAM/ABAC.
 5. On ambiguity, preserve source data and fail closed rather than adding hidden approval shortcuts.
