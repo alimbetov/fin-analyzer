@@ -123,10 +123,16 @@ class FormFactSourceReaderTest {
   }
 
   @Test void candidateFacadeRemainsUnqualifiedAndReadOnly() {
-    var service=new FormFactCandidateService(reader,new FormFactCandidateExtractor());
+    var verifier=mock(FormFactSourceIntegrityVerifier.class);
+    var service=new FormFactCandidateService(reader,new FormFactCandidateExtractor(),verifier);
     var out=service.extractExact(revisionId,organizationId,projectId);
     assertEquals("UNQUALIFIED_SOURCE_PROJECTION",out.qualificationState());
-    assertEquals("SOURCE_SHA_NOT_REVERIFIED",out.sourceIntegrityState());
+    assertEquals("SOURCE_SHA_REVERIFIED",out.sourceIntegrityState());
     assertEquals(3,out.numeric().size());
+    verify(verifier).verify(any(FormFactCandidateExtractor.SourceSnapshot.class));
+    doThrow(new IllegalStateException("SOURCE_CONTENT_SHA_MISMATCH"))
+        .when(verifier).verify(any(FormFactCandidateExtractor.SourceSnapshot.class));
+    assertEquals("SOURCE_CONTENT_SHA_MISMATCH",assertThrows(IllegalStateException.class,
+        ()->service.extractExact(revisionId,organizationId,projectId)).getMessage());
   }
 }
