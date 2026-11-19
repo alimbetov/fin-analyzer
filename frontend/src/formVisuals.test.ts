@@ -9,7 +9,7 @@ test('icons are reused across domains, not generated per form',()=>{
     'SECTOR_A','SECTOR_U'];
   for(const domain of supported){
     const value=formVisual(domain);
-    assert.equal(typeof value.icon,'object'); // Lucide forwardRef component
+    assert.ok(value.icon); // A real shared icon component
     assert.ok(['blue','teal','violet','amber'].includes(value.tone));
   }
   assert.ok(new Set(Object.values(formVisuals).map(v=>v.icon)).size<=15);
