@@ -54,21 +54,37 @@ public final class F02CalculationKernel {
 
     BigDecimal profit=revenue.subtract(cogs).setScale(2,RoundingMode.HALF_EVEN);
     BigDecimal operating=profit.subtract(opex).setScale(2,RoundingMode.HALF_EVEN);
-    var gp=present("grossProfit","KZT",profit,2);
-    var margin=revenue.signum()==0
+    return fromCalculated(profit,
+        revenue.signum()==0?null:profit.divide(revenue,8,RoundingMode.HALF_EVEN),
+        operating);
+  }
+
+  /**
+   * Canonical F02 value/SHA encoder shared with the native SQL adapter.
+   * Restricted to the kernel package. SQL calculations remain untrusted
+   * until verified by an independent Java calculation at the worker gate.
+   */
+  static Result fromCalculated(BigDecimal profit,BigDecimal margin,
+      BigDecimal operating){
+    if(profit==null||operating==null)
+      throw new IllegalArgumentException("CALC_R02_OUTPUT_VALUE_REQUIRED");
+    var gp=present("grossProfit","KZT",
+        profit.setScale(2,RoundingMode.UNNECESSARY),2);
+    var marginNode=margin==null
         ?invalid("grossMargin","RATIO","DIVISION_BY_ZERO")
         :present("grossMargin","RATIO",
-            profit.divide(revenue,8,RoundingMode.HALF_EVEN),8);
-    var op=present("operatingResult","KZT",operating,2);
+            margin.setScale(8,RoundingMode.UNNECESSARY),8);
+    var op=present("operatingResult","KZT",
+        operating.setScale(2,RoundingMode.UNNECESSARY),2);
     Map<String,NodeValue> nodes=new LinkedHashMap<>();
     // Canonical topo order (grossProfit, grossMargin, operatingResult).
     nodes.put("grossProfit",gp);
-    nodes.put("grossMargin",margin);
+    nodes.put("grossMargin",marginNode);
     nodes.put("operatingResult",op);
     String output=FactDigest.sha("FIN-FACT-CALC-OUTPUT-VALUES-V1",
         CONTRACT,F02CalcPlanDescriptor.ARTIFACT_SHA,
         F02CalcPlanDescriptor.CONFIG_SHA,F02CalcPlanDescriptor.PARAMS_SHA,
-        gp.valueSha256(),margin.valueSha256(),op.valueSha256());
+        gp.valueSha256(),marginNode.valueSha256(),op.valueSha256());
     return new Result(nodes,output);
   }
 
