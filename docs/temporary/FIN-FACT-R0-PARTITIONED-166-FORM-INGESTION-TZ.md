@@ -66,6 +66,8 @@ Proposed columns: `id UUID PK`; complete organization/entity/businessScope/proje
 
 Header must not have a mandatory single `source_form_code` / `form_version_id` as its identity. Those belong in each immutable source revision reference and observation.
 
+**Next scaling gate for full 166 forms:** JSONB membership is sufficient to prototype the single-source F02 FactSet, but **not sufficient by itself to prove referential integrity of every multi-source/evidence-only member**. Before calling multi-form production READY, evaluate an immutable relational `fin_fact.fact_set_source_member` table (FactSet ID, source kind, typed source revision FK/identity, formVersion, source content SHA, period range, role and membership sequence) with source-oriented indexes; compare with JSONB membership for query cost and repeatable digest. If needed, introduce as additive R1-INGEST migration, not hidden within 020. Do not claim 166-form lineage complete until this is decided and PG-negative tests pass.
+
 ### 3.2 fact_observation (partitioned by period_start)
 
 **PostgreSQL rule:** a PRIMARY KEY or UNIQUE constraint on a partitioned table must include the partition key. Therefore `PRIMARY KEY (id)` **is invalid**. Proposed:
@@ -86,6 +88,8 @@ Header must not have a mandatory single `source_form_code` / `form_version_id` a
 Full stable scope digest includes organization/economicEntity/businessScope/project/dataSpace/coverage/basis/currency, **datasetCode and target period**, but excludes random factSet/revision ID. Unique exact stable scope key. Atomic row-lock epoch/counter guard controls TEST_ONLY active membership and prevents stale current. Require active FactSet same scope and organization (transactional validated join, PG negative tests or composite FK). Out-of-order trusted events cannot advance a superseded epoch.
 
 **R0 admission remains TEST_ONLY.** Production S2 authority is independent; no externally delivered approval boolean can bypass it.
+
+**DB privilege boundary:** a row-level UPDATE/DELETE rejection trigger does **not** protect against `TRUNCATE`, an authorized `DROP TABLE`/`DETACH PARTITION`, table ownership, superuser bypass or filesystem corruption. Finance application/worker DB roles must **not own** fact tables/partitions and must lack `TRUNCATE`, `DROP/ALTER`/schema DDL privileges; partition maintenance uses a separate least-privilege maintenance role. Add negative SQL-role tests and backups/WAL/restore exercises to production release gates. The proposed DDL trigger alone is NOT a complete immutability guarantee.
 
 ## 4. SQL migration ordering and partition lifecycle
 
@@ -203,7 +207,7 @@ No raw source JSON/financial values in Redis, outbox, logs or Micrometer tags.
 | PFT-15 | New revision qualified vs unqualified: append-only new observations, exact source lineage, dirty DAG nodes only |
 | PFT-16 | Multiple concurrent factset commits, late worker, revocation and old approval event cannot publish wrong CURRENT |
 | PFT-17 | 166-form discovery matrix coverage: every form has declared extractor strategy and review state; no automatic S2 approval |
-| PFT-18 | Clean/upgrade migrations 001–020, schema hash, indexes/privileges; no changed 001–018 checksums |
+| PFT-18 | Clean/upgrade migrations 001–020, schema hash, indexes/privileges; negative app role TRUNCATE/DDL tests; no changed 001–018 checksums |
 
 ### Hard acceptance definitions
 
