@@ -48,8 +48,11 @@ public final class FormContentFingerprint {
     if (rows.stream().anyMatch(r -> r == null || r.rowId() == null
         || r.rowPosition() <= 0 || r.values() == null))
       throw new IllegalArgumentException("SOURCE_ROW_INVALID");
-    if (normalized.containsValue(null)
-        || rows.stream().anyMatch(r -> r.values().containsValue(null)))
+    // Map.of()/Map.copyOf() throw on containsValue(null), even if no null
+    // values exist; inspect entries without invoking that method.
+    if (normalized.values().stream().anyMatch(Objects::isNull)
+        || rows.stream().anyMatch(r ->
+            r.values().values().stream().anyMatch(Objects::isNull)))
       throw new IllegalArgumentException("SOURCE_NULL_VALUE");
 
     // The former FormDraftService JSON List used these 12 context fields,
