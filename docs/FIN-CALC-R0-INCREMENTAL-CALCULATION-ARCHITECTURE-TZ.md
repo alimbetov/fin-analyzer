@@ -1,6 +1,6 @@
 # ТЗ FIN CALC-R0 — Incremental Calculation Architecture Foundation (FIN HTAP v2)
 
-**Статус:** SPECIFICATION REVISED AFTER S1 TECHNICAL REVIEW / 166-FORM + 794-FIELD BASELINES / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
+**Статус:** SPECIFICATION REVISED AFTER S1 + MULTITHREADED EXECUTION AND CACHE ARCHITECTURE / 166-FORM + 794-FIELD BASELINES / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
 **Репозиторий:** `alimbetov/fin-analyzer`  
 **Единственная рабочая ветка:** `feat/fin-form-library-standalone`; без создания ветки, merge в `main`, изменения старых миграций или переноса старого FIN Analyzer Backend.  
 **Роль:** новая минимальная расчётная основа в standalone FIN Form Library, а не заявление о готовом production HTAP.  
@@ -13,7 +13,9 @@
 1. **Interactive Preview:** `React → debounce → preview API → UI`. Выполняет только предварительные формулы для несохранённых или сохранённых вводов, не публикует факты, не изменяет `fin_intake`/FIN HTAP.
 2. **Qualified Execution:** `trusted qualified FactSet → incremental DAG plan → PostgreSQL jobs → worker → immutable result → guarded current pointer`. Запускается **только** от независимого доверенного допуска, никогда непосредственно от изменения черновика.
 
-Transactional outbox доставляет события, PostgreSQL queue даёт конкурентное выполнение и retry, DAG определяет затронутые узлы, fingerprint обеспечивает дедупликацию результата.
+Transactional outbox доставляет события, PostgreSQL queue даёт конкурентное выполнение и retry, DAG определяет затронутые узлы, fingerprint обеспечивает дедупликацию результата. **Многопоточное исполнение обязательно:** изолированные ограниченные пулы для интерактивного preview и background qualified jobs; независимые DAG-узлы можно распараллелить внутри вычисления при оправданной сложности, с доказанным детерминизмом и контролем ресурсов.
+
+**Фазовая cache-архитектура:** `CALC-R0 = PostgreSQL + incremental DAG + fingerprints + Caffeine L1`; `CALC-R1 = CalculationCache port + optional Redis L2 adapter`; `CALC-R2 = activation by measured benchmark`. Redis по умолчанию OFF, Redis не является ни authority, ни job broker, ни source of truth. Для правильного выполнения сначала проверяется trusted binding, затем выполняется поиск reuse/cache; **публикация CURRENT всегда проверяет актуальный допуск в PostgreSQL/authority, а не кеш**.
 
 **R0 MVP:** один вертикальный сценарий `F02 → immutable revision → independent qualification/test fixture → FactSet → 3-node DAG → PostgreSQL job → immutable result`. Не строить универсальный конструктор 166 форм, distributed scheduler, UI администратора методик или Kafka до функционального доказательства этого сценария.
 
@@ -112,6 +114,35 @@ Change impact:
 - **R0 local test:** test-only authority/epoch сериализуются с публикацией в одной PostgreSQL DB transaction (общий guard row и lock order; допускается plan row при строго одном тестовом binding). **Production:** если authority находится в другой БД/сервисе, простая проверка по HTTP и последующий COMMIT НЕ атомарны; production publication остаётся HOLD до описания синхронизированного authority epoch, обязательного fail-closed read gate и проверки гонки с отзывом. Не заявлять глобальную атомарность без общей транзакционной границы.
 - После отзыва/смены config старые immutable результаты остаются в истории, но endpoint CURRENT обязан fail-closed или вернуть только другой валидный результат. Запрос без авторизованного tenancy в production запрещён.
 
+### CALC-FR-10. Обязательное многопоточное исполнение и resource admission
+
+- R0 **MUST** запускать `2–4` конкурирующих worker-процесса/потока в PostgreSQL Testcontainers-проверках; production sizing задаётся конфигурацией `fin.calc.workers.max`, по умолчанию `min(4, availableProcessors())` (минимум 1 на одноядерном окружении). Конкурентность принадлежит **разным независимым job и их данным**, не разделяемому мутабельному `BigDecimal` контексту.
+- **CPU-bound** вычисления выполнять в отдельном bounded `ThreadPoolExecutor` / `ExecutorService` на platform threads (Java 21), а не в unlimited `virtual threads`, `parallelStream()` или общем `ForkJoinPool.commonPool()`. Параметры: `maxWorkers`, `maxQueuedJobs`, `maxNodeParallelism`, `perTenantInFlightLimit`, timeout/budget и shutdown policy; все значения измеряемы и управляемы конфигурацией. При переполнении — backpressure/defer task, но не запуск произвольного дополнительного потока.
+- **Interactive Preview** получает отдельный bounded execution budget/queue от qualified workers; 3-node F02 допускает последовательное выполнение внутри одного задания, поскольку thread scheduling может стоить дороже BigDecimal арифметики. Однако **обязательна реальная параллельность независимых расчётных jobs**; независимые узлы/ветви большого DAG могут исполняться параллельно **по уровням топологического графа** (barrier после каждого уровня) при достижении измеренного порога затрат.
+- Любой DAG worker держит **immutable** `ExecutionContext` с pin-версиями, typed input snapshots и отдельным локальным result-map, безопасным для concurrent access; зависимые узлы не запускаются до получения успешных результатов родителей. Ошибка/timeout/cancellation одного обязательного узла не допускает неполную публикацию. Нет float/double в финансовых вычислениях; `BigDecimal` immutable, `MathContext`/rounding explicit.
+- I/O claim/heartbeat/fencing/publish выполняются в коротких PostgreSQL транзакциях вне CPU-bound DAG node tasks; каждый job имеет один fencing owner. Lease обновляется через heartbeat, пока ограниченная задача исполняется; отмена/прерывание/worker shutdown не гарантирует остановку CPU task, поэтому **TX-D/TX-E fencing обязательны независимо от cancellation**.
+- Очередь обеспечивает fair scheduling и отсутствие monopolization одним tenant через `perTenantInFlightLimit` плюс ограничение in-flight по всему процессу. Если задач больше, чем capacity, оставлять их в PostgreSQL `PENDING` до доступного слота; не буферизовать их безлимитно в памяти.
+- На shutdown: прекращение claim, корректное истечение/продление lease, bounded graceful wait, затем безопасный reaper/retry. Функциональная корректность не зависит от graceful shutdown.
+- Один и тот же `nodeFingerprint` внутри процесса должен проходить single-flight только если это не обход trust gate; полученная value из single-flight — **не опубликованный результат**, а untrusted compute reuse. Cache coalescing не должно удерживать DB lock и не заменяет job idempotency.
+
+### CALC-FR-11. Поэтапное кеширование Caffeine / optional Redis
+
+**Ключевое правило:** `DAG impact → exact nodeFingerprint → trusted reusable-value lookup (L1/L2/PG) → compute on miss → full immutable result → TX-E publication gate`. Логическая схема хранения источника и публикации остаётся PostgreSQL; L1/L2 не являются системой принятия финансовых решений.
+
+| Этап | Архитектурный результат | Условие |
+|---|---|---|
+| **CALC-R0** | Бounded `Caffeine` L1 для immutable/versioned `FormulaDescriptor` и `GraphDescriptor`. Переиспользование node values из **проверенных PostgreSQL immutable results**; для первого F02 пилота допустимо без отдельного node-value L1 cache, но `nodeFingerprint` обязателен. | Только сохранённые approved-for-test descriptors; ни raw draft, ни approval/revocation, ни current pointer в кеш. Нет Redis dependency в Maven. |
+| **CALC-R1** | Ввести Java порт `CalculationCache` с методами `getNodeValue(tenantScopeHash,nodeFingerprint)`, `putNodeValue(...)` и `invalidateLocalDescriptor(...)`; локальный `CaffeineCalculationCache` и **необязательный** `RedisCalculationCache` adapter (L2), плюс `NoopCalculationCache` для сравнения. | Redis starter и конфигурация подключаются только при включаемом adapter-модуле, `fin.calc.redis.enabled=false` по умолчанию; PostgreSQL read/compute fallback обязателен. |
+| **CALC-R2** | Benchmark и controlled Redis enablement в многопроцессной схеме; сравнить OFF vs L1 vs L1+L2 на одних фиксированных входах и одинаковом числе worker. | Включать только при воспроизводимом снижении p95/p99 и PostgreSQL load без роста error rate и без нарушения correctness/cross-tenant isolation; при отсутствии выгоды оставить OFF. |
+
+- Cache key для node value: `fin:calc:node:v1:{tenantScopeHash}:{nodeFingerprint}` с domain separation, HMAC/key-scoping без PII; никакого `projectId` без версии алгоритма или `formCode` как самостоятельного ключа.
+- Node value в кеше: только `valueState`, canonical numeric string/value unit, descriptor/operation SHA, `payloadSha256`, serialization version, optional provenance digest. Не хранить весь пользовательский JSON, JWT, доказательство approval или права доступа. Size/TTL/timeouts/bounded payload обязательны; при ошибке формата/SHA/версии считать cache miss, не публиковать.
+- **Невозможна глобальная “очистка периода” как механизм корректности.** Новая редакция/конфигурация формирует новый `executionFingerprint`; dirty dependent nodes получают новые `nodeFingerprint`. Неподверженные узлы могут повторно использовать cached value только с проверкой типизированных operands/scope; новый итоговый `calc_result` всегда имеет новый exact binding/lineage.
+- Порядок получения: **L1** immutable value → **optional L2** Redis → **PostgreSQL** проверенный ранее результат (или небольшой R1 node-value index, если оправдан benchmark) → вычисление. Нельзя делать быстрый Redis-hit основанием для пропуска `TrustedQualificationGateway` или TX-E/current validation. В R0 достаточно L1 для descriptors/graphs и прямой validated PG result reuse; full node-value cache — R1.
+- Redis outage, timeout или slow response **fail-open только для кеша** (продолжить к PostgreSQL/compute), но **fail-closed для admission**; bounded timeout и breaker. Кеш не держит `lease`, `fencing_token`, `calc_current_result`, `qualification_epoch` как authority и не заменяет PostgreSQL Job Queue.
+- Для локальных cache races нужен bounded single-flight с собственным лимитом памяти; для разных инстансов возможны дубли **чистых вычислений**, но не duplicate accepted immutable results. Redis distributed lock и Redis job queue запрещены в R0–R2.
+- Наблюдаемость: `calc_cache_get_total{tier,hit_or_miss}`, `calc_cache_corrupt_total`, `calc_cache_timeout_total`, `calc_cache_evictions_total`, `calc_node_reused_total`, `calc_node_recomputed_total`, `calc_cpu_active_workers`, `calc_cpu_executor_queue_depth`, `calc_job_queue_lag_seconds`, `calc_tenant_backpressure_total`. Метрики не содержат организационных идентификаторов, fingerprint или финансовых значений.
+
 ## 5. Минимальная модель хранения (новая схема `fin_calc`)
 
 R0 придерживается **пяти таблиц**, без отдельного Kafka и без таблицы на каждый узел DAG:
@@ -154,7 +185,7 @@ R0 придерживается **пяти таблиц**, без отдельн
 - Isolation: tenant/project/period/form version и reporting basis обязательны в fingerprint и доступе; нет прямого `fin_intake → fin_fact` writer. Preview в R0 только на loopback с feature flag, bounded payload (3 F02 inputs), без публичного Swagger write API для S2; rate limit и auth обязателен для внешнего размещения.
 - **R0 source reader:** только `fin_intake` pinned `revision_id + form_version_id + exact instance scope` через существующий `FormDraftService`/репозитории; в R0 **не создавать** третью параллельную fact таблицу. Snapshot canonical values валидируются с реальным source SHA и текущими immutable field definitions; не читать `current_revision_id` для уже pinned plan. Отдельный `ReportGridService` (`fin_intake.lib_report_revision_cell`) остаётся вне MVP с явным interface-adapter TODO.
 - **Hardening prerequisite:** existing `fin_intake` исторические revision/row/evidence таблицы не имеют доказанного PostgreSQL UPDATE/DELETE deny trigger. До production qualification обязателен DB-level append-only guard или equivalent access segregation и негативный SQL-тест; наличие Java immutable flow недостаточно.
-- Observability: `eventId`, `planId`, `jobId`, `executionId`, `fingerprint`, `factSetSha`, `methodId`, error code, duration, nodes total/recomputed/skipped, queue lag, retry/fence counters. Не логировать финансовые значения и PII.
+- Observability: `eventId`, `planId`, `jobId`, `executionId`, `fingerprint`, `factSetSha`, `methodId`, error code, duration, nodes total/recomputed/skipped, queue lag, retry/fence counters, active/queued CPU workers, tenant backpressure, cache L1/L2 hits/misses/timeouts. Не логировать финансовые значения, tenant identifiers или PII как высококардинальные labels.
 - Целевые **гипотезы для нагрузочной квалификации**, не SLA текущего проекта: p95 preview ≤ 300 ms для 3 полей; p95 от trusted event до результата ≤ 2 s в локальном 1-проектном пилоте; zero unauthorized current publications; zero duplicate results for same scope/fingerprint. Измерять p95/p99 и throughput PostgreSQL/worker; отклонения не скрывать.
 - `ddl-auto=validate`, Liquibase additive changesets; запрет правки исторических checksums/миграций. PostgreSQL 16 Testcontainers обязателен для concurrency; H2 не заменяет его.
 
@@ -183,6 +214,13 @@ R0 придерживается **пяти таблиц**, без отдельн
 | A19 | New revision changes unrelated input; node vs execution fingerprint | only dependent node hashes change; new plan and result lineage required |
 | A20 | Unauthorized HTTP preview/worker API and cross-scope reads | bounded localhost preview, no public approve, no cross-tenant output or data leak |
 | A21 | Synthetic local revocation/config activation concurrent with TX-E | locked ordering / epoch CAS guarantees no CURRENT advancement after revocation |
+| A22 | 2–4 independent jobs on bounded worker pool | prove parallel execution with barriers/latches; each job exactly once accepted by DB fence |
+| A23 | Independent DAG branches executed in parallel above threshold | correct topological barriers, deterministic SHA and identical outputs to sequential mode |
+| A24 | One tenant floods PostgreSQL jobs while another tenant submits work | per-tenant limit, bounded memory, no starvation; queue backpressure and visibility |
+| A25 | Concurrent cache L1/optional L2 reuse and eviction | stable key + immutable payload validation, corrupt hit treated as miss, no cross-tenant data |
+| A26 | Redis disabled, timeout, outage and restart (R1/R2 only) | seamless PostgreSQL/compute fallback; no skipped authorization or phantom CURRENT |
+| A27 | CPU worker crash, heartbeat expiry, cancellation race | no stale owner result, no published partial DAG; reaper and idempotent retry |
+| A28 | Identical benchmark workloads Redis OFF vs Caffeine vs Caffeine+Redis (R2) | store p95/p99, CPU, PG load, cache hit/miss, error budget and release decision |
 
 ### Проверяемые SQL-постусловия
 - Счётчик `fin_intake.lib_form_revision` соответствует коммитам save; rollback не оставляет `calc_outbox_event`.
@@ -195,12 +233,14 @@ R0 придерживается **пяти таблиц**, без отдельн
 | Этап | Содержимое | Условие завершения |
 |---|---|---|
 | **R0.A — Contract + Coverage** | Данное ТЗ, baseline 166 форм, 3 F02 formulas, аудит исходников | Полнота и неизобретённые зависимости подтверждены; DESIGN READY |
-| **R0.B — Minimal Calculation Kernel** | Typed F02 DAG, preview, additive tables, outbox и один PostgreSQL worker | A02–A09 PostgreSQL + React GREEN |
-| **R0.C — Incremental + Safety** | Field-level impact, fingerprint, stale/lease/fencing, revoke, algorithm change | A10–A17 PostgreSQL concurrency GREEN |
-| **R0.D — Qualification** | CI full regression, браузер, измерения, независимый code review | A18 GREEN, локальный TEST_ONLY пилот разрешён |
-| **R1 / Production Gate (вне R0)** | Реальный S2/IAM, FactSet authority, approved publish, масштабирование на 166 форм | Нет HOLD; финансовый выпуск отдельно |
+| **R0.B — Minimal Calculation Kernel** | Typed F02 DAG, preview, additive tables, outbox, bounded **multithreaded worker pool**, Caffeine descriptor/DAG L1 | A02–A09 + A22 PostgreSQL + React GREEN |
+| **R0.C — Incremental + Safety** | Field-level impact, per-node + execution fingerprints, stale/lease/fencing, revoke, method changes, parallel DAG branches above measured threshold | A10–A17 + A23/A24/A27 PostgreSQL concurrency GREEN |
+| **R0.D — Qualification** | CI full regression, browser, measurements and technical review; bounded Caffeine cache | A18–A25/A27 GREEN на одном SHA, локальный TEST_ONLY пилот разрешён |
+| **CALC-R1 — Cache Adapter (вне R0)** | Port `CalculationCache`, optional Redis L2 adapter, OFF by default | A25/A26 GREEN, fallback и безопасность доказаны |
+| **CALC-R2 — Redis Performance Gate (вне R0)** | Benchmark Redis OFF / L1 / L1+L2 для multi-worker workloads | A28 GREEN и статистически обоснованное enable/disable решение |
+| **Production S2/IAM Gate (отдельно)** | Реальный S2/IAM, FactSet authority, approved publish, масштабирование на 166 форм | Нет HOLD; финансовый выпуск отдельно |
 
-Не создавать generic formula DSL, 30 ops, массовую поддержку 166 расчётов, Kafka/Debezium, ClickHouse, микросервисы или Redis в R0. Caffeine допустим только для versioned descriptor/DAG cache, не для admission и current status. Outbox transport может быть заменён позже без изменения доменной логики.
+Не создавать generic formula DSL, 30 ops, массовую поддержку 166 расчётов, Kafka/Debezium, ClickHouse, микросервисы или Redis в R0. **Многопоточный bounded execution в R0 обязателен; Redis в R0 запрещён как runtime dependency.** Caffeine L1 для versioned descriptor/DAG cache; node-value cache и CalculationCache port — R1. Никогда не кешировать admission и current status. Outbox transport может быть заменён позже без изменения доменной логики.
 
 ## 11. Неподлежащие нарушению ограничения
 
@@ -213,7 +253,7 @@ R0 придерживается **пяти таблиц**, без отдельн
 ## 12. Definition of Done
 
 **R0.A**: ТЗ + две baseline-матрицы в ветке, точно 166 form rows и 794 unique R6 field rows, все формы включены, отсутствующие поля/semantics видны, формулы/зависимости честно кандидатные, без изменений исполняемого кода/миграций.  
-**R0.D**: F02 preview + synthetic qualified E2E + DAG + очередь + fencing + immutable result, отрицательные тесты A01–A21, CI GREEN на одном SHA.  
+**R0.D**: F02 preview + synthetic qualified E2E + DAG + PostgreSQL queue + bounded multithreaded workers + fencing + immutable result + Caffeine L1, тесты A01–A25 и A27 (A26 — R1, A28 — R2) CI GREEN на одном SHA.  
 **Production**: НЕ READY, пока нет независимого финансового S2, IAM/ABAC и реального approved FactSet admission.
 
 ### Review reference
