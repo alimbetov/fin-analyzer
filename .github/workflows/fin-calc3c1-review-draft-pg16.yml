@@ -1,0 +1,50 @@
+name: FIN CALC-3C.1 — Output Review Draft PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/resources/db/changelog/038-fin-calc3c1-required-output-review-drafts-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/hybrid/RequiredOutputReviewDraftService.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/hybrid/Calc3C1RequiredOutputDraftPostgresqlTest.java'
+      - 'form-library/pom.xml'
+      - '.github/workflows/fin-calc3c1-review-draft-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  calc3c1-drafts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Execute PostgreSQL draft-revision and S2 negative tests
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc3C1RequiredOutputDraftPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require five real PostgreSQL tests (zero skipped)
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          files=glob.glob('form-library/target/surefire-reports/TEST-*Calc3C1RequiredOutputDraftPostgresqlTest.xml')
+          if len(files)!=1:
+              sys.exit('FAIL: review-draft PG16 XML missing')
+          root=ET.parse(files[0]).getroot()
+          actual={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
+          print(actual)
+          if actual!={'tests':5,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('FAIL: 5/5 real PG16 tests required')
+          PY
