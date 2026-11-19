@@ -259,6 +259,50 @@ class FactR0PostgresqlPartitionTest {
         """,Integer.class,f.factsetId()));
   }
 
+  @Test void planAndSourceCannotCrossScopeOrAlterVerifiedHistoricalRevision() {
+    var month=YearMonth.of(2026,11);
+    partitions.ensureMonthlyRange(month,month,false);
+    var f=newFixture(month);
+    insertSet(f);
+    // New 021 composite FK prevents a plan for one scope/tenant from
+    // reusing somebody else's exact FactSet UUID.
+    String planSql="""
+        INSERT INTO fin_calc.calc_plan
+          (id,organization_id,scope_key,factset_id,execution_fingerprint,
+           qualified_binding_sha256,qualification_epoch,algorithm_artifact_sha256,
+           config_sha256,params_sha256,dag_jsonb,qualification_mode)
+        VALUES(?,?,?,?,?,?,?,?,?,?,'{}'::jsonb,'TEST_QUALIFIED')
+        """;
+    assertThrows(DataAccessException.class,()->jdbc.update(planSql,
+        UUID.randomUUID(),f.organizationId(),sha("WRONG_CALC_SCOPE"),
+        f.factsetId(),sha("ONE"),sha("BINDING"),1,
+        sha("ARTIFACT"),sha("CONFIG"),sha("PARAMS")));
+    assertThrows(DataAccessException.class,()->jdbc.update(planSql,
+        UUID.randomUUID(),UUID.randomUUID(),f.scopeKey(),
+        f.factsetId(),sha("TWO"),sha("BINDING"),1,
+        sha("ARTIFACT"),sha("CONFIG"),sha("PARAMS")));
+
+    // Existing source snapshots are now append-only on PostgreSQL, not
+    // protected exclusively by a caller recomputing the SHA later.
+    assertThrows(DataAccessException.class,()->jdbc.update("""
+        UPDATE fin_intake.lib_form_revision SET values_json='{}' WHERE id=?
+        """,f.revisionId()));
+    assertThrows(DataAccessException.class,()->jdbc.update("""
+        DELETE FROM fin_intake.lib_form_revision WHERE id=?
+        """,f.revisionId()));
+
+    Integer enabled=jdbc.queryForObject("""
+        SELECT count(*) FROM pg_trigger t
+        WHERE t.tgrelid='fin_intake.lib_form_revision'::regclass
+          AND t.tgname IN ('trg_source_revision_append_only',
+                           'trg_source_revision_no_truncate')
+          AND t.tgenabled='O'
+        """,Integer.class);
+    assertEquals(2,enabled);
+    assertThrows(DataAccessException.class,
+        ()->jdbc.execute("TRUNCATE fin_fact.fact_observation"));
+  }
+
   @Test void transactionRollbackRemovesHeaderObservationAndOutbox() {
     var m=YearMonth.of(2026,11);partitions.ensureMonthlyRange(m,m,false);
     var f=newFixture(m);
