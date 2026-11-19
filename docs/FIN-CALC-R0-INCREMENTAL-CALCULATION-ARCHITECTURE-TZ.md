@@ -299,6 +299,9 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 ### Temporary code-level implementation workpacks
 
 - `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migrations 019/020/021, F02 DAG, bounded workers, outbox, tests.
+- `docs/temporary/FIN-FACT-1A-1B-TRUSTED-QUALIFICATION-CODE-LEVEL-TZ.md` — next FACT-1.A/B trusted F02 candidate hash, independent issuer verification, fail-closed qualifier and TX-Q protocol; **QF-01–24 planned, not yet executed**.
+- `docs/temporary/FIN-FACT-0H-POSTGRES-SECURITY-AND-OPERATIONS-TZ.md` — FACT-0.H PostgreSQL roles/maintenance/pruning/recovery; **OPS-01–16 planned, not yet executed**.
+- `docs/audits/FIN-FACT-FACT1-NEXT-S1-PREIMPLEMENTATION-REVIEW-2026-11-19.md` — P0 trust-boundary review and implementation order.
 - `docs/audits/FIN-FACT-R0-FACT1-F02-S1-PG16-REVIEW-2026-11-19.md` — verified 27 PostgreSQL 16 tests, actual storage/upgrade vs test-only F02 TX-Q and remaining S2 HOLD.
 - `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, TX-Q and tests STF-01–STF-16.
 - `docs/temporary/FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md` — S1B: monthly PG16 partitioning, multi-form FactSets, 166-form ingestion strategies, PFT-01..18.
@@ -307,7 +310,7 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 - `docs/temporary/FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md` — CalculationCache interfaces, Caffeine node values, optional Redis L2, feature flags, fallback.
 - `docs/temporary/FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md` — 3-mode benchmark scripts/fixtures, telemetry, correctness and Redis activation gate.
 
-These are versioned temporary **specifications only**, not implemented code or proof of GREEN.
+**Status discipline:** INGEST-0/1/2, FACT-0 physical 019–021 and synthetic F02 TEST_ONLY TX-Q have prior PostgreSQL CI evidence. The new FACT-1.A/B and FACT-0.H documents are **specifications only**; no runtime S2/ABAC/qualified committer, worker or CURRENT result is ready. No new QF/OPS GREEN results may be claimed until executed.
 
 ### Source references
 - `form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java`
