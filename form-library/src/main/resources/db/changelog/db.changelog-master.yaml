@@ -71,3 +71,5 @@ databaseChangeLog:
       file: db/changelog/035-fin-calc154-versioned-formula-contracts-postgresql.sql
   - include:
       file: db/changelog/036-fin-calc154-calc3b-requirements-and-lineage-postgresql.sql
+  - include:
+      file: db/changelog/037-fin-calc3c1-numeric-source-capabilities-postgresql.sql
