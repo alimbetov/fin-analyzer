@@ -13,10 +13,10 @@ case "${1:---quick}" in
   -h|--help)
     cat <<'HELP'
 FIN smoke (macOS/Linux; run from any directory)
-  bash scripts/smoke-fin-fact.sh            # 6 essential PostgreSQL cases
+  bash scripts/smoke-fin-fact.sh            # 7 essential PostgreSQL cases
   bash scripts/smoke-fin-fact.sh --quick    # same
   bash scripts/smoke-fin-fact.sh --forms    # 169 PG tests: all 166 forms individually + 3 integrity tests
-  bash scripts/smoke-fin-fact.sh --extended # 183 PG tests incl. every form + 018->021 upgrade
+  bash scripts/smoke-fin-fact.sh --extended # 193 PG tests incl. 10 FACT-1.B cases + 018->021 upgrade
   bash scripts/smoke-fin-fact.sh --unit     # 32 Java unit tests incl. FACT-1.A1; no Docker
 
 Requires JDK 21 and Maven. --quick/--extended need Docker Desktop/Engine.
@@ -69,8 +69,8 @@ case "$mode" in
     options=()
     ;;
   quick)
-    selector="Ingest2PostgresqlIntegrityTest#f02ExactHistoricalRevisionIsVerifiedNotLatest,FactR0PostgresqlPartitionTest#partitionedSchemaIsPresentWithCompositePrimaryKeyAndNoDefault+octoberAndNovemberRowsRouteToSeparatePartitionsAndCannotChange+planAndSourceCannotCrossScopeOrAlterVerifiedHistoricalRevision,Fact1F02TestOnlyQualificationTest#f02ExactVerifiedRevisionCreatesThreeFactsAndOneOutbox+atomicTxRollsBackAllThreeFactsAndTrustedEventOnFault"
-    expected=6
+    selector="Ingest2PostgresqlIntegrityTest#f02ExactHistoricalRevisionIsVerifiedNotLatest,FactR0PostgresqlPartitionTest#partitionedSchemaIsPresentWithCompositePrimaryKeyAndNoDefault+octoberAndNovemberRowsRouteToSeparatePartitionsAndCannotChange+planAndSourceCannotCrossScopeOrAlterVerifiedHistoricalRevision,Fact1F02TestOnlyQualificationTest#f02ExactVerifiedRevisionCreatesThreeFactsAndOneOutbox+atomicTxRollsBackAllThreeFactsAndTrustedEventOnFault,Fact1BUatCommitterPostgresqlTest#qf11OneAtomicFactSetAndThreeExactObservationsPlusOutbox"
+    expected=7
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
   forms)
@@ -79,8 +79,8 @@ case "$mode" in
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
   extended)
-    selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,FactR0PostgresqlUpgradeTest"
-    expected=183
+    selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,FactR0PostgresqlUpgradeTest"
+    expected=193
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
 esac
