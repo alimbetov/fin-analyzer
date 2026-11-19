@@ -31,7 +31,7 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: form-library/pom.xml
-      - name: Run six actual PostgreSQL 16 qualification-blocker tests
+      - name: Run seven actual PostgreSQL 16 qualification-blocker tests
         run: |
           mvn -B -ntp -f form-library/pom.xml test \
             -Dfin.postgres.uat.enabled=true \
@@ -48,6 +48,6 @@ jobs:
           attrs=ET.parse(reports[0]).getroot().attrib
           values={name:int(attrs.get(name,0)) for name in ('tests','errors','failures','skipped')}
           print(values)
-          if values!={'tests':6,'errors':0,'failures':0,'skipped':0}:
-              sys.exit('FAIL: 6/6 real PostgreSQL tests required')
+          if values!={'tests':7,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('FAIL: 7/7 real PostgreSQL tests required')
           PY
