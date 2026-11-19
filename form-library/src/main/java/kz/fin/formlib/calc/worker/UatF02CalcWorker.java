@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.calc.fact.FactDigest;
 import kz.fin.formlib.calc.fact.UatF02PinnedPlanReader;
 import kz.fin.formlib.calc.kernel.F02CalculationKernel;
+import kz.fin.formlib.calc.kernel.SqlF02CalculationKernel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -47,12 +49,29 @@ public final class UatF02CalcWorker {
   private final F02CalculationKernel kernel=new F02CalculationKernel();
   private final ObjectMapper mapper;
   private final boolean enabled;
+  private final boolean nativeSqlEnabled;
+  private final SqlF02CalculationKernel nativeSqlKernel;
 
+  /**
+   * Opt-in SQL backend. In this UAT stage it must independently match Java
+   * values, invalid states and canonical node/output SHA before TX-D.
+   * Default is Java, and all production financial S2 boundaries remain HOLD.
+   */
+  @Autowired
   public UatF02CalcWorker(JdbcTemplate sql,PlatformTransactionManager manager,
       UatF02PinnedPlanReader verifiedReader,ObjectMapper mapper,
-      @Value("$"+"{fin.calc.uat.worker.enabled:false}") boolean enabled){
+      SqlF02CalculationKernel nativeSqlKernel,
+      @Value("$"+"{fin.calc.uat.worker.enabled:false}") boolean enabled,
+      @Value("$"+"{fin.calc.uat.worker.sql.enabled:false}") boolean nativeSqlEnabled){
     this.sql=sql;this.manager=manager;this.verifiedReader=verifiedReader;
     this.mapper=mapper;this.enabled=enabled;
+    this.nativeSqlKernel=nativeSqlKernel;this.nativeSqlEnabled=nativeSqlEnabled;
+  }
+
+  // Retain explicit test-only disabled-instance construction.
+  UatF02CalcWorker(JdbcTemplate sql,PlatformTransactionManager manager,
+      UatF02PinnedPlanReader verifiedReader,ObjectMapper mapper,boolean enabled){
+    this(sql,manager,verifiedReader,mapper,null,enabled,false);
   }
 
   public WorkResult runOne(String owner){
@@ -120,7 +139,16 @@ public final class UatF02CalcWorker {
     // Recompute exact candidate SHA, plan fingerprint and each observation SHA.
     var verified=verifiedReader.verify(claim.planId(),claim.organizationId(),
         claim.scopeKey());
-    var evaluated=kernel.evaluate(verified.observations());
+    var expectedJava=kernel.evaluate(verified.observations());
+    var evaluated=expectedJava;
+    if(nativeSqlEnabled) {
+      if(nativeSqlKernel==null)
+        throw new IllegalStateException("CALC_SQL_F02_KERNEL_UNAVAILABLE");
+      var computedSql=nativeSqlKernel.evaluate(verified.observations());
+      if(!expectedJava.equals(computedSql))
+        throw new IllegalStateException("CALC_SQL_F02_PARITY_MISMATCH");
+      evaluated=computedSql;
+    }
     String resultSha=FactDigest.sha("FIN-FACT-CALC-RESULT-V1",
         verified.executionFingerprint(),verified.bindingSha256(),
         Long.toString(verified.epoch()),evaluated.outputValuesSha256());
