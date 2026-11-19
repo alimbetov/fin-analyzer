@@ -69,3 +69,5 @@ databaseChangeLog:
       file: db/changelog/034-fin-calc-candidate-metric-operation-bindings-postgresql.sql
   - include:
       file: db/changelog/035-fin-calc154-versioned-formula-contracts-postgresql.sql
+  - include:
+      file: db/changelog/036-fin-calc154-calc3b-requirements-and-lineage-postgresql.sql
