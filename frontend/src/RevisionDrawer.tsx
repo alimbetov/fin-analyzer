@@ -18,7 +18,7 @@ export default function RevisionDrawer({instanceId,organizationId,projectId,late
   useEffect(()=>{setSelected(latestRevision)},[instanceId,latestRevision]);
   useEffect(()=>{
     let active=true;
-    setLoading(true);setError('');setRevision(null);
+    setLoading(true);setError('');setDownloadError('');setRevision(null);
     get<HistoricalDraft>('/drafts/'+encodeURIComponent(instanceId)+'/revisions/'+selected+
       '?organizationId='+encodeURIComponent(organizationId))
       .then(data=>{if(active){setRevision(data);setLoading(false)}})
