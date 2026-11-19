@@ -69,6 +69,6 @@ test('form opens a scoped period tree and resumes and saves a report',async({pag
   await expect(history).toContainText('2300.47');
   await history.getByRole('button',{name:'Закрыть историю'}).click();
   await expect(page.locator('#field-netRevenue')).toHaveValue('2500.49');
-  await page.getByRole('button',{name:'Сохранённые отчёты'}).click();
+  await page.getByRole('button',{name:'Вернуться к списку отчётов'}).click();
   await expect(october).toContainText('Редакция 2');
 });
