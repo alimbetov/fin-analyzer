@@ -70,7 +70,7 @@ public final class FactMonthlyPartitionService {
   }
 
   private MonthStatus ensureOne(YearMonth month) {
-    for(int attempt=1;attempt<=3;attempt++) {
+    for(int attempt=1;attempt<=5;attempt++) {
       try{
         var tx=new TransactionTemplate(txManager);
         tx.setTimeout(20);
@@ -98,8 +98,8 @@ public final class FactMonthlyPartitionService {
           return new MonthStatus(month,State.CREATED,"created and verified");
         }));
       }catch(RuntimeException ex) {
-        if(attempt==3 || !retryable(ex)) throw ex;
-        try{Thread.sleep(50L*attempt);}catch(InterruptedException interrupted){
+        if(attempt==5 || !retryable(ex)) throw ex;
+        try{Thread.sleep(75L*attempt);}catch(InterruptedException interrupted){
           Thread.currentThread().interrupt();
           throw new IllegalStateException("FACT_PARTITION_INTERRUPTED",interrupted);
         }
@@ -165,6 +165,8 @@ public final class FactMonthlyPartitionService {
   }
 
   private static boolean retryable(Throwable error) {
+    if(error instanceof IllegalStateException e && e.getMessage()!=null
+        && e.getMessage().startsWith("FACT_PARTITION_LOCK_BUSY"))return true;
     Throwable cause=error;
     while(cause!=null){
       if(cause instanceof SQLException sql
