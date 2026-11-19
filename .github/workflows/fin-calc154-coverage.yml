@@ -1,0 +1,48 @@
+name: FIN CALC-154 — Full Numeric Inventory Gate
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'docs/FIN-CALC-R0-COVERAGE-166-BASELINE.tsv'
+      - 'docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv'
+      - 'docs/FIN-CALC154-*.tsv'
+      - 'form-library/src/main/resources/catalog/analytics-model-catalog.tsv'
+      - 'scripts/generate-fin-calc154-coverage.py'
+      - 'scripts/check-fin-calc166-candidate-inventory.py'
+      - '.github/workflows/fin-calc154-coverage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: 154 forms, 804 metric rows, 46 analytical outputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify 166-form canonical library
+        run: python3 scripts/check-fin-calc166-candidate-inventory.py
+      - name: Rebuild deterministically and reject untracked changes
+        run: python3 scripts/generate-fin-calc154-coverage.py --check
+      - name: Check that candidates have no implicit S2 or COMPLETE promotion
+        run: |
+          python3 - <<'PY'
+          import csv
+          from pathlib import Path
+          base = Path('docs')
+          with (base/'FIN-CALC154-FORM-STATUS.tsv').open() as f:
+              rows = list(csv.DictReader(f, delimiter='\t'))
+          assert len(rows) == 154
+          assert all(r['complete'] == 'false'
+                     and r['financiallyQualifiedOutputs'] == '0'
+                     and 'S2_NOT_APPROVED' in r['blockers'] for r in rows)
+          assert sum(int(r['calculatedCandidates']) for r in rows) == 10
+          assert sum(int(r['uatOnlyOutputs']) for r in rows) == 3
+          print('PASS CALC154 no implicit financial approval or completion')
+          PY
