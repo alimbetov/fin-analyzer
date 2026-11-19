@@ -75,3 +75,5 @@ databaseChangeLog:
       file: db/changelog/037-fin-calc3c1-numeric-source-capabilities-postgresql.sql
   - include:
       file: db/changelog/038-fin-calc3c1-required-output-review-drafts-postgresql.sql
+  - include:
+      file: db/changelog/039-fin-calc3c1-draft-found-shadow-fix-postgresql.sql
