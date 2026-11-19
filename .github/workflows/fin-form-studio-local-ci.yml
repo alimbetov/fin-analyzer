@@ -102,7 +102,7 @@ jobs:
       - name: Run isolated PostgreSQL Testcontainers integration
         run: >-
           mvn -B -ntp -f form-library/pom.xml
-          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,CalcR02PostgresqlTest,Calc166ReadinessPostgresqlTest,FactR0PostgresqlUpgradeTest
+          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,CalcR02PostgresqlTest,SqlF02ParityPostgresqlTest,Calc166ReadinessPostgresqlTest,FactR0PostgresqlUpgradeTest
           -Dfin.postgres.uat.enabled=true
           test
       - name: Fail closed on FACT-1.B PG16 source/commit/replay matrix
@@ -111,6 +111,8 @@ jobs:
         run: python3 scripts/check-fin-calc-r01-junit.py --out-dir target/calc-r01
       - name: Fail closed on CALC-R0.2 PostgreSQL full E2E
         run: python3 scripts/check-fin-calc-r02-junit.py --out-dir target/calc-r02
+      - name: Fail closed on native SQL F02 versus Java HALF_EVEN and SHA parity
+        run: python3 scripts/check-fin-calc-sql-junit.py --out-dir target/calc-sql-f02
       - name: Fail closed on 166 separate PostgreSQL calculation readiness checks
         run: python3 scripts/check-fin-calc166-junit.py --out-dir form-library/target/fin-calc166
       - name: Validate exactly 166 independently executed PG16 report cases
@@ -130,6 +132,8 @@ jobs:
             target/calc-r01/calc-r01-coverage.json
             form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.worker.CalcR02PostgresqlTest.xml
             target/calc-r02/calc-r02-coverage.json
+            form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.kernel.SqlF02ParityPostgresqlTest.xml
+            target/calc-sql-f02/calc-sql-f02-coverage.json
             form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.readiness.Calc166ReadinessPostgresqlTest.xml
             form-library/target/fin-calc166/166-form-calculation-readiness.tsv
             form-library/target/fin-calc166/877-field-calculation-contracts.tsv
