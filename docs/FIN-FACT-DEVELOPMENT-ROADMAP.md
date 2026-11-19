@@ -120,3 +120,11 @@ NEXT authorized slice and remaining HOLD
 - **Задача внедрения:** [CALC-166 HYB #19](https://github.com/alimbetov/fin-analyzer/issues/19), разбивка HYB-0…HYB-9. Не закрывать без фактических per-form PostgreSQL E2E и утверждённых методик.
 - **Доказанная база:** F02 SQL/JDBC/Java UAT parity + benchmark on commit 9b8bacdc, not SQL approval for other forms. 153 additional data forms require method contracts; 12 evidence forms require provenance, not invented numeric outputs.
 - **Запрет на подмену:** 166/166 физические формы, 877 исходных/метаданных полей и 166 PostgreSQL readiness tests не равны 166 финансовым расчётам. Правила финансового S2, IAM и immutable source binding остаются обязательными.
+
+
+## CALC-166 HYB-2A implementation increment (2026-11-19)
+
+- **Additive PostgreSQL migrations 027–028:** append-only versioned method revision, input/output bindings, exact multi-source FactSet references and strategy binding scaffold; independent trigger prevents assigning a strategy to legacy F02 CalcPlans without a strategy-aware fingerprint. No automatic method registration/financial S2.
+- **Java:** `HybridMethodRegistry` validates physical form/metric/schema/units and independent method-contract SHA, `HybridF02ComparisonService` can compare JAVA_ONLY / SQL_ONLY / SQL_AGG_JAVA_FINAL over verified F02 FactSet only behind `fin.calc.hybrid.uat.compare.enabled=false` default. Diagnostic returns no published result and never mutates CURRENT.
+- **PostgreSQL evidence:** seven new tests in `CalcR02PostgresqlTest` (r02_13–19) check parity, candidate refusal, drift, append-only constraints, duplicates, forged SHA, cross-project binding and retroactive strategy rejection. CI must show 21/21 F02 cases and full PG16 regression on the exact commit; this paragraph alone does not prove GREEN.
+- **Next:** HYB-2B requires immutable strategy-aware plan fingerprint + transactionally inserted plan/executor binding, independent S2 method approval and a true ROWSET FactSet projection. Until those are proven, additional 153 data forms remain blocked.
