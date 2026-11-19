@@ -307,15 +307,28 @@ class Ingest2PostgresqlIntegrityTest {
     assertEquals(revised.contentSha256(),
         json.readTree(currentHttp.getResponse().getContentAsByteArray())
           .path("sha256").asText(),code);
-    // XLSX byte stream is independently parsed, not merely asserted non-empty.
-    var export=http.perform(get("/api/v1/drafts/"+first.instanceId()+"/export.xlsx")
+    // XLSX transport is intentionally limited to SINGLE_RECORD/ROWSET.
+    // Evidence documents use their attachment-download transport instead.
+    var xlsxRequest=get("/api/v1/drafts/"+first.instanceId()+"/export.xlsx")
         .param("organizationId",tenant.org().toString())
-        .param("styleCode","EXCEL").param("locale","ru"))
-        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-    assertTrue(export.length>100,"XLSX_EXPORT_EMPTY:"+code);
-    try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(export))) {
-      assertNotNull(workbook.getSheet("REPORT"),"XLSX_REPORT_SHEET_MISSING:"+code);
-      assertNotNull(workbook.getSheet("PARAMETERS"),"XLSX_PARAMS_SHEET_MISSING:"+code);
+        .param("styleCode","EXCEL").param("locale","ru");
+    if("EVIDENCE".equals(mode)) {
+      http.perform(xlsxRequest).andExpect(status().isUnprocessableEntity());
+      var downloaded=http.perform(get("/api/v1/drafts/"+first.instanceId()
+          +"/revisions/1/attachment")
+          .param("organizationId",tenant.org().toString())
+          .param("projectId",tenant.project().toString()))
+          .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+      assertEquals(opened.attachment().sizeBytes(),downloaded.length,code);
+    }else{
+      // Parse the actual workbook; HTTP 200 alone would not prove validity.
+      var export=http.perform(xlsxRequest).andExpect(status().isOk())
+          .andReturn().getResponse().getContentAsByteArray();
+      assertTrue(export.length>100,"XLSX_EXPORT_EMPTY:"+code);
+      try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(export))) {
+        assertNotNull(workbook.getSheet("REPORT"),"XLSX_REPORT_SHEET_MISSING:"+code);
+        assertNotNull(workbook.getSheet("PARAMETERS"),"XLSX_PARAMS_SHEET_MISSING:"+code);
+      }
     }
     assertEquals(original.sourceSha256Claim(),
         candidates.extractExact(first.revisionId(),tenant.org(),tenant.project())
