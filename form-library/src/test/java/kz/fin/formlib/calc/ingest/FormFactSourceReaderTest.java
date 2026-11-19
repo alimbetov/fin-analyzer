@@ -122,6 +122,20 @@ class FormFactSourceReaderTest {
         ()->reader.readExact(revisionId,organizationId,projectId));
   }
 
+  @Test void rejectsDuplicateJsonFieldsBeforeHashAndIgnoresNeitherValue() {
+    revision.setValuesJson("{\"netRevenue\":\"10\",\"netRevenue\":\"100\"}");
+    var ex=assertThrows(IllegalArgumentException.class,
+        ()->reader.readExact(revisionId,organizationId,projectId));
+    assertEquals("SOURCE_JSON_INVALID",ex.getMessage());
+  }
+
+  @Test void rejectsTrailingJsonDocumentAfterFirstObject() {
+    revision.setValuesJson("{\"netRevenue\":\"100\"} {\"cogs\":\"40\"}");
+    var ex=assertThrows(IllegalArgumentException.class,
+        ()->reader.readExact(revisionId,organizationId,projectId));
+    assertEquals("SOURCE_JSON_TRAILING_DATA",ex.getMessage());
+  }
+
   @Test void candidateFacadeRemainsUnqualifiedAndReadOnly() {
     var verifier=mock(FormFactSourceIntegrityVerifier.class);
     var service=new FormFactCandidateService(reader,new FormFactCandidateExtractor(),verifier);
