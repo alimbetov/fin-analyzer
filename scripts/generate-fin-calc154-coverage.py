@@ -9,50 +9,72 @@ Usage:
 """
 import argparse
 import csv
+import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FORM_PATH = ROOT / "docs/FIN-CALC-R0-COVERAGE-166-BASELINE.tsv"
 FIELD_PATH = ROOT / "docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv"
 MODEL_PATH = ROOT / "form-library/src/main/resources/catalog/analytics-model-catalog.tsv"
+CONTRACT_PATH = ROOT / "form-library/src/main/resources/catalog/calc154-formula-contracts-v1.tsv"
 
-# Only reviewed, pinned source-derived method proposals documented in
-# migrations 030 and 034, plus existing F02_TEST_ONLY_V1 outputs.
-# No formula or version is inferred from unreviewed field names.
-SPECIFICATIONS = [
-    ("F01", "F01.balanceResidual", "F01.assets;F01.liabilities;F01.equity", "RECONCILE",
-     "F01_CANDIDATE_V1", "CANDIDATE_UNQUALIFIED",
-     "FINANCE_S2;INPUT_MAPPING;AS_OF_SEMANTICS;CURRENCY"),
-    ("F02", "F02.grossProfit", "F02.netRevenue;F02.cogs", "SUBTRACT",
-     "F02_TEST_ONLY_V1", "UAT_TEST_ONLY", "FINANCE_S2;PRODUCTION_NOT_ADMITTED"),
-    ("F02", "F02.grossMargin", "F02.grossProfit;F02.netRevenue", "RATIO",
-     "F02_TEST_ONLY_V1", "UAT_TEST_ONLY", "FINANCE_S2;PRODUCTION_NOT_ADMITTED"),
-    ("F02", "F02.operatingResult", "F02.grossProfit;F02.operatingExpenses", "SUBTRACT",
-     "F02_TEST_ONLY_V1", "UAT_TEST_ONLY", "FINANCE_S2;PRODUCTION_NOT_ADMITTED"),
-    ("F03", "F03.cashResidual", "F03.openingCash;F03.cfo;F03.cfi;F03.cff;F03.closingCash",
-     "ROLL_FORWARD", "F03_CANDIDATE_V1", "CANDIDATE_UNQUALIFIED",
-     "FINANCE_S2;INPUT_MAPPING;SIGNED_FLOW_SEMANTICS;FX_POLICY"),
-    ("F02", "F02.cogsToRevenueCandidate", "F02.cogs;F02.netRevenue",
-     "RATIO_OF_SUMS", "UNVERSIONED_CANDIDATE", "CANDIDATE_UNQUALIFIED",
-     "FINANCE_S2;PERIOD_POLICY;DIMENSION_POLICY;INPUT_BINDINGS;PLAN_ADMISSION"),
-    ("C07", "C07.grossSalesGroupedCandidate", "C07.grossSales",
-     "GROUP_BY", "UNVERSIONED_CANDIDATE", "CANDIDATE_UNQUALIFIED",
-     "FINANCE_S2;PERIOD_POLICY;DIMENSION_POLICY;INPUT_BINDINGS;PLAN_ADMISSION"),
-    ("C07", "C07.returnsGroupedCandidate", "C07.returns",
-     "GROUP_BY", "UNVERSIONED_CANDIDATE", "CANDIDATE_UNQUALIFIED",
-     "FINANCE_S2;PERIOD_POLICY;DIMENSION_POLICY;INPUT_BINDINGS;PLAN_ADMISSION"),
-    ("C07", "C07.returnsShareCandidate", "C07.returns;C07.grossSales",
-     "RATIO_OF_SUMS", "UNVERSIONED_CANDIDATE", "CANDIDATE_UNQUALIFIED",
-     "FINANCE_S2;PERIOD_POLICY;DIMENSION_POLICY;INPUT_BINDINGS;PLAN_ADMISSION"),
-    ("C09", "C09.expenseAmountGroupedCandidate", "C09.amount",
-     "GROUP_BY", "UNVERSIONED_CANDIDATE", "CANDIDATE_UNQUALIFIED",
-     "FINANCE_S2;PERIOD_POLICY;DIMENSION_POLICY;INPUT_BINDINGS;PLAN_ADMISSION"),
+# Formula proposals live ONLY in calc154-formula-contracts-v1.tsv. Do not
+# author new source-to-output dependencies inside this generator.
+CONTRACT_COLUMNS = [
+    "form_code", "output_metric_code", "source_metrics", "operation",
+    "formula_version", "status", "blocker", "period_semantics",
+    "dimension_policy", "currency_policy", "unit_policy",
+    "rounding_policy", "missing_policy", "zero_policy", "source_evidence",
 ]
+ALLOWED_OPERATIONS = {
+    "RECONCILE", "SUBTRACT", "RATIO", "ROLL_FORWARD", "GROUP_BY", "RATIO_OF_SUMS"
+}
+
+
+def contracts():
+    with CONTRACT_PATH.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream, delimiter="\\t")
+        require(reader.fieldnames == CONTRACT_COLUMNS, "formula contract columns changed")
+        records = list(reader)
+    require(len(records) == 10, "formula registry count drift: expected ten existing candidates")
+    for record in records:
+        require(all(record.get(key) is not None and record[key] != ""
+                    for key in CONTRACT_COLUMNS), "empty formula contract member")
+        require(record["operation"] in ALLOWED_OPERATIONS, "unrecognized operation")
+        require(record["status"] in {"CANDIDATE_UNQUALIFIED", "UAT_TEST_ONLY"},
+                "invalid finance status")
+        require(record["status"] != "UAT_TEST_ONLY" or
+                (record["form_code"] == "F02" and
+                 record["formula_version"] == "F02_TEST_ONLY_V1"),
+                "unapproved UAT reference")
+        require(record["blocker"].find("FINANCE_S2") >= 0,
+                "contract cannot erase the financial S2 blocker")
+        require(record["period_semantics"] in {
+            "AS_OF_CANDIDATE", "INTERVAL_CANDIDATE", "INTERVAL_REQUIRED"},
+            "unexpected period policy")
+        require(record["dimension_policy"] == "UNREVIEWED"
+                and record["currency_policy"] == "UNREVIEWED"
+                and record["rounding_policy"] == "UNREVIEWED",
+                "unreviewed formula policy falsely approved")
+        require(record["missing_policy"] == "REQUIRE_PRESENT_CANDIDATE"
+                and record["zero_policy"] in {"INVALID_CANDIDATE", "NOT_APPLICABLE"},
+                "missing/zero policy cannot be inferred")
+        if record["operation"] in {"RATIO", "RATIO_OF_SUMS"}:
+            require(record["zero_policy"] == "INVALID_CANDIDATE", "ratio zero policy required")
+        else:
+            require(record["zero_policy"] == "NOT_APPLICABLE", "unexpected zero policy")
+    return records
+
+
+def formula_digest(record):
+    canonical = "\\t".join(record[key] for key in CONTRACT_COLUMNS)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
 
 METRIC_HEADERS = [
     "formCode", "metricCode", "kind", "sourceMetrics", "operation",
     "formulaVersion", "status", "blocker", "periodSemantics",
-    "unitPolicy", "sourceEvidence",
+    "unitPolicy", "sourceEvidence", "contractSha256",
 ]
 FORM_HEADERS = [
     "formCode", "contentMode", "physicalSourceFields", "unboundDerivedCandidates",
@@ -101,22 +123,26 @@ def build():
         n = sum(f["form_code"] == form["form_code"] for f in fields)
         require(n == int(form["presentation_r6_field_count"]),
                 "presentation field count drift: " + form["form_code"])
-    require(len(SPECIFICATIONS) == 10, "unexpected candidate formula count")
+    specifications = contracts()
+    require(len(specifications) == 10, "unexpected candidate formula count")
 
-    formula_names = {r[1] for r in SPECIFICATIONS}
+    formula_names = {r["output_metric_code"] for r in specifications}
     require(len(formula_names) == 10, "duplicate formula identifiers")
-    for form, metric, sources, _, _, _, _ in SPECIFICATIONS:
+    for spec in specifications:
+        form, metric, sources = (spec["form_code"], spec["output_metric_code"], spec["source_metrics"])
         require(form in codes and metric.startswith(form + "."),
                 "unknown formula form: " + metric)
         for source in sources.split(";"):
             sf, _, field = source.partition(".")
-            require((sf, field) in pairs or source in formula_names,
-                    "unknown formula dependency: " + source)
+            require(source != "F02.netProfit" and
+                    ((sf, field) in pairs or source in formula_names),
+                    "unknown or unbound formula dependency: " + source)
         require(metric not in sources.split(";"), "self-reference: " + metric)
 
     # Fail closed on cycles; no topological sort over unreviewed identifiers.
-    dependencies = {s[1]: [d for d in s[2].split(";") if d in formula_names]
-                    for s in SPECIFICATIONS}
+    dependencies = {s["output_metric_code"]:
+                    [d for d in s["source_metrics"].split(";") if d in formula_names]
+                    for s in specifications}
     visiting, visited = set(), set()
 
     def visit(name):
@@ -145,17 +171,14 @@ def build():
             "FORMULA_NOT_APPROVED;NOT_PHYSICAL_INPUT" if derived else
             "METHOD_REVIEW;PERIOD_UNREVIEWED;AGGREGATION_UNREVIEWED",
             f["time_semantics_state"], f["unit_policy_r6_candidate"],
-            "FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv",
+            "FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv", "",
         ])
-    for form, metric, sources, operation, version, status, blocker in SPECIFICATIONS:
-        semantic = ("AS_OF_CANDIDATE" if operation == "RECONCILE" else
-                    "INTERVAL_CANDIDATE" if operation == "ROLL_FORWARD" else
-                    "INTERVAL_REQUIRED")
-        evidence = ("034_candidate_metric_operation_binding" if version == "UNVERSIONED_CANDIDATE"
-                    else "FIN-R16-F01-F03 / F02_TEST_ONLY")
+    for spec in specifications:
         rows.append([
-            form, metric, "CALCULATED_CANDIDATE", sources, operation, version,
-            status, blocker, semantic, "FORM_CURRENCY_REVIEW_REQUIRED", evidence,
+            spec["form_code"], spec["output_metric_code"], "CALCULATED_CANDIDATE",
+            spec["source_metrics"], spec["operation"], spec["formula_version"],
+            spec["status"], spec["blocker"], spec["period_semantics"],
+            spec["unit_policy"], spec["source_evidence"], formula_digest(spec),
         ])
     rows.sort(key=lambda r: (r[0].casefold(), r[1].casefold(), r[2].casefold()))
     require(len(rows) == 804, "metric coverage != 804")
