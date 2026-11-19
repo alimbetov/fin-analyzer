@@ -1,6 +1,7 @@
 package kz.fin.formlib.calc.readiness;
 
 import kz.fin.formlib.calc.ingest.FormFactIngestionRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -92,6 +93,7 @@ public final class FormCalculationCoverageService {
   private final JdbcTemplate sql;
   private final FormFactIngestionRegistry registry;
 
+  @Autowired
   public FormCalculationCoverageService(JdbcTemplate sql) {
     this(sql,FormFactIngestionRegistry.loadDefault());
   }
