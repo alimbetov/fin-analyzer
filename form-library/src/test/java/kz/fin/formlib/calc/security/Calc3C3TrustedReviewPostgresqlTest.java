@@ -72,8 +72,11 @@ class Calc3C3TrustedReviewPostgresqlTest {
       .expiresAt(expired?now.minusSeconds(1):now.plusSeconds(600))
       .claim("realm_access",Map.of("roles",List.of(role)))
       .build();
-    SecurityContextHolder.getContext().setAuthentication(
-      new JwtAuthenticationToken(jwt));
+    var trusted=new JwtAuthenticationToken(jwt);
+    // Unit fixture models the post-signature-verification authentication
+    // produced by Spring Security's JwtAuthenticationProvider.
+    trusted.setAuthenticated(true);
+    SecurityContextHolder.getContext().setAuthentication(trusted);
   }
   private void principal(String subject,String role){
     principal(subject,role,"https://idp.example.org/realms/fin",
