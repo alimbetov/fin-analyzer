@@ -90,7 +90,7 @@ jobs:
       - name: Reject mixed Testcontainers module versions
         shell: bash
         run: |
-          mvn -B -ntp -f form-library/pom.xml dependency:tree -Dincludes=org.testcontainers -DoutputFile=target/testcontainers-tree.txt
+          mvn -B -ntp -f form-library/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.7.1:tree -Dincludes=org.testcontainers -DoutputFile=target/testcontainers-tree.txt
           cat form-library/target/testcontainers-tree.txt
           if grep -E 'org[.]testcontainers:.*:1[.]21[.]3' form-library/target/testcontainers-tree.txt; then
             echo "Mixed Testcontainers versions detected: 1.21.3 must not be present"
