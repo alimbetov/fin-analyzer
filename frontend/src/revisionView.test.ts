@@ -21,7 +21,7 @@ test('labels are applied only for an exact matching form version',()=>{
 });
 
 test('rowset historical values retain every stored column',()=>{
-  const rows=[{sku:'A-20',quantity:'0'}, {sku:'B-42',legacyCost:'99.12'}];
+  const rows:Record<string,string>[]=[{sku:'A-20',quantity:'0'}, {sku:'B-42',legacyCost:'99.12'}];
   assert.deepEqual(rows.map(row=>historyValues(row,[],false)),[
     [{fieldCode:'sku',label:'sku',value:'A-20'},{fieldCode:'quantity',label:'quantity',value:'0'}],
     [{fieldCode:'sku',label:'sku',value:'B-42'},{fieldCode:'legacyCost',label:'legacyCost',value:'99.12'}]
