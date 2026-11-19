@@ -105,7 +105,7 @@ Change impact:
 - **`executionFingerprint` (full binding):** SHA-256 по domain tag, версии контракта, полному tenant/entity/businessScope/project/period/currency/basis/coverage/dataSpace scope, exact FactSet ID+SHA+admission epoch, methodology/variant+version, approved config/params/artifact SHA, ordered pinned revisions и input source hashes, DAG descriptor SHA. Это ключ **отдельного утверждённого исполнения** и одной полной immutable result-записи.
 - **`nodeFingerprint` (computational reuse):** SHA-256 по domain tag, версии конкретного алгоритма узла, его effective params/config/rounding, typed unit/period/semantic dimensions, scope и **только фактически потребляемым operand value digests и upstream node fingerprints**. Не включает неиспользуемые поля, ID всей новой редакции или SHA всего FactSet; иначе требование адресного пересчёта A10 невыполнимо.
 - При новом FactSet допускается reuse **вычисленного значения узла**, если его `nodeFingerprint` идентичен, исходный результат целостен, корректен и доступен в том же tenant/scope; новое `calc_result` содержит копию значения + новый binding, точный lineage до новых источников и метки RECOMPUTED/REUSED. Не разрешать cross-tenant reuse даже при совпадении числа. Неквалифицированные исходники не становятся APPROVED от reuse.
-- Отдельно хранить `resultSha256` по новому output snapshot, `executionId` по попытке исполнения; оба отличны от fingerprint. `calc_plan` должен быть уникален по full scope + `executionFingerprint`, чтобы дубль точного события находил первоначальный `plan_id`; иначе unique(result fingerprint) + FK на разные планы даст некорректный lineage.
+- Отдельно хранить **`outputValuesSha256`** — hash canonical экономических выходов (typed values/state/unit/algorithm policy; не включает REUSED/RECOMPUTED, timing, cache tier), и **`resultSha256`** — hash целостности полного immutable result snapshot с pinned binding/lineage/tech execution metadata; `executionId` идентифицирует попытку. Это три разных идентификатора, и только `outputValuesSha256` сравним между режимами Redis OFF/L1/L1+L2 при одинаковой методике и источниках. `calc_plan` должен быть уникален по full scope + `executionFingerprint`, чтобы дубль точного события находил первоначальный `plan_id`; иначе unique(result fingerprint) + FK на разные планы даст некорректный lineage.
 - `calc_result` append-only с DB-level UPDATE/DELETE protection, уникальность `(tenant, executionFingerprint)`; Caffeine только для immutable descriptors/graph cache, не authority или revocation.
 
 ### CALC-FR-09. Qualification / publication gate
@@ -152,7 +152,7 @@ R0 придерживается **пяти таблиц**, без отдельн
 | `calc_outbox_event` | `id PK`, `producer`, `producer_event_id`, `event_type`, `aggregate_id`, `revision_id`, `payload_sha256`, `payload_json`, `occurred_at`, `processed_at`, `state`, `available_at`, `attempts`, `last_error_code`, UNIQUE(producer, producer_event_id); payload SHA не является дедупликационным ключом. Payload содержит ссылки и digests, не финансовые значения |
 | `calc_plan` | `id PK`, **full** tenant/entity/scope/project/period/currency/basis/coverage/dataSpace key, `execution_fingerprint`, `factset_id`, `factset_sha256`, `qualification_binding_sha256`, `qualification_epoch`, `method_id/version`, `config_sha256`, `params_sha256`, `artifact_sha256`, `dag_snapshot_json`, `dag_sha256`, `status`, `created_at`; UNIQUE(full_scope,execution_fingerprint), immutable binding columns |
 | `calc_job` | `id PK`, `plan_id FK`, `node_group_key`, `execution_fingerprint`, `status`, `priority`, `attempt_count`, `available_at`, `lease_owner`, `lease_until`, `fencing_token`, `last_error_code`, `result_id NULL`, timestamps; UNIQUE(plan_id,node_group_key), partial ready index, conditional fenced state transitions |
-| `calc_result` | `id PK`, full scope, `plan_id FK`, `execution_fingerprint`, `result_sha256`, `result_json` (complete 3-output snapshot incl. value states/nodeFingerprints/reuse flags), `lineage_json` (binding to **this** FactSet), `computed_at`, `qualification_mode`; UNIQUE(tenant,execution_fingerprint), DB-level UPDATE/DELETE forbidden |
+| `calc_result` | `id PK`, full scope, `plan_id FK`, `execution_fingerprint`, `output_values_sha256` (pure economic outputs; cache-mode invariant), `result_sha256` (full immutable snapshot integrity), `result_json` (complete 3-output snapshot incl. value states/nodeFingerprints/reuse flags), `lineage_json` (binding to **this** FactSet), `computed_at`, `qualification_mode`; UNIQUE(tenant,execution_fingerprint), DB-level UPDATE/DELETE forbidden |
 | `calc_current_result` | complete organization/entity/businessScope/project/methodVariant/period/coverage/currency/basis/dataSpace stable key, `result_id FK`, `pointer_version`, `approval_epoch`, `activated_at`; FK, CAS, serialized admission/revocation gate |
 
 Это **логическая SQL-спецификация**, точные миграции и PostgreSQL constraints/indices будут написаны в R0.B. `calc_outbox_event` и результат имеют разные правила жизненного цикла: технические поля доставки outbox изменяемы; финансовые payload и result immutable. У `calc_plan` DAG фиксируется в snapshot JSON + SHA (не хранить отдельную таблицу edges до необходимости). Существующие `fin_lib` / `fin_intake` таблицы не переписывать.
@@ -220,7 +220,7 @@ R0 придерживается **пяти таблиц**, без отдельн
 | A25 | Concurrent cache L1/optional L2 reuse and eviction | stable key + immutable payload validation, corrupt hit treated as miss, no cross-tenant data |
 | A26 | Redis disabled, timeout, outage and restart (R1/R2 only) | seamless PostgreSQL/compute fallback; no skipped authorization or phantom CURRENT |
 | A27 | CPU worker crash, heartbeat expiry, cancellation race | no stale owner result, no published partial DAG; reaper and idempotent retry |
-| A28 | Identical benchmark workloads Redis OFF vs Caffeine vs Caffeine+Redis (R2) | store p95/p99, CPU, PG load, cache hit/miss, error budget and release decision |
+| A28 | Identical benchmark workloads Redis OFF vs Caffeine vs Caffeine+Redis (R2) | store p95/p99, CPU, PG load, cache hit/miss, error budget, compare exact `outputValuesSha256`, and record release decision |
 
 ### Проверяемые SQL-постусловия
 - Счётчик `fin_intake.lib_form_revision` соответствует коммитам save; rollback не оставляет `calc_outbox_event`.
@@ -259,6 +259,14 @@ R0 придерживается **пяти таблиц**, без отдельн
 ### Review reference
 
 Выполнен технический S1 review: `docs/audits/FIN-CALC-R0-S1-ARCHITECTURE-REVIEW-2026-11-19.md`. Не является независимым финансовым S2.
+
+### Temporary code-level implementation workpacks
+
+- `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migration 019, F02 DAG, bounded workers, outbox, tests.
+- `docs/temporary/FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md` — CalculationCache interfaces, Caffeine node values, optional Redis L2, feature flags, fallback.
+- `docs/temporary/FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md` — 3-mode benchmark scripts/fixtures, telemetry, correctness and Redis activation gate.
+
+These are versioned temporary **specifications only**, not implemented code or proof of GREEN.
 
 ### Source references
 - `form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java`
