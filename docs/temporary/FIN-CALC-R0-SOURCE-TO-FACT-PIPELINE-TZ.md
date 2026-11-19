@@ -1,0 +1,202 @@
+# FIN CALC-R0 / HTAP v2 — Source-to-Fact Pipeline Contract
+
+**Date:** 2026-11-19. **Status:** P0 SPECIFICATION HARDENING / NOT IMPLEMENTED / PRODUCTION S2 HOLD.
+**Scope:** `alimbetov/fin-analyzer`, branch `feat/fin-form-library-standalone`.
+**Normative parent:** `docs/FIN-CALC-R0-INCREMENTAL-CALCULATION-ARCHITECTURE-TZ.md`.
+
+## 1. P0 gap and architectural decision
+
+Previous R0 specified `F02 revision → TEST_QUALIFIED FactSet → DAG → job → result`, but did not define an actual producer of FactSet, typed source extraction, versioned field-to-metric mapping, persisted fact observations, the factset digest, or a qualified event that could be verified by the consumer.
+
+**Verified source state:** standalone branch has `fin_intake.lib_form_revision.values_json TEXT` and `lib_form_revision_row`, but **no fin_fact tables and no production S2 gateway**. `fin_lib.lib_field_binding_contract` and versioned policy/mapping candidates are marked `CANDIDATE_UNQUALIFIED`, not S2-approved. `FormWorkflowService.READY_FOR_REVIEW` is not S2.
+
+**Decision:** close the full source-to-fact gap with **three additive PostgreSQL fact-boundary tables** in R0 pilot, alongside the existing five proposed fin_calc tables (eight new tables total). No warehouse, Kafka, Redis or new service required. Only synthetic `TEST_QUALIFIED` facts until independent S2+IAM exists.
+
+## 2. Exact data flow and transaction boundaries
+
+```text
+React F02 edit → PREVIEW_UNQUALIFIED (no fact writes)
+  |
+TX-A: FormDraftService.save() → immutable fin_intake revision N
+      + fin_calc.calc_outbox_event(DRAFT_REVISION_SAVED)
+  |
+Draft event consumer → integrity/staging only, never qualification
+  |
+Independent qualified command (test fixture ONLY in R0)
+  → PinnedSourceReader(revision_id, full scope, formVersion, content SHA)
+  → SourceFactAssembler(F02 field→typed observation + approved-for-test mapping)
+  → canonical candidate FactSet digest, no persistence yet
+  → TrustedQualificationGateway checks exact candidate digest/issuer/epoch
+  |
+TX-Q: INSERT fin_fact.fact_set + 3 fin_fact.fact_observation
+      UPDATE fin_fact.factset_control (test-local active binding and epoch)
+      INSERT outbox FACTSET_QUALIFIED; all in ONE PostgreSQL COMMIT
+  |
+TX-B: dispatcher loads exact persisted factset, verifies digest/binding
+      → immutable DAG plan + job; mark event processed in ONE COMMIT
+  |
+TX-C: SKIP LOCKED job claim, lease and fencing; COMMIT
+  |
+CPU: worker reads exact pinned fin_fact observations (NOT latest raw JSON)
+     → node fingerprint → reuse or compute changed nodes
+  |
+TX-D: fenced immutable calc_result + job SUCCEEDED, ONE COMMIT
+  |
+TX-E: serialized authority/epoch + active factset + config recheck
+      → CAS current pointer; separate COMMIT
+  |
+GET CURRENT: check live authority/epoch; revoked → fail closed
+```
+
+**No implicit step:** Saving draft does not produce an approved FactSet. A newly saved revision neither revokes nor silently supersedes a previously qualified revision. A new trusted qualification/revocation controls the active binding and its epoch; out-of-order events must not roll it back.
+
+## 3. Source-to-metric mapping contract for F02
+
+| Source field | Candidate metric | Input | Grain / semantic |
+|---|---|---|---|
+| `netRevenue` | `F02.netRevenue` | MONEY / BigDecimal | INTERVAL, F02 pilot month M |
+| `cogs` | `F02.cogs` | MONEY / BigDecimal | same interval, positive cost convention TEST_ONLY |
+| `operatingExpenses` | `F02.operatingExpenses` | MONEY / BigDecimal | same interval, positive cost convention TEST_ONLY |
+
+Use **exact** `form_version_id` UUID and `schema_sha256` / `mapping_sha256`, not merely `FIN-FORM-V2` label. Existing `F02.netProfit` is an unbound historical `FORM_DERIVED_CANDIDATE` despite a legacy SOURCE_FIELD classification; **never import it as an editable fourth fact**.
+
+F02 R0 accepts only `SINGLE_RECORD`, exactly these 3 required numeric fields, same currency/entity/project/period/basis/coverage/dataSpace, all PRESENT. `ROWSET`, EVIDENCE and `ReportGridService` require explicitly separate adapters later. An unsupported source cannot be flattened or treated as qualified. No currency conversion, aggregation or period conversion is inferred from field names. The legacy structural FieldMetricContractGuard is not an independent S2 sign-off.
+
+## 4. Minimum physical fact tables (NEW, not existing)
+
+**Migration contract:** keep `019-fin-calc-r0-postgresql.sql` for five fin_calc tables; add PostgreSQL-only `020-fin-fact-r0-pilot-postgresql.sql` in the master changelog, without editing 001–018. Migration 020 introduces 3 tables below and adds FK `calc_plan.factset_id → fin_fact.fact_set.id`.
+
+### 4.1 fin_fact.fact_set — immutable qualified snapshot header
+
+```text
+id uuid PK
+organization_id, economic_entity_id, business_scope_id, project_id uuid NOT NULL
+source_form_code, form_version_id, source_revisions_jsonb NOT NULL
+period_type, period_code, period_start, period_end_exclusive NOT NULL
+currency, coverage, reporting_basis, data_space NOT NULL
+source_set_sha256 char(64), mapping_sha256 char(64) NOT NULL
+canonicalization_version int NOT NULL
+factset_sha256 char(64) NOT NULL
+qualification_binding_sha256 char(64), qualification_epoch bigint NOT NULL
+qualification_mode varchar(32) CHECK = TEST_QUALIFIED (R0 only)
+test_issuer varchar(128), created_at timestamptz NOT NULL
+UNIQUE(organization_id, factset_sha256, qualification_binding_sha256)
+```
+
+`source_revisions_jsonb` is a canonical, ordered array of exact `revisionId, instanceId, formVersionId, source content SHA, row order SHA when semantically relevant`. `factset_sha256` hashes **canonical typed observation values plus full scope, source versions, mapping version and canonicalization policy**, excluding random ID/timestamp. Transactional duplicate request must return same existing set, not create duplicate rows. SQL UPDATE/DELETE forbidden for immutable fact tables.
+
+### 4.2 fin_fact.fact_observation — immutable typed facts
+
+```text
+id uuid PK
+factset_id uuid NOT NULL FK -> fact_set(id)
+metric_code varchar(160), metric_contract_version varchar(64) NOT NULL
+source_revision_id uuid NOT NULL FK -> fin_intake.lib_form_revision(id)
+source_row_key varchar(128) NOT NULL DEFAULT 'SINGLE'
+source_field_code varchar(128), form_version_id uuid NOT NULL
+source_content_sha256 char(64) NOT NULL
+period_start, period_end_exclusive date NOT NULL
+period_semantics varchar(24) NOT NULL   -- INTERVAL for F02
+dimension_digest char(64) NOT NULL
+value_kind varchar(24) CHECK = NUMERIC
+value_state varchar(24) CHECK = PRESENT
+numeric_value numeric(38,12) NOT NULL
+unit_code varchar(64), currency_code char(3) NOT NULL
+canonical_value_sha256 char(64) NOT NULL
+UNIQUE(factset_id, metric_code, source_revision_id,
+       source_row_key, source_field_code, period_start, dimension_digest)
+```
+
+F02 uses `source_row_key='SINGLE'` and stable empty-dimension digest. For general ROWSET later, preserve row UUID, true dimensions and grain; do not SUM STOCK across months or ignore YTD/LTD/AS_OF semantics. Null observations and explicit MISSING/NOT_APPLICABLE states will require a separate field policy; do not silently replace missing values by zero. Validate precision, scale, currency units, sign and duplicate business identity before insert.
+
+### 4.3 fin_fact.factset_control — mutable local authority guard (TEST_ONLY)
+
+```text
+id uuid PK, stable_scope_key char(64) NOT NULL UNIQUE,
+organization_id uuid NOT NULL,
+active_factset_id uuid NULL FK -> fin_fact.fact_set(id),
+qualification_epoch bigint NOT NULL, revoked boolean NOT NULL,
+row_version bigint NOT NULL, updated_at timestamptz NOT NULL
+```
+
+TX-Q, TX-E, local test revoke and CURRENT reader coordinate against same guarded scope and epoch. A newly qualified FactSet advances active binding; old immutable results remain historical, but are not CURRENT while replacement is pending. A new *draft* does not alter control. PostgreSQL locking and compare-and-swap rules must be consistent and tested.
+
+**Do not mistake TEST_ONLY control for production S2.** External authority in another DB cannot be transactionally serialized by merely calling its REST API before COMMIT. Production publication remains HOLD pending a versioned authority epoch and verified live read/revoke protocol.
+
+## 5. Proposed implementation interfaces (all NEW)
+
+Location: `form-library/src/main/java/kz/fin/formlib/calc/ingest/`.
+
+```java
+record PinnedRevisionRef(UUID revisionId, UUID instanceId,
+                         UUID formVersionId, String contentSha256,
+                         String schemaSha256) {}
+
+record CandidateFactValue(String metricCode, String fieldCode,
+                          UUID sourceRevisionId, BigDecimal value,
+                          String currency, String valueDigest) {}
+
+record CandidateFactSet(CalcScope scope,
+                        List<PinnedRevisionRef> sources,
+                        String mappingSha256,
+                        List<CandidateFactValue> observations,
+                        String factsetSha256) {}
+
+interface SourceRevisionReader {
+  VerifiedRevision readExact(UUID revisionId, CalcScope expectedScope);
+}
+interface SourceFactAssembler {
+  CandidateFactSet assembleF02(VerifiedRevision source,
+                               VersionedMappingDescriptor mapping);
+}
+interface TrustedQualificationGateway {
+  VerifiedDecision verifyExactCandidate(CandidateFactSet candidate);
+}
+interface FactSetCommitter {
+  QualifiedFactSetRef commit(CandidateFactSet candidate,
+                             VerifiedDecision exactDecision);
+}
+interface QualifiedFactReader {
+  VerifiedFactSet readAndVerify(UUID factsetId,
+                                String expectedFactsetSha256,
+                                String expectedBindingSha256);
+}
+```
+
+- Reader loads exact revision by UUID, joins instance and formVersion, verifies full scope, bound content hash and F02 source completeness. **Do not compare SHA(values_json) directly to canonical_content_sha256:** existing FormDraftService canonical source hash includes scope/version/rows/evidence. Reuse the versioned FIN-LIB-CONTENT-V1 canonicalization algorithm, with read-back negative tests.
+- Assembler uses allowlisted, **test-only** F02 mapping descriptor and typed BigDecimal; CANDIDATE_UNQUALIFIED metadata must never be treated as production S2 authorization. Recompute factset digest from persisted observations at commit/worker-read.
+- Gateway rejects non-test profile/DB for synthetic issuer; no HTTP endpoint allows self-approval. Production gateway defaults to fail closed.
+- Committer verifies the signed/bound decision exact digest and epoch **before TX-Q**; then under locked test-only control row validates still-current decision, inserts header+observations, advances control and emits FACTSET_QUALIFIED **in same DB TX**.
+- Worker uses QualifiedFactReader, **not raw FormDraftService**, to load exact factset and recompute digest; on wrong scope, SHA, source, mapping, missing or duplicate observation **BLOCK**, no fallback to draft latest revision.
+- Do not trust an outbox event payload to assert qualification; verify persisted rows and authority binding before enqueue.
+
+## 6. Change impact, period scope, reuse and backfill
+
+- Exact qualified FactSet change → new `executionFingerprint` and new full immutable `calc_result` with lineage to new factset and source revisions.
+- Only changed typed consumed inputs + relevant algorithm/config/period → changed `nodeFingerprint` and recompute. For F02 changing only operatingExpenses → 1 node recomputed, 2 safely reused.
+- Per-method temporal dependency contract: same-month F02 only that month; trailing 12 months recompute windows that contain changed month; YTD recalculates downstream periods to year boundary; STOCK/AS_OF not blindly summed. Multi-form joins require same tenant, entity, basis, coverage, currency and approved mapping/grain policies.
+- **Historical backfill:** pre-outbox revisions do not automatically produce an event. Define read-only inventory/discovery of missing source revision IDs, an idempotent staging reprocess path, and an explicit qualification gate. No automatic historic approval. If backfill not implemented in R0, it must be a documented HOLD/TODO, not silently assumed complete.
+- **Supersession:** qualified epoch and scope determine current binding, not processing time, idempotency key or latest draft revision. Older approvals may remain historical but never overwrite newer CURRENT.
+
+## 7. Mandatory PostgreSQL 16 tests (additional F01–F16)
+
+| ID | Scenario | Required postcondition |
+|---|---|---|
+| F01 | Draft commit+outbox; rollback | no orphan outbox or revision |
+| F02 | Draft event without trusted issuer | no factset, fact observation, qualified job |
+| F03 | Test-qualified exact three-field F02 | one factset, exactly 3 typed observations, one qualified outbox |
+| F04 | Duplicate qualification and event replay | same factset/plan/job, no duplicate fact |
+| F05 | Wrong source hash/formVersion/schema/scope | BLOCK before commit |
+| F06 | Unapproved F02.netProfit mapping/fourth source | BLOCK; no implicit output-to-fact promotion |
+| F07 | Missing/non-numeric/overflow/invalid cost convention | BLOCK or explicit domain state, no silent zero |
+| F08 | Different currency/entity/project/basis/dataSpace/period | no cross-scope mixing |
+| F09 | Fact row corrupted or removed | digest verification fails; no result/publication |
+| F10 | Draft correction with no new qualification | old qualified factset unchanged; no qualified job |
+| F11 | New FactSet with only operatingExpenses changed | 1 dirty, 2 reused, new complete result+lineage |
+| F12 | Trusted event arrives out of qualification epoch order | cannot move CURRENT backward |
+| F13 | Revoke during worker/publication/current read | fail closed, historical result retained |
+| F14 | ROWSET/EVIDENCE/ReportGrid offered to F02 assembler | UNSUPPORTED_SOURCE_ADAPTER, never collapsed |
+| F15 | Already-existing draft saved before outbox feature | discovery/backfill status visible; never auto approved |
+| F16 | Full PG migration 001–020 and upgrade from 018 | checksum-compatible, FK, unique and immutability proofs |
+
+**DoD:** completion of master A01–A28 is not sufficient without F01–F16. Qualified end-to-end remains BLOCKED until implemented and PostgreSQL GREEN. For small isolated B1 pure Java DAG tests, five-table kernel can proceed independently. The new three tables are **minimum storage for an actual test-only source→fact chain**, not a full HTAP warehouse.
