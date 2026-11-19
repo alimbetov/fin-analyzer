@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -25,7 +26,8 @@ public class FormFactCandidateService {
   }
 
   /** One stable database snapshot for read + hash verification + conversion. */
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ,
+      propagation = Propagation.REQUIRES_NEW)
   public FormFactCandidateExtractor.Projection extractExact(
       UUID revisionId, UUID organizationId, UUID projectId) {
     var source=sourceReader.readExact(revisionId,organizationId,projectId);
