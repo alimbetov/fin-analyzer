@@ -6,6 +6,7 @@ on:
       - feat/fin-form-library-standalone
     paths:
       - 'form-library/src/main/resources/db/changelog/040-fin-calc3c2-control-examples-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/041-fin-calc3c2-financial-review-readiness-view.sql'
       - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
       - 'form-library/src/main/resources/catalog/calc3c2-f02-uat-control-v1.tsv'
       - 'form-library/src/main/java/kz/fin/formlib/bootstrap/Calc3C2ControlExampleBootstrap.java'
@@ -36,7 +37,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=Calc3C2ControlExamplePostgresqlTest \
             -DfailIfNoTests=true
-      - name: Prove seven test cases ran without skipping
+      - name: Prove eight test cases ran without skipping
         if: always()
         run: |
           python3 - <<'PY'
@@ -47,6 +48,6 @@ jobs:
           x=ET.parse(reports[0]).getroot()
           counts={k:int(x.attrib.get(k,0)) for k in ('tests','failures','errors','skipped')}
           print(counts)
-          if counts!={'tests':7,'failures':0,'errors':0,'skipped':0}:
-              sys.exit('FAIL: seven real PostgreSQL tests required')
+          if counts!={'tests':8,'failures':0,'errors':0,'skipped':0}:
+              sys.exit('FAIL: eight real PostgreSQL tests required')
           PY
