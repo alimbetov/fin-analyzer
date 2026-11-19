@@ -113,3 +113,10 @@ NEXT authorized slice and remaining HOLD
 - **P0 CALC-R0.2:** [GitHub issue #16](https://github.com/alimbetov/fin-analyzer/issues/16) — actual F02 BigDecimal worker, lease/fencing, immutable `calc_result`, guarded `CURRENT`. Local UAT only; production S2/IAM remain HOLD. **Do not claim this step GREEN before real PG16 E2E.**
 - **Parallel read-only R16.A, then R16.B → R7.B → R16.C:** [GitHub issue #15](https://github.com/alimbetov/fin-analyzer/issues/15). Required 166-form live PostgreSQL field/metric gap inventory and financial semantic review before scaling beyond F02. Previous 877 candidate contracts do not imply financial approval.
 - Do not expand the methodology count or bulk-promote financial metrics until BOTH F02 E2E and per-form contract gates are independently evidenced. Treat the issues as the durable task checklist; any completion requires exact commit SHA + CI evidence.
+
+## FIN CALC-166 Hybrid SQL/JDBC + Java specification — 2026-11-19
+
+- **Нормативный проект ТЗ:** [FIN-CALC-166-SQL-JDBC-JAVA-HYBRID-TZ.md](FIN-CALC-166-SQL-JDBC-JAVA-HYBRID-TZ.md) — source inventory 166 forms, method-level execution strategy (JAVA_ONLY / SQL_ONLY / SQL_AGG_JAVA_FINAL), separate DUAL_RUN parity gate, immutable plans/jobs/results, additive schema, governance, performance and security. Draft, not financial S2.
+- **Задача внедрения:** [CALC-166 HYB #19](https://github.com/alimbetov/fin-analyzer/issues/19), разбивка HYB-0…HYB-9. Не закрывать без фактических per-form PostgreSQL E2E и утверждённых методик.
+- **Доказанная база:** F02 SQL/JDBC/Java UAT parity + benchmark on commit 9b8bacdc, not SQL approval for other forms. 153 additional data forms require method contracts; 12 evidence forms require provenance, not invented numeric outputs.
+- **Запрет на подмену:** 166/166 физические формы, 877 исходных/метаданных полей и 166 PostgreSQL readiness tests не равны 166 финансовым расчётам. Правила финансового S2, IAM и immutable source binding остаются обязательными.
