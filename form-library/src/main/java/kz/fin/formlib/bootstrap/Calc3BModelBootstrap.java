@@ -110,10 +110,14 @@ public class Calc3BModelBootstrap implements ApplicationRunner {
     if(!"PostgreSQL".equals(database))return;
     var currentForms=forms();
     var proposed=source(currentForms);
-    Integer existing=db.queryForObject(
-      "SELECT count(*) FROM fin_calc.model_candidate_revision",Integer.class);
-    if(existing==null || existing!=0&&existing!=42)
-      throw new IllegalStateException("CALC3B_MODEL_PARTIAL_SEED");
+    // Only the original manifest revision is bootstrap-managed. Other
+    // independent model revisions are append-only and must coexist.
+    Integer existing=db.queryForObject("""
+      SELECT count(*) FROM fin_calc.model_candidate_revision
+      WHERE catalog_revision=?
+      """,Integer.class,CATALOG_REVISION);
+    if(existing==null || existing!=0&&existing!=proposed.size())
+      throw new IllegalStateException("CALC3B_BASELINE_MODEL_PARTIAL_SEED");
 
     if(existing==0){
       List<Object[]> values=new ArrayList<>();
@@ -167,9 +171,17 @@ public class Calc3BModelBootstrap implements ApplicationRunner {
       throw new IllegalStateException("CALC3B_MODEL_EDGES_DRIFT");
 
     Integer inputCount=db.queryForObject(
-      "SELECT count(*) FROM fin_calc.model_candidate_input_form",Integer.class);
+      """
+      SELECT count(*) FROM fin_calc.model_candidate_input_form i
+      JOIN fin_calc.model_candidate_revision m ON m.id=i.model_revision_id
+      WHERE m.catalog_revision='CATALOG_CANDIDATE_V1'
+      """,Integer.class);
     Integer outputCount=db.queryForObject(
-      "SELECT count(*) FROM fin_calc.model_candidate_output_metric",Integer.class);
+      """
+      SELECT count(*) FROM fin_calc.model_candidate_output_metric o
+      JOIN fin_calc.model_candidate_revision m ON m.id=o.model_revision_id
+      WHERE m.catalog_revision='CATALOG_CANDIDATE_V1'
+      """,Integer.class);
     if(inputCount==null||outputCount==null
        ||inputCount!=0&&inputCount!=97||outputCount!=0&&outputCount!=46)
       throw new IllegalStateException("CALC3B_PARTIAL_MODEL_DEPENDENCIES");
@@ -195,7 +207,9 @@ public class Calc3BModelBootstrap implements ApplicationRunner {
         SELECT model_revision_id,ordinal,source_form_code,source_form_version_id,
           source_schema_sha256,content_mode,numeric_eligible,binding_sha256,
           dependency_state,approval_state
-        FROM fin_calc.model_candidate_input_form
+        FROM fin_calc.model_candidate_input_form i
+        JOIN fin_calc.model_candidate_revision m ON m.id=i.model_revision_id
+        WHERE m.catalog_revision='CATALOG_CANDIDATE_V1'
         """,(r,i)->new Object[]{r.getObject(1,UUID.class),r.getInt(2),r.getString(3),
           r.getObject(4,UUID.class),r.getString(5),r.getString(6),
           r.getBoolean(7),r.getString(8),r.getString(9),r.getString(10)});
@@ -216,7 +230,9 @@ public class Calc3BModelBootstrap implements ApplicationRunner {
     var foundOutputs=db.query("""
         SELECT model_revision_id,ordinal,output_metric_code,formula_state,
           requiredness_state,approval_state
-        FROM fin_calc.model_candidate_output_metric
+        FROM fin_calc.model_candidate_output_metric o
+        JOIN fin_calc.model_candidate_revision m ON m.id=o.model_revision_id
+        WHERE m.catalog_revision='CATALOG_CANDIDATE_V1'
         """,(r,i)->new Object[]{r.getObject(1,UUID.class),r.getInt(2),r.getString(3),
           r.getString(4),r.getString(5),r.getString(6)});
     var actualOutputs=new HashMap<String,Object[]>();
