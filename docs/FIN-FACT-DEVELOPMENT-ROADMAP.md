@@ -106,3 +106,10 @@ NEXT authorized slice and remaining HOLD
 - [CALC R0/R1/R2 index](temporary/FIN-CALC-IMPLEMENTATION-WORKPACK-INDEX.md)
 - [PG16 physical DDL proposal](temporary/sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql)
 - [S1B technical review](audits/FIN-CALC-R0-S1B-PARTITIONED-166-INGESTION-REVIEW-2026-11-19.md)
+
+
+## Current execution tracker — 2026-11-19 (supersedes historical baseline above)
+
+- **P0 CALC-R0.2:** [GitHub issue #16](https://github.com/alimbetov/fin-analyzer/issues/16) — actual F02 BigDecimal worker, lease/fencing, immutable `calc_result`, guarded `CURRENT`. Local UAT only; production S2/IAM remain HOLD. **Do not claim this step GREEN before real PG16 E2E.**
+- **Parallel read-only R16.A, then R16.B → R7.B → R16.C:** [GitHub issue #15](https://github.com/alimbetov/fin-analyzer/issues/15). Required 166-form live PostgreSQL field/metric gap inventory and financial semantic review before scaling beyond F02. Previous 877 candidate contracts do not imply financial approval.
+- Do not expand the methodology count or bulk-promote financial metrics until BOTH F02 E2E and per-form contract gates are independently evidenced. Treat the issues as the durable task checklist; any completion requires exact commit SHA + CI evidence.
