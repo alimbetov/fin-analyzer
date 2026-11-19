@@ -23,7 +23,7 @@ public final class FinancialReconciliationProposals {
   public record F01(LocalDate asOf,BigDecimal assets,
       BigDecimal liabilities,BigDecimal equity) {
     public F01 {
-      Objects.requireNonNull(asOf,"CALC_F01_ASOF_REQUIRED");
+      if(asOf==null)throw new IllegalArgumentException("CALC_F01_ASOF_REQUIRED");
       require(assets);require(liabilities);require(equity);
     }
   }
