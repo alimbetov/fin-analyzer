@@ -14,6 +14,15 @@ public final class HybridF02RegistryTestFixture {
 
   public static UUID install(JdbcTemplate jdbc,UUID planId,UUID formVersionId,
       String state,boolean wrongSourceSha){
+    String version=("TEST_ONLY_REFERENCE".equals(state)&&!wrongSourceSha)
+        ?"1":"TEST-"+UUID.randomUUID();
+    if("1".equals(version)){
+      var existing=jdbc.query("""
+          SELECT id FROM fin_calc.method_revision
+          WHERE method_code='F02_TEST_ONLY_V1' AND method_version='1'
+          """,(r,i)->r.getObject(1,UUID.class));
+      if(existing.size()==1)return existing.getFirst();
+    }
     String dagSha=jdbc.queryForObject("""
         SELECT dag_jsonb->>'dagSha256' FROM fin_calc.calc_plan WHERE id=?
         """,String.class,planId);
@@ -44,7 +53,7 @@ public final class HybridF02RegistryTestFixture {
           algorithm_artifact_sha256,config_sha256,params_sha256,
           sql_artifact_sha256,artifact_attested)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,false)
-        """,id,F02CalcPlanDescriptor.METHOD,"1",state,
+        """,id,F02CalcPlanDescriptor.METHOD,version,state,
         HybridMethodRegistry.sourceDigest(inputs),
         HybridMethodRegistry.outputDigest(outputs),
         dagSha,F02CalcPlanDescriptor.ARTIFACT_SHA,

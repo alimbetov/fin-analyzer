@@ -172,7 +172,9 @@ public class HybridMethodRegistry {
         ||!out.stream().map(Output::unitCode).toList()
           .equals(List.of("KZT","RATIO","KZT"))
         ||!out.stream().map(Output::numericScale).toList()
-          .equals(List.of(2,8,2)))
+          .equals(List.of(2,8,2))
+        ||!out.stream().map(Output::missingPolicy).toList()
+          .equals(List.of("PROPAGATE","INVALID","PROPAGATE")))
       throw new IllegalStateException("HYB_F02_OUTPUT_SHAPE_INVALID");
     return m;
   }
