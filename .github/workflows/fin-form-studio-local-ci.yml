@@ -100,7 +100,7 @@ jobs:
       - name: Run isolated PostgreSQL Testcontainers integration
         run: >-
           mvn -B -ntp -f form-library/pom.xml
-          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest
+          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,FactR0PostgresqlUpgradeTest
           -Dfin.postgres.uat.enabled=true
           test
 
