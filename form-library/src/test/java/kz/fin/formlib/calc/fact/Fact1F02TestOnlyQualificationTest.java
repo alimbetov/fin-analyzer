@@ -274,7 +274,7 @@ class Fact1F02TestOnlyQualificationTest {
     var s=Slot.fresh();
     var old=save(s,null,0,"2100000","f1-old-"+s.org());
     var approved=commitF02(old.revisionId(),s,false);
-    var revised=save(s,drafts.get(old.instanceId(),s.org()).instanceId(),1,
+    var revised=save(s,old.instanceId(),1,
         "2200000","f1-revised-"+s.org());
     assertEquals(approved.factSetId(),jdbc.queryForObject("""
         SELECT active_factset_id FROM fin_fact.factset_control WHERE stable_scope_key=?
