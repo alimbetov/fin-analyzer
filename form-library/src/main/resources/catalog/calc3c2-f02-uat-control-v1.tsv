@@ -1,0 +1,4 @@
+output_metric_code	example_code	net_revenue	cogs	operating_expenses	expected_value	expected_scale
+F02.grossProfit	F02_UAT_200_100_50	200.00	100.00	50.00	100.00	2
+F02.grossMargin	F02_UAT_200_100_50	200.00	100.00	50.00	0.50000000	8
+F02.operatingResult	F02_UAT_200_100_50	200.00	100.00	50.00	50.00	2
