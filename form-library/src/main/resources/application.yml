@@ -41,3 +41,11 @@ fin:
   uat:
     editor:
       enabled: ${FIN_FORM_UAT_EDITOR_ENABLED:false}
+
+# Disabled by default. Do not bind untrusted network interfaces before
+# production deployment has separately approved IAM/S2 and network policy.
+  financial-review:
+    api-enabled: ${FIN_FINANCIAL_REVIEW_API_ENABLED:false}
+    issuer: ${FIN_FINANCIAL_REVIEW_ISSUER:}
+    jwk-set-uri: ${FIN_FINANCIAL_REVIEW_JWKS_URI:}
+    audience: ${FIN_FINANCIAL_REVIEW_AUDIENCE:fin-form-library/financial-methodology-review/v1}
