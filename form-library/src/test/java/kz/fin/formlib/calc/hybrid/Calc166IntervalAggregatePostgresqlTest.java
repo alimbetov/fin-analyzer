@@ -247,4 +247,36 @@ class Calc166IntervalAggregatePostgresqlTest {
       f.dimension(),"KZT","KZT"));
   }
 
+  @Test void ratioOfSumsDividesTwoPinnedMetricTotals() {
+    var f=source();
+    // Synthetic COGS observation, on the same pinned source revision and
+    // exact dimensional grain as the two netRevenue observations.
+    jdbc.update("""
+      INSERT INTO fin_fact.fact_observation(
+        period_start,observation_id,factset_id,source_revision_id,
+        source_form_code,source_form_version_id,source_row_key,source_field_code,
+        source_content_sha256,mapping_sha256,metric_code,metric_contract_version,
+        period_type,period_end_exclusive,period_semantics,dimension_digest,
+        dimensions_jsonb,observation_key_sha256,value_kind,value_state,
+        numeric_value,unit_code,currency_code,canonical_value_sha256)
+      SELECT period_start,?,factset_id,source_revision_id,
+        source_form_code,source_form_version_id,'COST-ROW','cogs',
+        source_content_sha256,mapping_sha256,'F02.cogs',metric_contract_version,
+        period_type,period_end_exclusive,period_semantics,dimension_digest,
+        dimensions_jsonb,?,'NUMERIC','PRESENT',100.00,unit_code,currency_code,?
+      FROM fin_fact.fact_observation
+      WHERE factset_id=? AND metric_code='F02.netRevenue' LIMIT 1
+      """,UUID.randomUUID(),sha("COST-KEY:"+f.factset()),sha("COST-VALUE:100.00"),
+      f.factset());
+    var ratio=jdbc.queryForObject("""
+      SELECT ratio FROM fin_calc.candidate_ratio_of_sums(
+        ?::uuid,?::uuid,?::varchar,?::varchar,?::varchar,
+        ?::date,?::date,?::char(64),?::varchar,?::char(3))
+      """,BigDecimal.class,f.org(),f.factset(),"F02",
+      "F02.netRevenue","F02.cogs",f.start(),f.end(),f.dimension(),"KZT","KZT");
+    assertNotNull(ratio);
+    assertEquals(0,new BigDecimal("2").compareTo(ratio));
+    assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM fin_calc.calc_result",Integer.class));
+  }
+
 }
