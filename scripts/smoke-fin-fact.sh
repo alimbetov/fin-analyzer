@@ -16,7 +16,7 @@ FIN smoke (macOS/Linux; run from any directory)
   bash scripts/smoke-fin-fact.sh            # 8 essential PostgreSQL cases
   bash scripts/smoke-fin-fact.sh --quick    # same
   bash scripts/smoke-fin-fact.sh --forms    # 169 PG tests: all 166 forms individually + 3 integrity tests
-  bash scripts/smoke-fin-fact.sh --extended # 205 PG tests incl. 11 CALC-R0.1 cases + 018->022 upgrade
+  bash scripts/smoke-fin-fact.sh --extended # 207 PG tests incl. 13 CALC-R0.1 cases + 018->022 upgrade
   bash scripts/smoke-fin-fact.sh --unit     # 32 Java unit tests incl. FACT-1.A1; no Docker
 
 Requires JDK 21 and Maven. --quick/--extended need Docker Desktop/Engine.
@@ -80,7 +80,7 @@ case "$mode" in
     ;;
   extended)
     selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,FactR0PostgresqlUpgradeTest"
-    expected=205
+    expected=207
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
 esac

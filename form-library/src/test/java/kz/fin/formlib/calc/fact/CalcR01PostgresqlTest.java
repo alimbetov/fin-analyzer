@@ -241,26 +241,59 @@ class CalcR01PostgresqlTest {
           """,String.class,eventId(f)));
   }
 
+  /** Simulates an inserted duplicate with a NEW decision ID, never a valid receipt. */
+  private UUID forgedEvent(Fixture f){
+    UUID original=eventId(f);
+    sql.update("""
+        UPDATE fin_calc.calc_outbox_event
+        SET next_attempt_at=now()+interval '1 day' WHERE id=?
+        """,original);
+    UUID fake=UUID.randomUUID();
+    assertEquals(1,sql.update("""
+        INSERT INTO fin_calc.calc_outbox_event(
+          id,organization_id,scope_key,producer,producer_event_id,
+          event_type,payload_jsonb)
+        SELECT ?,organization_id,scope_key,producer,?,event_type,payload_jsonb
+        FROM fin_calc.calc_outbox_event WHERE id=?
+        """,fake,UUID.randomUUID().toString(),original));
+    return fake;
+  }
+
   @Test void r01_06TamperedEventCannotEnqueueOrAcknowledge(){
     var f=fresh();
-    UUID id=eventId(f);
-    try{
-      sql.update("""
-          UPDATE fin_calc.calc_outbox_event
-          SET payload_jsonb=jsonb_set(payload_jsonb,'{factsetSha256}',
-              to_jsonb(?::text)) WHERE id=?
-          ""","a".repeat(64),id);
-      assertEquals("CALC_R01_EVENT_BINDING_MISMATCH",
-          assertThrows(IllegalArgumentException.class,
-              ()->dispatcher.dispatchBatch(32)).getMessage());
-      assertEquals(0,count("fin_calc.calc_plan",f.slot.org));
-      assertEquals(0,count("fin_calc.calc_job",f.slot.org));
-      assertNull(sql.queryForObject("""
-          SELECT processed_at FROM fin_calc.calc_outbox_event WHERE id=?
-          """,java.time.OffsetDateTime.class,id));
-    }finally{
-      sql.update("UPDATE fin_calc.calc_outbox_event SET next_attempt_at=now()+interval '5 years' WHERE id=?",id);
-    }
+    UUID original=eventId(f);
+    // Identity, payload, DELETE, and TRUNCATE are DB-level immutable
+    // independent of the Java dispatcher. Metadata requeue remains allowed.
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            UPDATE fin_calc.calc_outbox_event SET
+            payload_jsonb=jsonb_set(payload_jsonb,'{factsetSha256}',to_jsonb(?::text))
+            WHERE id=?
+            ""","a".repeat(64),original));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("""
+            UPDATE fin_calc.calc_outbox_event SET producer_event_id=? WHERE id=?
+            """,UUID.randomUUID().toString(),original));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->
+        sql.update("DELETE FROM fin_calc.calc_outbox_event WHERE id=?",original));
+
+    // A FORGED new event cannot pass the independently stored decision receipt.
+    UUID fake=forgedEvent(f);
+    var report=dispatcher.dispatchBatch(8);
+    assertEquals(1,report.deferred());
+    assertEquals(0,report.processed());
+    assertEquals(0,count("fin_calc.calc_plan",f.slot.org));
+    assertEquals(0,count("fin_calc.calc_job",f.slot.org));
+    assertNull(sql.queryForObject("""
+        SELECT processed_at FROM fin_calc.calc_outbox_event WHERE id=?
+        """,java.time.OffsetDateTime.class,fake));
+    assertEquals("CALC_R01_EVENT_BINDING_MISMATCH",
+        sql.queryForObject("""
+            SELECT last_error_code FROM fin_calc.calc_outbox_event WHERE id=?
+            """,String.class,fake));
+    assertEquals(1,sql.queryForObject("""
+        SELECT failure_count FROM fin_calc.calc_outbox_event WHERE id=?
+        """,Integer.class,fake));
   }
 
   @ParameterizedTest
@@ -293,6 +326,54 @@ class CalcR01PostgresqlTest {
         SELECT count(*) FROM fin_calc.calc_outbox_event
         WHERE organization_id=? AND processed_at IS NOT NULL
         """,Integer.class,f.slot.org));
+  }
+
+  @Test void r01_10PersistentPoisonEventMovesToQuarantineWithoutAck(){
+    var f=fresh();
+    UUID fake=forgedEvent(f);
+    for(int i=1;i<=5;i++){
+      // Simulate passage of backoff time, without waiting wall-clock minutes.
+      sql.update("UPDATE fin_calc.calc_outbox_event SET next_attempt_at=now() WHERE id=?",fake);
+      var report=dispatcher.dispatchBatch(8);
+      assertEquals(0,report.processed());
+      assertEquals(i==5?1:0,report.quarantined());
+      assertEquals(i==5?0:1,report.deferred());
+      assertEquals(i,sql.queryForObject("""
+          SELECT failure_count FROM fin_calc.calc_outbox_event WHERE id=?
+          """,Integer.class,fake));
+    }
+    assertNotNull(sql.queryForObject("""
+        SELECT quarantined_at FROM fin_calc.calc_outbox_event WHERE id=?
+        """,java.time.OffsetDateTime.class,fake));
+    assertNull(sql.queryForObject("""
+        SELECT processed_at FROM fin_calc.calc_outbox_event WHERE id=?
+        """,java.time.OffsetDateTime.class,fake));
+    assertEquals(0,dispatcher.dispatchBatch(8).rejected(),
+        "Quarantined events must not enter the hot poll loop");
+    assertEquals(0,count("fin_calc.calc_job",f.slot.org));
+    assertEquals(0,count("fin_calc.calc_plan",f.slot.org));
+  }
+
+  @Test void r01_11HealthyEventBehindPoisonIsProcessedInSameBatch(){
+    var broken=fresh();
+    UUID fake=forgedEvent(broken);
+    var healthy=fresh();
+    var result=dispatcher.dispatchBatch(8);
+    assertEquals(1,result.deferred());
+    assertEquals(1,result.planned());
+    assertEquals(1,result.processed());
+    assertEquals(0,count("fin_calc.calc_job",broken.slot.org));
+    assertEquals(1,count("fin_calc.calc_job",healthy.slot.org));
+    assertEquals(1,count("fin_calc.calc_plan",healthy.slot.org));
+    assertEquals(1,sql.queryForObject("""
+        SELECT failure_count FROM fin_calc.calc_outbox_event WHERE id=?
+        """,Integer.class,fake));
+    assertNull(sql.queryForObject("""
+        SELECT processed_at FROM fin_calc.calc_outbox_event WHERE id=?
+        """,java.time.OffsetDateTime.class,fake));
+    assertNotNull(sql.queryForObject("""
+        SELECT processed_at FROM fin_calc.calc_outbox_event WHERE id=?
+        """,java.time.OffsetDateTime.class,eventId(healthy)));
   }
 
   @Test void r01_09DisabledDefaultRejectsDispatch(){
