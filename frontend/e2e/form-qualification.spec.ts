@@ -63,6 +63,7 @@ function dbRead(receipt:Receipt & {revisionId:string}){
 
 async function openForm(page:Page,root:string,code:string){
   await page.goto('/');
+  await page.getByRole('button',{name:/Категории/}).click({timeout:budget});
   await page.getByRole('button',{name:root,exact:true}).and(page.locator('.group-select')).click({timeout:budget});
   await page.getByPlaceholder('Код или название...').fill(code,{timeout:budget});
   await page.locator('.form-list-item').filter({has:page.locator('small').filter({
@@ -73,7 +74,7 @@ async function openForm(page:Page,root:string,code:string){
 async function save(page:Page){
   const [response] = await Promise.all([
     page.waitForResponse(r=>r.url().endsWith('/api/v1/drafts')&&r.request().method()==='POST',{timeout:budget}),
-    page.getByRole('button',{name:'Сохранить ревизию'}).click({timeout:budget})
+    page.getByRole('button',{name:'Сохранить',exact:true}).click({timeout:budget})
   ]);
   expect(response.status(),await response.text()).toBe(200);
   const receipt:Receipt & {revisionId:string} = await response.json();
