@@ -1,6 +1,0 @@
-form_code	operation_code	output_code	numerator_metric_code	denominator_metric_code
-F02	RATIO_OF_SUMS	cogsToRevenueCandidate	F02.cogs	F02.netRevenue
-C07	GROUP_BY	grossSalesGroupedCandidate	C07.grossSales	
-C07	GROUP_BY	returnsGroupedCandidate	C07.returns	
-C07	RATIO_OF_SUMS	returnsShareCandidate	C07.returns	C07.grossSales
-C09	GROUP_BY	expenseAmountGroupedCandidate	C09.amount	
