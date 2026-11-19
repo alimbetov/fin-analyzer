@@ -3,11 +3,12 @@ import type {KeyboardEvent as ReactKeyboardEvent} from 'react';
 import {ChevronRight,Clock3,Download,X} from 'lucide-react';
 import type {Draft,Field} from './api';
 import {get,request} from './api';
+import {historyValues} from './revisionView';
 
 type HistoricalDraft=Draft&{attachment?:{fileName:string;sizeBytes:number;sha256:string}|null};
-type Props={instanceId:string;organizationId:string;projectId:string;latestRevision:number;fields:Field[];onClose:()=>void};
+type Props={instanceId:string;organizationId:string;projectId:string;latestRevision:number;formVersion:string;fields:Field[];onClose:()=>void};
 
-export default function RevisionDrawer({instanceId,organizationId,projectId,latestRevision,fields,onClose}:Props){
+export default function RevisionDrawer({instanceId,organizationId,projectId,latestRevision,formVersion,fields,onClose}:Props){
   const [selected,setSelected]=useState(latestRevision);
   const [revision,setRevision]=useState<HistoricalDraft|null>(null);
   const [loading,setLoading]=useState(true);
@@ -69,13 +70,14 @@ export default function RevisionDrawer({instanceId,organizationId,projectId,late
       </nav>
       <section className="history-content" aria-live="polite">
         {loading?<p role="status">Загрузка редакции…</p>:error?<p role="alert">{error}</p>:revision&&<>
-          <div className="history-meta"><strong>Редакция {revision.revisionNo}</strong><span>{revision.periodCode} · {revision.currency}</span></div>
+          <div className="history-meta"><strong>Редакция {revision.revisionNo}</strong><span>{revision.periodCode} · {revision.currency} · контракт {revision.formVersion}</span></div>
+          {revision.formVersion!==formVersion&&<p className="history-version-notice">Версия контракта отличается от текущей. Показаны исходные коды и значения без подстановки новых названий.</p>}
           <div className="history-fields">
-            {revision.contentMode!=='ROWSET'&&fields.map(field=><div key={field.fieldCode}><span>{field.title||field.fieldCode}</span>
-              <strong>{revision.values[field.fieldCode]||'—'}</strong></div>)}
+            {revision.contentMode!=='ROWSET'&&historyValues(revision.values,fields,revision.formVersion===formVersion).map(field=><div key={field.fieldCode}><span>{field.label}</span>
+              <strong>{field.value||'—'}</strong></div>)}
             {revision.rows.length>0&&<div className="history-rowset"><strong>Табличные строки: {revision.rows.length}</strong>
               {revision.rows.map((row,index)=><details key={row.rowId}><summary>Строка {index+1} <ChevronRight size={14}/></summary>
-                {fields.map(field=><p key={field.fieldCode}>{field.title||field.fieldCode}: {row.values[field.fieldCode]||'—'}</p>)}
+                {historyValues(row.values,fields,revision.formVersion===formVersion).map(field=><p key={field.fieldCode}>{field.label}: {field.value||'—'}</p>)}
               </details>)}</div>}
           </div>
           {downloadError&&<p role="alert" className="history-download-error">{downloadError}</p>}
