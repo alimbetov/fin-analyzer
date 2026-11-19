@@ -7,7 +7,7 @@
 
 ## 1. Scope and non-goals
 
-R1 introduces **one typed caching port** and optional Redis adapter to reduce repeated execution of **already trusted, immutable computational values**. It does not change PostgreSQL as source of truth, planner correctness, execution fingerprint, lease/fencing, qualified FactSet admission or immutable result schema. R1 adds **node-value Caffeine** beyond R0 descriptor/graph Caffeine, without inserting tenant financial values into `CatalogReadCache`.
+R1 introduces **one typed caching port** and optional Redis adapter to reduce repeated execution of **already trusted, immutable computational values**. **Prerequisite:** R0 `fin_fact.fact_set` + `fact_observation` are physically committed and read by QualifiedFactReader; cache must never fall back to raw `fin_intake` draft JSON to fill a missing qualified observation. It does not change PostgreSQL as source of truth, planner correctness, execution fingerprint, lease/fencing, qualified FactSet admission or immutable result schema. R1 adds **node-value Caffeine** beyond R0 descriptor/graph Caffeine, without inserting tenant financial values into `CatalogReadCache`.
 
 - New `CalculationCache` port; `CaffeineNodeValueCache`, `RedisNodeValueCache`, `NoopNodeValueCache`, `TieredCalculationCache`.
 - Redis disabled by default; startup with no Redis endpoint must be GREEN, and fallback must remain correct.
