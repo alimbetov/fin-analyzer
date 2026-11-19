@@ -694,7 +694,7 @@ export default function App(){
           </section>}
         </div>
         </>}
-        {historyOpen&&draft&&<RevisionDrawer instanceId={draft.instanceId} organizationId={draft.organizationId} projectId={draft.projectId} latestRevision={draft.revisionNo} fields={fields} onClose={()=>setHistoryOpen(false)}/>}
+        {historyOpen&&draft&&<RevisionDrawer instanceId={draft.instanceId} organizationId={draft.organizationId} projectId={draft.projectId} latestRevision={draft.revisionNo} formVersion={form?.form.version??''} fields={fields} onClose={()=>setHistoryOpen(false)}/>}
         <footer className="disclaimer"><AlertTriangle size={15}/> Локальный стенд. Backend без Security: не публикуйте порт 8086 в сеть и не используйте реальные финансовые данные.</footer>
       </main>
     </div>
