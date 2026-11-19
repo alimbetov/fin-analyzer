@@ -85,7 +85,11 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
     List<Formula> formulas = sql.query("""
         SELECT id,form_code,form_version_id,source_schema_sha256,
           output_metric_code,source_metrics_jsonb::text
-        FROM fin_calc.formula_contract_revision ORDER BY output_metric_code
+        FROM fin_calc.formula_contract_revision c
+        JOIN fin_lib.lib_form_definition f ON f.current_version_id=c.form_version_id
+        WHERE c.formula_version IN ('F01_CANDIDATE_V1','F02_TEST_ONLY_V1',
+          'F03_CANDIDATE_V1','CALC154_CANDIDATE_V1')
+        ORDER BY c.output_metric_code
         """,(r,i)->new Formula(r.getObject(1,UUID.class),r.getString(2),
           r.getObject(3,UUID.class),r.getString(4),r.getString(5),r.getString(6)));
     if (formulas.size()!=10) throw new IllegalStateException("CALC3B_EXPECT_10_FORMULAS");
@@ -123,10 +127,6 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
   }
 
   private void seedRequirements(List<FormVersion> numeric){
-    Integer current=sql.queryForObject(
-        "SELECT count(*) FROM fin_calc.form_calculation_requirement_revision",Integer.class);
-    if (current==null || current!=0 && current!=154)
-      throw new IllegalStateException("CALC3B_PARTIAL_FORM_REQUIREMENTS");
     String insert="""
         INSERT INTO fin_calc.form_calculation_requirement_revision(
           id,form_code,form_version_id,source_schema_sha256,requirement_version,
@@ -135,22 +135,33 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
         VALUES(?,?,?,?,'CALC3B_REVIEW_V1','REVIEW_REQUIRED',NULL,?,
           'NOT_S2_APPROVED',?,?)
         """;
-    if(current==0) {
-      List<Object[]> rows=new ArrayList<>();
-      for(var v:numeric){
+    // Seed by exact form-version key. Historical requirement revisions and
+    // independently authored review drafts are not overwritten or counted.
+    List<Object[]> rows=new ArrayList<>();
+    for(var v:numeric){
+      Integer exists=sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.form_calculation_requirement_revision
+        WHERE form_version_id=? AND requirement_version=?
+        """,Integer.class,v.id(),VERSION);
+      if(exists==null||exists>1)
+        throw new IllegalStateException("CALC3B_DUPLICATE_REQUIREMENT:"+v.code());
+      if(exists==0){
         String source=sha("CALC3B-REQUIREMENT-V1|"+v.code()+"|REVIEW_REQUIRED|"+BLOCKERS);
         String bind=sha("CALC3B-REQUIREMENT-BIND-V1|"+v.id()+"|"+v.schema()+"|"+source);
         rows.add(new Object[]{UUID.randomUUID(),v.code(),v.id(),v.schema(),BLOCKERS,source,bind});
       }
-      sql.batchUpdate(insert,rows);
     }
+    if(!rows.isEmpty())sql.batchUpdate(insert,rows);
 
     var saved=sql.query("""
         SELECT form_code,form_version_id,source_schema_sha256,
           requirement_version,mandatory_output_state,mandatory_outputs_jsonb IS NULL,
           obligation_blockers,approval_state,source_definition_sha256,binding_sha256
-        FROM fin_calc.form_calculation_requirement_revision
-        """,(r,i)->new String[]{r.getString(1),r.getObject(2,UUID.class).toString(),
+        FROM fin_calc.form_calculation_requirement_revision r
+        JOIN fin_lib.lib_form_definition f ON f.form_code=r.form_code
+          AND f.current_version_id=r.form_version_id
+        WHERE r.requirement_version='CALC3B_REVIEW_V1'
+        "",(r,i)->new String[]{r.getString(1),r.getObject(2,UUID.class).toString(),
           r.getString(3),r.getString(4),r.getString(5),String.valueOf(r.getBoolean(6)),
           r.getString(7),r.getString(8),r.getString(9),r.getString(10)});
     if(saved.size()!=154)throw new IllegalStateException("CALC3B_FORM_REQUIREMENT_COUNT_DRIFT");
@@ -171,8 +182,13 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
 
   private void seedTypedInputs(List<Formula> formulas,Map<String,Formula> byOutput,
       Map<String,Physical> byMetric) throws Exception{
-    Integer existing=sql.queryForObject(
-        "SELECT count(*) FROM fin_calc.formula_typed_input_binding",Integer.class);
+    Integer existing=sql.queryForObject("""
+        SELECT count(*) FROM fin_calc.formula_typed_input_binding i
+        JOIN fin_calc.formula_contract_revision c ON c.id=i.formula_revision_id
+        JOIN fin_lib.lib_form_definition f ON f.current_version_id=c.form_version_id
+        WHERE c.formula_version IN ('F01_CANDIDATE_V1','F02_TEST_ONLY_V1',
+          'F03_CANDIDATE_V1','CALC154_CANDIDATE_V1')
+        """,Integer.class);
     if(existing==null || existing!=0 && existing!=21)
       throw new IllegalStateException("CALC3B_FORMULA_INPUT_PARTIAL");
     List<Object[]> inserts=new ArrayList<>();
@@ -222,7 +238,11 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
         SELECT formula_revision_id,ordinal,source_metric_code,source_kind,
           source_form_version_id,source_schema_sha256,source_field_code,field_type,
           source_formula_revision_id,binding_sha256,requiredness_state
-        FROM fin_calc.formula_typed_input_binding
+        FROM fin_calc.formula_typed_input_binding i
+        JOIN fin_calc.formula_contract_revision c ON c.id=i.formula_revision_id
+        JOIN fin_lib.lib_form_definition f ON f.current_version_id=c.form_version_id
+        WHERE c.formula_version IN ('F01_CANDIDATE_V1','F02_TEST_ONLY_V1',
+          'F03_CANDIDATE_V1','CALC154_CANDIDATE_V1')
         """,(r,i)->new Object[]{r.getObject(1,UUID.class),r.getInt(2),r.getString(3),
           r.getString(4),r.getObject(5,UUID.class),r.getString(6),r.getString(7),
           r.getString(8),r.getObject(9,UUID.class),r.getString(10),r.getString(11)});
