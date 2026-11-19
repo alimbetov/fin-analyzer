@@ -8,6 +8,7 @@ import {test,expect,type Page} from '@playwright/test';
 
 async function selectBankFlow(page:Page){
   await page.goto('/');
+  await page.getByRole('button',{name:'Финансовые решения'}).click();
   await expect(page.locator('.kpi-header h2')).toHaveText('От вопроса — к нужным данным.');
   await expect(page.locator('.kpi-goal-option')).toHaveCount(7);
   const bank=page.locator('.kpi-goal-option').filter({hasText:'Подготовка к кредитованию'});
@@ -41,12 +42,12 @@ test('FIN UX-R1.1: question → metric → source F02 → PostgreSQL revision �
   await netRevenue.fill('125000.45');
   await cogs.fill('60000.20');
   await operating.fill('15000.00');
-  await expect(page.getByRole('button',{name:'Сохранить ревизию'})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Сохранить',exact:true})).toBeEnabled();
 
   const saveResponse=page.waitForResponse(response=>
     response.url().includes('/api/v1/drafts') &&
     response.request().method()==='POST');
-  await page.getByRole('button',{name:'Сохранить ревизию'}).click();
+  await page.getByRole('button',{name:'Сохранить',exact:true}).click();
   const response=await saveResponse;
   expect(response.status()).toBe(200);
   const receipt=await response.json() as {
@@ -74,7 +75,8 @@ test('FIN UX-R1.1: question → metric → source F02 → PostgreSQL revision �
   expect(Number(snapshot.values.cogs)).toBe(60000.2);
   expect(Number(snapshot.values.operatingExpenses)).toBe(15000);
 
-  await page.getByRole('button',{name:'Открыть по UUID (сверить ревизию)'}).click();
+  await page.getByText('Дополнительные настройки и инструменты').click();
+  await page.getByRole('button',{name:'Проверить запись по UUID'}).click();
   await expect(page.locator('.editor-footer')).toContainText('Открыта ревизия 1');
   await expect(netRevenue).toHaveValue('125000.45');
   await expect(cogs).toHaveValue(snapshot.values.cogs);
@@ -109,11 +111,12 @@ test('FIN UX-R1.1: unsaved edits cannot be discarded by switching tree branches 
   await page.locator('.nav-line').filter({hasText:'Библиотека форм'}).first().click();
   await expect(page.locator('#field-netRevenue')).toHaveValue('99123');
   await expect(page.locator('.editor-head')).toContainText('F02');
-  await expect(page.getByRole('button',{name:'Сохранить ревизию'})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Сохранить',exact:true})).toBeEnabled();
 });
 
 test('FIN UX-R1.1: keyboard-only selection, expand/collapse and form opening',async({page})=>{
   await page.goto('/');
+  await page.getByRole('button',{name:'Финансовые решения'}).click();
   const bank=page.locator('.kpi-goal-option').filter({hasText:'Подготовка к кредитованию'});
   await bank.focus();
   await page.keyboard.press('Enter');
