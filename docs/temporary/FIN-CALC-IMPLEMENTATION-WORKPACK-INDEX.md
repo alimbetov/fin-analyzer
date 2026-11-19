@@ -3,15 +3,15 @@
 **Branch:** `feat/fin-form-library-standalone`  
 **State:** DRAFT SPECIFICATIONS ONLY. Java/SQL/Redis implementation and benchmarks remain NOT EXECUTED until separately verified.  
 **Canonical architecture:** [FIN CALC-R0 master ТЗ](../FIN-CALC-R0-INCREMENTAL-CALCULATION-ARCHITECTURE-TZ.md).  
-**S1 findings:** [Architecture review](../audits/FIN-CALC-R0-S1-ARCHITECTURE-REVIEW-2026-11-19.md), [Source→Fact data-flow audit](../audits/FIN-CALC-R0-S1-SOURCE-FACT-CALC-FLOW-REVIEW-2026-11-19.md).  
-**Source matrices:** [166 forms](../FIN-CALC-R0-COVERAGE-166-BASELINE.tsv), [794 candidate fields](../FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv).
+**S1 findings:** [Architecture review](../audits/FIN-CALC-R0-S1-ARCHITECTURE-REVIEW-2026-11-19.md), [Source→Fact data-flow audit](../audits/FIN-CALC-R0-S1-SOURCE-FACT-CALC-FLOW-REVIEW-2026-11-19.md), [S1B partitioning and 166-form re-review](../audits/FIN-CALC-R0-S1B-PARTITIONED-166-INGESTION-REVIEW-2026-11-19.md).  
+**Source matrices:** [166 forms](../FIN-CALC-R0-COVERAGE-166-BASELINE.tsv), [794 candidate fields](../FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv), [166-form ingestion strategy matrix](../FIN-FACT-R0-166-FORM-INGESTION-COVERAGE.tsv).
 
 ## Execution order and gates
 
 | Stage | Code-level TЗ | Core implementation | DoD / no-go |
 |---|---|---|---|
-| **CALC-R0** | [R0 code-level](./FIN-CALC-R0-CODE-LEVEL-TZ.md) + [Source→Fact contract](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md) | F02 typed DAG, **pinned JSON→3 typed fin_fact observations**, exact TEST_ONLY qualified FactSet, PostgreSQL outbox/queue, bounded multithreaded workers + immutable results + Caffeine descriptor/DAG L1 | PostgreSQL 16 migrations 001–020 + STF-01–STF-16 + A01–A25/A27/A29–A31 + Java/React E2E on one SHA; no real S2 |
-| **CALC-R1** | [R1 code-level](./FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md) | `CalculationCache` port, Caffeine node values L1, optional Redis L2 OFF by default, pg/CPU fallback | Cache failure ≡ correct output; no cross-tenant leak; no Redis dependency for app correctness |
+| **CALC-R0** | [R0 code-level](./FIN-CALC-R0-CODE-LEVEL-TZ.md) + [Source→Fact](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md) + [Partitioned fin_fact/166 forms](./FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md) | F02 typed DAG, pinned JSON→**monthly-partitioned** typed observations, TEST_ONLY FactSet, PostgreSQL queue, multithreaded workers and Caffeine descriptors | PG16 001–020, STF-01–16, PFT-01–18, A01–A25/A27/A29–A34, Java/React E2E GREEN on one SHA; no production S2 |
+| **CALC-R1** | [R1 code-level](./FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md) | `CalculationCache` port, Caffeine node values L1, optional Redis L2 OFF by default; **R1-INGEST** adds ROWSET/EVIDENCE and later ReportGrid adapters with reviewed field semantics | Cache failure ≡ correct output; per-form mapping E2E separately, no automatic S2 or source mixing |
 | **CALC-R2** | [R2 code-level](./FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md) | Reproducible OFF/L1/L1+L2 benchmark, exact fixture SHAs, performance + correctness report | Enable Redis **only** after measured benefit; `KEEP_DISABLED_NO_GAIN` is a valid outcome |
 
 **Do not start R1 before accepted R0; do not start R2 before R1 correctness GREEN.** Distinguish architecture test-only acceptance from production financial approval.
@@ -26,6 +26,7 @@
 6. **Test-only issuer is not S2.** Real production S2, IAM/ABAC, external authority linearization and historical source append-only gates stay HOLD until independently proven.
 7. **Exact source versions and persisted fact boundary:** `FormDraftService` transactional save; `fin_intake.lib_form_revision.values_json` TEXT JSON, F02 `FIN-FORM-V2` resolved to actual UUID, 166 form codes, 794 R6 candidate fields. **SourceFactAssembler and TX-Q (fin_fact fact_set/observation/control) mandatory for qualified E2E**; workers never fall back to draft JSON. Existing `CatalogReadCache` is public-only and must not contain tenant financial data.
 8. **No early infrastructure:** Kafka, MongoDB, Flink, ClickHouse and Redis distributed locks are outside these stages.
+9. **166 forms do not mean 166 numeric mappers or 166 partitions:** 3 SINGLE_RECORD, 151 ROWSET, 12 EVIDENCE. Use 3 source strategies, reviewed per-formVersion mapping and monthly `RANGE(period_start)` partitioned numeric observations. Header/control unpartitioned. No automatic DROP of historical facts or SQL MERGE updates.
 
 ## Codex implementation handoff format
 
