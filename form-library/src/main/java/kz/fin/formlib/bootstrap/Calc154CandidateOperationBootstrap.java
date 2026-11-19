@@ -26,13 +26,13 @@ import java.util.Set;
  * populated by ApplicationRunner later. This runner has order 6, after
  * CatalogBootstrap (1) and FieldMetricContractBootstrap (5).
  *
- * Only five UNQUALIFIED proposals are persisted; no method_revision,
+ * Only five UNQUALIFIED proposals are derived from the canonical formula\n * contract source and persisted; no method_revision,
  * CalcPlan, job, fact or result can be produced by this class.
  */
 @Component
 @Order(6)
 public class Calc154CandidateOperationBootstrap implements ApplicationRunner {
-  private static final String RESOURCE = "catalog/calc154-operation-candidates-r0.tsv";
+  private static final String RESOURCE = "catalog/calc154-formula-contracts-v1.tsv";
   private final JdbcTemplate jdbc;
 
   public Calc154CandidateOperationBootstrap(JdbcTemplate jdbc) {
@@ -48,21 +48,26 @@ public class Calc154CandidateOperationBootstrap implements ApplicationRunner {
     try (var reader = new BufferedReader(new InputStreamReader(
         new ClassPathResource(RESOURCE).getInputStream(), StandardCharsets.UTF_8))) {
       String header = reader.readLine();
-      if (!"form_code\toperation_code\toutput_code\tnumerator_metric_code\tdenominator_metric_code"
+      if (!"form_code\toutput_metric_code\tsource_metrics\toperation\tformula_version\tstatus\tblocker\tperiod_semantics\tdimension_policy\tcurrency_policy\tunit_policy\trounding_policy\tmissing_policy\tzero_policy\tsource_evidence"
           .equals(header))
         throw new IllegalStateException("CALC154_CANDIDATE_HEADER_DRIFT");
       String line;
       while ((line = reader.readLine()) != null) {
         if (line.isBlank()) continue;
         String[] a = line.split("\t", -1);
-        if (a.length != 5) throw new IllegalStateException("CALC154_CANDIDATE_COLUMNS");
-        String denominator = a[4].isBlank() ? null : a[4];
-        Proposal p = new Proposal(a[0], a[1], a[2], a[3], denominator);
+        if (a.length != 15) throw new IllegalStateException("CALC154_CANDIDATE_COLUMNS");
+        if (!Set.of("GROUP_BY","RATIO_OF_SUMS").contains(a[3])) continue;
+        if (!a[1].startsWith(a[0] + "."))
+          throw new IllegalStateException("CALC154_CANDIDATE_OUTPUT_IDENTITY");
+        String[] sources = a[2].split(";", -1);
+        if (sources.length != ("GROUP_BY".equals(a[3]) ? 1 : 2)
+            || !"CANDIDATE_UNQUALIFIED".equals(a[5]))
+          throw new IllegalStateException("CALC154_CANDIDATE_SHAPE");
+        Proposal p = new Proposal(a[0], a[3], a[1].substring(a[0].length()+1),
+            sources[0], sources.length == 2 ? sources[1] : null);
         if (!identities.add(p.form() + "|" + p.operation() + "|" + p.output()))
           throw new IllegalStateException("CALC154_DUPLICATE_CANDIDATE");
-        if (!Set.of("GROUP_BY", "RATIO_OF_SUMS").contains(p.operation())
-            || (p.operation().equals("GROUP_BY") != (p.denominator() == null))
-            || p.numerator().equals(p.denominator()))
+        if (p.numerator().equals(p.denominator()))
           throw new IllegalStateException("CALC154_CANDIDATE_OPERATION_INVALID");
         entries.add(p);
       }
