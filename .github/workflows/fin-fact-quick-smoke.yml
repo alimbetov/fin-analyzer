@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   fact-smoke:
-    name: 8 isolated INGEST/FACT/CALC smoke checks
+    name: 9 isolated INGEST/FACT/CALC smoke checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

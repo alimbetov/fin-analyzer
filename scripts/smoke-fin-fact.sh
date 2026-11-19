@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # FIN FACT local/CI smoke for Java 21 + PostgreSQL 16 Testcontainers.
-# Does not require React, public API, Keycloak, Redis, worker or financial S2.
+# Runs an isolated synthetic F02 worker in test only; no public API, Keycloak, Redis or financial S2.
 # Synthetic test data lives only in disposable Testcontainers databases.
 set -Eeuo pipefail
 
@@ -13,11 +13,11 @@ case "${1:---quick}" in
   -h|--help)
     cat <<'HELP'
 FIN smoke (macOS/Linux; run from any directory)
-  bash scripts/smoke-fin-fact.sh            # 8 essential PostgreSQL cases
+  bash scripts/smoke-fin-fact.sh            # 9 essential PostgreSQL cases
   bash scripts/smoke-fin-fact.sh --quick    # same
   bash scripts/smoke-fin-fact.sh --forms    # 169 PG tests: all 166 forms individually + 3 integrity tests
-  bash scripts/smoke-fin-fact.sh --extended # 207 PG tests incl. 13 CALC-R0.1 cases + 018->022 upgrade
-  bash scripts/smoke-fin-fact.sh --unit     # 32 Java unit tests incl. FACT-1.A1; no Docker
+  bash scripts/smoke-fin-fact.sh --extended # 220 PG tests incl. 13 CALC-R0.2 cases + 018->023 upgrade
+  bash scripts/smoke-fin-fact.sh --unit     # 38 Java unit tests incl. F02 calculation kernel; no Docker
 
 Requires JDK 21 and Maven. --quick/--extended need Docker Desktop/Engine.
 Testcontainers manages a disposable PG16; no local database or full FIN stack.
@@ -64,13 +64,13 @@ fi
 # Never touch Compose volumes or issue DROP/TRUNCATE against any real FIN DB.
 case "$mode" in
   unit)
-    selector="FormContentFingerprintTest,FormFactCandidateExtractorTest,FormFactSourceReaderTest,F02CandidateMappingTest"
-    expected=32
+    selector="FormContentFingerprintTest,FormFactCandidateExtractorTest,FormFactSourceReaderTest,F02CandidateMappingTest,F02CalculationKernelTest"
+    expected=38
     options=()
     ;;
   quick)
-    selector="Ingest2PostgresqlIntegrityTest#f02ExactHistoricalRevisionIsVerifiedNotLatest,FactR0PostgresqlPartitionTest#partitionedSchemaIsPresentWithCompositePrimaryKeyAndNoDefault+octoberAndNovemberRowsRouteToSeparatePartitionsAndCannotChange+planAndSourceCannotCrossScopeOrAlterVerifiedHistoricalRevision,Fact1F02TestOnlyQualificationTest#f02ExactVerifiedRevisionCreatesThreeFactsAndOneOutbox+atomicTxRollsBackAllThreeFactsAndTrustedEventOnFault,Fact1BUatCommitterPostgresqlTest#qf11OneAtomicFactSetAndThreeExactObservationsPlusOutbox,CalcR01PostgresqlTest#r01_01PublishedUatFactsetCreatesPlanAndReadyJobWithExactFingerprint"
-    expected=8
+    selector="Ingest2PostgresqlIntegrityTest#f02ExactHistoricalRevisionIsVerifiedNotLatest,FactR0PostgresqlPartitionTest#partitionedSchemaIsPresentWithCompositePrimaryKeyAndNoDefault+octoberAndNovemberRowsRouteToSeparatePartitionsAndCannotChange+planAndSourceCannotCrossScopeOrAlterVerifiedHistoricalRevision,Fact1F02TestOnlyQualificationTest#f02ExactVerifiedRevisionCreatesThreeFactsAndOneOutbox+atomicTxRollsBackAllThreeFactsAndTrustedEventOnFault,Fact1BUatCommitterPostgresqlTest#qf11OneAtomicFactSetAndThreeExactObservationsPlusOutbox,CalcR01PostgresqlTest#r01_01PublishedUatFactsetCreatesPlanAndReadyJobWithExactFingerprint,CalcR02PostgresqlTest#r02_01EndToEndPersistsCorrectImmutableFinancialResult
+    expected=9
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
   forms)
@@ -79,8 +79,8 @@ case "$mode" in
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
   extended)
-    selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,FactR0PostgresqlUpgradeTest"
-    expected=207
+    selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,CalcR02PostgresqlTest,FactR0PostgresqlUpgradeTest
+    expected=220
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
 esac
