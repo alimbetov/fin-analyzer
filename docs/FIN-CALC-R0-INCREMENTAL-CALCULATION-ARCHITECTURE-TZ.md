@@ -1,6 +1,6 @@
 # ТЗ FIN CALC-R0 — Incremental Calculation Architecture Foundation (FIN HTAP v2)
 
-**Статус:** SPECIFICATION HARDENED AFTER S1B PARTITIONED FACT / 166-FORM INGESTION REVIEW / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
+**Статус:** ARCHITECTURE SPECIFICATION / FACT-0 PostgreSQL 019–021 PHYSICAL FOUNDATION GREEN (27 PG tests incl upgrade); FACT-1 F02 TEST-ONLY TX-Q GREEN; CALC DAG/WORKER/PUBLICATION NOT IMPLEMENTED / FINANCIAL S2 HOLD  
 **Репозиторий:** `alimbetov/fin-analyzer`  
 **Единственная рабочая ветка:** `feat/fin-form-library-standalone`; без создания ветки, merge в `main`, изменения старых миграций или переноса старого FIN Analyzer Backend.  
 **Роль:** новая минимальная расчётная основа в standalone FIN Form Library, а не заявление о готовом production HTAP.  
@@ -173,7 +173,7 @@ Change impact:
 
 ## 5. Минимальная модель хранения (схемы `fin_calc` + `fin_fact`)
 
-R0 имеет **восемь новых таблиц**: пять `fin_calc` ниже и три `fin_fact` по CALC-FR-12. Это минимальный полный source→fact→calculate пилот, без Kafka, DWH и отдельной таблицы на каждый узел DAG. **`fin_fact.fact_observation` — месяц RANGE(period_start)**, `fact_set`/`factset_control` — обычные таблицы; точный состав PK/FK/UNIQUE и мультиформенная membership в CALC-FR-13. Старые схематичные PK из первоначального Source-to-Fact ТЗ заменены. `019-fin-calc-r0-postgresql.sql` создаёт calc-контур, `020-fin-fact-r0-pilot-postgresql.sql` — факт-контур и FK `calc_plan.factset_id → fin_fact.fact_set.id`:
+R0 имеет **восемь новых таблиц**: пять `fin_calc` ниже и три `fin_fact` по CALC-FR-12. Это минимальный полный source→fact→calculate пилот, без Kafka, DWH и отдельной таблицы на каждый узел DAG. **`fin_fact.fact_observation` — месяц RANGE(period_start)**, `fact_set`/`factset_control` — обычные таблицы; точный состав PK/FK/UNIQUE и мультиформенная membership в CALC-FR-13. Старые схематичные PK из первоначального Source-to-Fact ТЗ заменены. `019-fin-calc-r0-postgresql.sql` создаёт calc-контур, `020-fin-fact-r0-pilot-postgresql.sql` — факт-контур, `021-fin-fact-scope-source-immutability-postgresql.sql` усиливает FK `calc_plan` на `factsetId+organizationId+scope` и SQL-неизменяемость `fin_intake`. **Миграции реально внедрены и приняты PostgreSQL 16**, но CALC execution/qualification runtime ещё отсутствует:
 
 | Таблица | Минимальные поля и ограничения |
 |---|---|
@@ -253,7 +253,7 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 | A28 | Identical benchmark workloads Redis OFF vs Caffeine vs Caffeine+Redis (R2) | store p95/p99, CPU, PG load, cache hit/miss, error budget, compare exact `outputValuesSha256`, and record release decision |
 | A29 | Source-to-Fact qualification seam: test-only F02 revision | `fin_fact.fact_set` + exactly 3 typed observations + trusted event atomically committed, exact SHA/lineage |
 | A30 | Source correction, stale mapping, source SHA mismatch and out-of-order qualification | reject wrong facts/current, preserve history, no implicit draft promotion |
-| A31 | Full PostgreSQL migration 001–020, failed TX-Q, replay, source tampering and backfill discovery | STF-01–STF-16 in source-to-fact appendix GREEN; no historical checksums rewritten |
+| A31 | Full PostgreSQL migration 001–021, failed TX-Q, replay, source tampering and backfill discovery | FACT-0/FACT-1 test-only SHA/rollback/upgrade subset GREEN; complete STF-01–16 + backfill discovery remains R0.D gate; no historical checksums rewritten |
 | A32 | PostgreSQL 16 monthly fact partitions and partition maintenance | PFT-01..08: valid composite PK/UNIQUE, wrong bounds BLOCK, multi-node safe ensure, no auto-drop |
 | A33 | 166-form adapter discovery and multi-form FactSet | PFT-09..15: 3/151/12 modes, row UUID/dimensions, one multi-source dataset, source conflict blocking |
 | A34 | Fact partition/source qualification gate end-to-end | PFT-16..18: tenant-safe epoch, correct migration, 166 entries fully classified, no invented S2 |
@@ -298,7 +298,8 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 
 ### Temporary code-level implementation workpacks
 
-- `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migrations 019/020, F02 DAG, bounded workers, outbox, tests.
+- `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migrations 019/020/021, F02 DAG, bounded workers, outbox, tests.
+- `docs/audits/FIN-FACT-R0-FACT1-F02-S1-PG16-REVIEW-2026-11-19.md` — verified 27 PostgreSQL 16 tests, actual storage/upgrade vs test-only F02 TX-Q and remaining S2 HOLD.
 - `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, TX-Q and tests STF-01–STF-16.
 - `docs/temporary/FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md` — S1B: monthly PG16 partitioning, multi-form FactSets, 166-form ingestion strategies, PFT-01..18.
 - `docs/temporary/sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql` — reviewable **SQL draft only**, not included in Liquibase.
