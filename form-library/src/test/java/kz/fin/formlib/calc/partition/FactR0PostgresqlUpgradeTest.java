@@ -113,19 +113,7 @@ class FactR0PostgresqlUpgradeTest {
     migrate("db/changelog/db.changelog-master.yaml");
     var checksumsAfter=jdbc.queryForList("""
         SELECT id,author,filename,md5sum FROM databasechangelog
-        WHERE filename NOT LIKE '%019-%'
-          AND filename NOT LIKE '%020-%'
-          AND filename NOT LIKE '%021-%'
-          AND filename NOT LIKE '%022-%'
-          AND filename NOT LIKE '%023-%'
-          AND filename NOT LIKE '%024-%'
-          AND filename NOT LIKE '%025-%'
-          AND filename NOT LIKE '%026-%'
-          AND filename NOT LIKE '%027-%'
-          AND filename NOT LIKE '%028-%'
-          AND filename NOT LIKE '%029-%'
-          AND filename NOT LIKE '%030-%'
-        ORDER BY id,author,filename
+        WHERE filename ~ '/(00[1-9]|01[0-8])-'\n        ORDER BY id,author,filename
         """);
     assertEquals(originalChecksums,checksumsAfter,
         "Upgrading must not rewrite 001-018 executed checksums");
