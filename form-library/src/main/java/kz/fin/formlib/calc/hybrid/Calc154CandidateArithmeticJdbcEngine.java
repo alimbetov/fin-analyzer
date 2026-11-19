@@ -25,7 +25,7 @@ import java.util.UUID;
  * parameterized native PostgreSQL numeric SQL. Does not write fin_intake,
  * fin_fact, CalcPlan, CalcJob or CalcResult; does not grant financial S2.
  *
- * The initial pilot is five existing arithmetic candidates on F01/F02/F03,
+ * This compiler resolves authored arithmetic contracts for ANY current form version,
  * not a claim that 154 forms have approved financial formulas.
  * GROUP_BY/RATIO_OF_SUMS remain delegated to plan-bound observation readers.
  *
@@ -35,14 +35,6 @@ import java.util.UUID;
  */
 @Service
 public class Calc154CandidateArithmeticJdbcEngine {
-  private static final Map<String,String> PILOT_VERSIONS = Map.of(
-      "F01","F01_CANDIDATE_V1","F02","F02_TEST_ONLY_V1",
-      "F03","F03_CANDIDATE_V1");
-  private static final Map<String,Set<String>> PILOT_OUTPUTS = Map.of(
-      "F01",Set.of("F01.balanceResidual"),
-      "F02",Set.of("F02.grossProfit","F02.grossMargin","F02.operatingResult"),
-      "F03",Set.of("F03.cashResidual"));
-
   public record Computed(String metricCode,String status,BigDecimal value) {}
   public record CandidatePreview(String formCode,UUID formVersionId,
       String schemaSha256,String compilationSha256,String inputSha256,
@@ -75,7 +67,14 @@ public class Calc154CandidateArithmeticJdbcEngine {
   @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
   public CandidatePreview preview(String formCode,UUID exactFormVersion,
       Map<String,BigDecimal> inputValues) {
-    Compiled plan=compile(formCode,exactFormVersion);
+    return preview(formCode,exactFormVersion,resolveUniqueVersion(formCode,exactFormVersion),
+      inputValues);
+  }
+
+  @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+  public CandidatePreview preview(String formCode,UUID exactFormVersion,
+      String formulaVersion,Map<String,BigDecimal> inputValues) {
+    Compiled plan=compile(formCode,exactFormVersion,formulaVersion);
     if(inputValues==null||!inputValues.keySet().equals(
         new HashSet<>(plan.physicalInputCodes())))
       throw new IllegalArgumentException("CALC154_CANDIDATE_EXACT_INPUT_SET_REQUIRED");
@@ -106,7 +105,12 @@ public class Calc154CandidateArithmeticJdbcEngine {
 
   @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
   public Compiled compile(String formCode,UUID exactFormVersion) {
-    Graph graph=loadGraph(formCode,exactFormVersion);
+    return compile(formCode,exactFormVersion,resolveUniqueVersion(formCode,exactFormVersion));
+  }
+
+  @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+  public Compiled compile(String formCode,UUID exactFormVersion,String formulaVersion) {
+    Graph graph=loadGraph(formCode,exactFormVersion,formulaVersion);
     var inputAliases=new HashMap<String,String>();
     var selectInputs=new ArrayList<String>();
     for(int i=0;i<graph.physical().size();i++){
@@ -173,9 +177,40 @@ public class Calc154CandidateArithmeticJdbcEngine {
       graph.physical(),outputs,false);
   }
 
-  private Graph loadGraph(String formCode,UUID exactVersion){
-    if(!PILOT_VERSIONS.containsKey(formCode)||exactVersion==null)
-      throw new IllegalArgumentException("CALC154_ARITHMETIC_PILOT_ONLY");
+  /**
+   * Never select arbitrary latest formula. Multiple authored versions require
+   * an explicit formulaVersion; the default overload refuses ambiguity.
+   */
+  private String resolveUniqueVersion(String formCode,UUID exactVersion){
+    if(formCode==null||formCode.isBlank()||exactVersion==null)
+      throw new IllegalArgumentException("CALC154_FORM_IDENTITY_REQUIRED");
+    var candidates=jdbc.query("""
+      SELECT DISTINCT c.formula_version FROM fin_calc.formula_contract_revision c
+      JOIN fin_lib.lib_form_definition f ON f.form_code=c.form_code
+        AND f.current_version_id=c.form_version_id
+      WHERE c.form_code=? AND c.form_version_id=?
+        AND c.operation_code IN ('SUBTRACT','RATIO','RECONCILE','ROLL_FORWARD')
+        AND c.financial_approval_state='NOT_S2_APPROVED'
+      ORDER BY c.formula_version
+      """,(rs,i)->rs.getString(1),formCode,exactVersion);
+    if(candidates.isEmpty()){
+      Integer actual=jdbc.queryForObject("""
+        SELECT count(*) FROM fin_lib.lib_form_definition
+        WHERE form_code=? AND current_version_id=?
+        """,Integer.class,formCode,exactVersion);
+      if(actual==null||actual!=1)
+        throw new IllegalStateException("CALC154_FORM_VERSION_NOT_CURRENT");
+      throw new IllegalArgumentException("CALC154_ARITHMETIC_CONTRACT_NOT_AUTHORED");
+    }
+    if(candidates.size()!=1)
+      throw new IllegalStateException("CALC154_FORMULA_VERSION_EXPLICIT_PIN_REQUIRED");
+    return candidates.getFirst();
+  }
+
+  private Graph loadGraph(String formCode,UUID exactVersion,String formulaVersion){
+    if(formCode==null||formCode.isBlank()||exactVersion==null
+        ||formulaVersion==null||formulaVersion.isBlank())
+      throw new IllegalArgumentException("CALC154_FORMULA_VERSION_REQUIRED");
     var forms=jdbc.query("""
       SELECT v.schema_sha256 FROM fin_lib.lib_form_definition f
       JOIN fin_lib.lib_form_version v ON v.id=f.current_version_id
@@ -192,24 +227,24 @@ public class Calc154CandidateArithmeticJdbcEngine {
       FROM fin_calc.formula_contract_revision c
       WHERE c.form_code=? AND c.form_version_id=?
         AND c.formula_version=?
+        AND c.operation_code IN ('SUBTRACT','RATIO','RECONCILE','ROLL_FORWARD')
       ORDER BY c.output_metric_code
       """,(rs,i)->new Row(rs.getObject(1,UUID.class),rs.getString(2),
           rs.getString(3),rs.getString(4),rs.getString(5),rs.getString(6),
           rs.getString(7),rs.getString(8),rs.getObject(9,UUID.class),
           rs.getString(10),rs.getString(11),rs.getString(12),
           rs.getString(13),rs.getString(14)),
-        formCode,exactVersion,PILOT_VERSIONS.get(formCode));
-    if(formulas.size()!=PILOT_OUTPUTS.get(formCode).size()
-        ||!formulas.stream().map(Row::metric).collect(java.util.stream.Collectors.toSet())
-          .equals(PILOT_OUTPUTS.get(formCode)))
-      throw new IllegalStateException("CALC154_ARITHMETIC_CONTRACT_INCOMPLETE");
+        formCode,exactVersion,formulaVersion);
+    if(formulas.isEmpty()
+        ||new HashSet<>(formulas.stream().map(Row::metric).toList()).size()!=formulas.size())
+      throw new IllegalStateException("CALC154_ARITHMETIC_CONTRACT_MISSING_OR_DUPLICATE");
 
     Map<String,Node> byOutput=new HashMap<>();
     Map<String,Row> byId=new HashMap<>();
     for(Row f:formulas){
       if(!f.formVersion().equals(exactVersion)||!schema.equals(f.schema())
         ||!"NOT_S2_APPROVED".equals(f.financial())
-        ||!("F02".equals(formCode)?"UAT_TEST_ONLY":"CANDIDATE_UNQUALIFIED").equals(f.review())
+        ||!Set.of("UAT_TEST_ONLY","CANDIDATE_UNQUALIFIED").contains(f.review())
         ||!"REQUIRE_PRESENT_CANDIDATE".equals(f.missing())
         ||!f.bindingSha().equals(sha("FIN-CALC154-FORMULA-BINDING-V1|"+
           exactVersion+"|"+schema+"|"+f.definitionSha()))
@@ -235,7 +270,7 @@ public class Calc154CandidateArithmeticJdbcEngine {
         rs.getString(3),rs.getString(4),rs.getObject(5,UUID.class),
         rs.getString(6),rs.getString(7),rs.getObject(8,UUID.class),
         rs.getString(9),rs.getString(10)),
-      formCode,exactVersion,PILOT_VERSIONS.get(formCode));
+      formCode,exactVersion,formulaVersion);
     var sourceMap=new HashMap<String,List<Source>>();
     for(Source source:typed)sourceMap.computeIfAbsent(source.formulaId().toString(),
       ignored->new ArrayList<>()).add(source);
