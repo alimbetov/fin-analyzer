@@ -1,0 +1,51 @@
+name: FIN CALC-4B — All 154 Forms PostgreSQL Candidate Plans
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/plan/Calc154CatalogWidePlanner.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/plan/Calc154CatalogWidePlannerPostgresqlTest.java'
+      - 'form-library/src/main/resources/db/changelog/**'
+      - 'form-library/pom.xml'
+      - '.github/workflows/fin-calc4b-all154-plan-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  all154-catalog-planning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Execute 154 individual PostgreSQL contract checks plus inventory tests
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc154CatalogWidePlannerPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Verify 154 individual forms actually tested, no skips
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          files=glob.glob('form-library/target/surefire-reports/TEST-*Calc154CatalogWidePlannerPostgresqlTest.xml')
+          if len(files)!=1:sys.exit('FAIL CALC4B: no PostgreSQL XML report')
+          xml=ET.parse(files[0]).getroot()
+          values={k:int(xml.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
+          cases=xml.findall('.//testcase')
+          names=[x.attrib.get('name','') for x in cases]
+          individual=[n for n in names if n.startswith('CALC4B_FORM_')]
+          print(values,'individual named forms',len(individual))
+          if values['errors'] or values['failures'] or values['skipped'] or len(set(individual))!=154:
+              sys.exit('FAIL CALC4B: requires 154 distinct form tests with zero failures/skips')
+          PY
