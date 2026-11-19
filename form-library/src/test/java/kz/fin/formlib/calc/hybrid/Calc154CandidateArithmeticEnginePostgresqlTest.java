@@ -122,7 +122,8 @@ class Calc154CandidateArithmeticEnginePostgresqlTest {
 
   @Test void deterministicCompilationAndIndependentPostgresqlF02Parity(){
     UUID v=version("F02");
-    var a=engine.compile("F02",v),b=engine.compile("F02",v);
+    var a=engine.compile("F02",v);
+    var b=engine.compile("F02",v);
     assertEquals(a.sql(),b.sql());
     assertEquals(a.compilationSha256(),b.compilationSha256());
     var actual=engine.preview("F02",v,
