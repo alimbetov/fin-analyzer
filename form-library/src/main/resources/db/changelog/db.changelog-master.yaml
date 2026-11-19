@@ -53,3 +53,5 @@ databaseChangeLog:
       file: db/changelog/026-fin-calc-f02-exact-decimal-output-postgresql.sql
   - include:
       file: db/changelog/027-fin-calc-hybrid-method-contracts-postgresql.sql
+  - include:
+      file: db/changelog/028-fin-calc-hybrid-plan-admission-postgresql.sql
