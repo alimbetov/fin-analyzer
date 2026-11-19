@@ -15,7 +15,7 @@ FIN smoke (macOS/Linux; run from any directory)
   bash scripts/smoke-fin-fact.sh            # 6 essential PostgreSQL cases
   bash scripts/smoke-fin-fact.sh --quick    # same
   bash scripts/smoke-fin-fact.sh --extended # 18 PG tests, incl. 166 forms + upgrade 018->021
-  bash scripts/smoke-fin-fact.sh --unit     # 20 Java unit tests; no Docker
+  bash scripts/smoke-fin-fact.sh --unit     # 32 Java unit tests incl. FACT-1.A1; no Docker
 
 Requires JDK 21 and Maven. --quick/--extended need Docker Desktop/Engine.
 Testcontainers manages a disposable PG16; no local database or full FIN stack.
@@ -62,8 +62,8 @@ fi
 # Never touch Compose volumes or issue DROP/TRUNCATE against any real FIN DB.
 case "$mode" in
   unit)
-    selector="FormContentFingerprintTest,FormFactCandidateExtractorTest,FormFactSourceReaderTest"
-    expected=20
+    selector="FormContentFingerprintTest,FormFactCandidateExtractorTest,FormFactSourceReaderTest,F02CandidateMappingTest"
+    expected=32
     options=()
     ;;
   quick)
