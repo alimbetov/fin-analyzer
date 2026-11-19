@@ -117,8 +117,10 @@ class Calc3C3TrustedReviewPostgresqlTest {
     assertFalse(request.approvedForExecution());
     assertEquals(64,request.requestSha256().length());
     assertEquals(request,intake.submitForIndependentS2(draft.id()));
-    assertEquals(1,jdbc.queryForObject(
-      "SELECT count(*) FROM fin_calc.financial_methodology_review_request",Integer.class));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.financial_methodology_review_request
+      WHERE draft_id=?
+      """,Integer.class,draft.id()));
     noPlanOrApproval();
   }
 
@@ -166,8 +168,10 @@ class Calc3C3TrustedReviewPostgresqlTest {
     principal("reviewer",FinancialReviewIamIdentity.REVIEWER_ROLE);
     assertThrows(IllegalStateException.class,()->intake.submitForIndependentS2(
       legacyDraft.id()));
-    assertEquals(0,jdbc.queryForObject(
-      "SELECT count(*) FROM fin_calc.financial_methodology_review_request",Integer.class));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.financial_methodology_review_request
+      WHERE draft_id=?
+      """,Integer.class,legacyDraft.id()));
   }
 
   @Test void supersededDraftNeverReceivesPreS2Request() throws Exception{
