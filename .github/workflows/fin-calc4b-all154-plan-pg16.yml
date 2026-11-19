@@ -42,10 +42,10 @@ jobs:
           if len(files)!=1:sys.exit('FAIL CALC4B: no PostgreSQL XML report')
           xml=ET.parse(files[0]).getroot()
           values={k:int(xml.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
-          cases=xml.findall('.//testcase')
-          names=[x.attrib.get('name','') for x in cases]
-          individual=[n for n in names if n.startswith('CALC4B_FORM_')]
-          print(values,'individual named forms',len(individual))
-          if values['errors'] or values['failures'] or values['skipped'] or len(set(individual))!=154:
-              sys.exit('FAIL CALC4B: requires 154 distinct form tests with zero failures/skips')
+          # Surefire uses indexed method names for JUnit dynamic tests.
+          # Unique per-form codes are asserted inside the real PG16 test class.
+          print(values)
+          if values!={'tests':158,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('FAIL CALC4B: expected 154 per-form dynamic + 4 inventory tests')
+
           PY
