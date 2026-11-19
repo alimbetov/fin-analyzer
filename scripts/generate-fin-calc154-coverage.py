@@ -33,7 +33,7 @@ ALLOWED_OPERATIONS = {
 
 def contracts():
     with CONTRACT_PATH.open(encoding="utf-8", newline="") as stream:
-        reader = csv.DictReader(stream, delimiter="\\t")
+        reader = csv.DictReader(stream, delimiter="\t")
         require(reader.fieldnames == CONTRACT_COLUMNS, "formula contract columns changed")
         records = list(reader)
     require(len(records) == 10, "formula registry count drift: expected ten existing candidates")
@@ -67,7 +67,7 @@ def contracts():
 
 
 def formula_digest(record):
-    canonical = "\\t".join(record[key] for key in CONTRACT_COLUMNS)
+    canonical = "\t".join(record[key] for key in CONTRACT_COLUMNS)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
