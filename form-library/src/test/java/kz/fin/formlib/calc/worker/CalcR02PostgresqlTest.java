@@ -535,9 +535,10 @@ class CalcR02PostgresqlTest {
         """,Integer.class,f.planId));
     assertThrows(IllegalArgumentException.class,()->
         methodRegistry.requireVerified(UUID.randomUUID()));
-    assertThrows(IllegalStateException.class,()->
-        hybridComparison.compare(f.planId,UUID.randomUUID(),f.scope,method,
-            HybridMethodRegistry.Strategy.JAVA_ONLY));
+    assertEquals("CALC_R02_QUALIFIED_PLAN_MISSING",
+        assertThrows(IllegalArgumentException.class,()->
+            hybridComparison.compare(f.planId,UUID.randomUUID(),f.scope,method,
+            HybridMethodRegistry.Strategy.JAVA_ONLY)).getMessage());
     assertEquals(0,results(f.slot));
   }
 
