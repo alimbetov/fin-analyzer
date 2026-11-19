@@ -2,9 +2,10 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
 import {Activity,AlertTriangle,ArrowLeft,Check,CheckCircle2,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
 import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
-import {exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
+import {downloadEvidence,exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
+import {validateEvidenceFile} from './documentEvidence';
 import SavedReports from './SavedReports';
 import RevisionDrawer from './RevisionDrawer';
 import {formVisual,sectionTitle} from './formVisuals';
@@ -75,6 +76,7 @@ export default function App(){
   const [profileId,setProfileId]=useState('');
   const [preview,setPreview]=useState<PreviewTicket|null>(null);
   const [file,setFile]=useState<File|null>(null);
+  const [documentFile,setDocumentFile]=useState<File|null>(null);
   const [previous,setPrevious]=useState<Draft|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
@@ -241,7 +243,7 @@ export default function App(){
       setFormCode(code);
     }
     setDraft(null);setInstanceId('');setValues({});setRowEntries([]);
-    setProfileId('');setPrevious(null);setPreview(null);setFile(null);
+    setProfileId('');setPrevious(null);setPreview(null);setFile(null);setDocumentFile(null);
     setNavigator(false);setDashboard(false);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
     setDecisionContext(null);
@@ -260,6 +262,7 @@ export default function App(){
     setAttemptedSave(true);
     if(!form||!editable)throw new Error('Для этой формы запись черновика недоступна.');
     if(!draft&&!dirty&&Object.keys(values).length===0&&rowEntries.length===0)throw new Error('Сначала заполните отчёт');
+    if(evidence&&!draft&&!documentFile)throw new Error('Первую редакцию документа необходимо сохранить с вложением PDF, PNG или JPEG');
     if(draft&&!dirty)throw new Error('Нет изменений для сохранения');
     if(range==='Неверный период')throw new Error('Некорректный учётный период');
     if(rowset&&(rowEntries.length===0||rowEntries.length>200))
@@ -278,7 +281,7 @@ export default function App(){
     setSaveUncertain(true);
     let receipt:Receipt;
     try{
-      receipt=await post<Receipt>('/drafts',{
+      const command={
         instanceId:draft?.instanceId??null,
         organizationId:scope.organizationId,
         economicEntityId:draft?.economicEntityId??scope.economicEntityId,
@@ -291,7 +294,14 @@ export default function App(){
         dataSpace:draft?.dataSpace??'SYNTHETIC',
         expectedRevision:draft?.revisionNo??0,values:cleaned,rows:preparedRows,
         createdBy:'react-local-uat',changeReason:'React editor input'
-      },saveKeyRef.current);
+      };
+      if(evidence&&documentFile){
+        await validateEvidenceFile(documentFile);
+        const body=new FormData();
+        body.append('draft',new Blob([JSON.stringify(command)],{type:'application/json'}),'draft.json');
+        body.append('file',documentFile,documentFile.name);
+        receipt=await multipart<Receipt>('/drafts/with-attachment',body,saveKeyRef.current);
+      }else receipt=await post<Receipt>('/drafts',command,saveKeyRef.current);
     }catch(error){
       if(isDefiniteRejection(error)){
         setSaveUncertain(false);
@@ -323,7 +333,16 @@ export default function App(){
       previousRevision,cleaned,preparedRows,fields))
       throw new Error('Запись могла завершиться, но полная сверка ревизии, полей и строк не прошла. '+
         'Не меняйте данные вслепую: откройте сохранённый экземпляр и проверьте результат.');
-    setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setRowEntries(snapshot.rows);setPreview(null);
+    if(evidence){
+      if(!snapshot.attachment)throw new Error('Документ сохранён без подтверждённого вложения. Проверьте ревизию вручную.');
+      if(documentFile){
+        const uploadedSha=await fileSha256(documentFile);
+        if(snapshot.attachment.sha256!==uploadedSha||snapshot.attachment.sizeBytes!==documentFile.size)
+          throw new Error('SHA или размер сохранённого вложения не совпадает с загруженным файлом.');
+      }else if(draft?.attachment?.sha256!==snapshot.attachment.sha256)
+        throw new Error('Сохранённая редакция потеряла закреплённое вложение.');
+    }
+    setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setRowEntries(snapshot.rows);setPreview(null);setDocumentFile(null);
     saveKeyRef.current=null;setSaveUncertain(false);
     setDirty(false);setCommitUncertain(false);setAttemptedSave(false);
     setMessage('Сохранено: ревизия '+snapshot.revisionNo+' · SHA '+snapshot.sha256.slice(0,12));
@@ -334,7 +353,7 @@ export default function App(){
     const query=new URLSearchParams({organizationId:scope.organizationId});
     const snapshot=await get<Draft>('/drafts/'+encodeURIComponent(id)+'?'+query);
     if(snapshot.formCode!==formCode)throw new Error('Сначала выберите форму '+snapshot.formCode);
-    setHistoryOpen(false);setAttemptedSave(false);
+    setHistoryOpen(false);setAttemptedSave(false);setDocumentFile(null);
     setDraft(snapshot);setValues(snapshot.values);setRowEntries(snapshot.rows);setPeriodType(snapshot.periodType);setPeriodCode(snapshot.periodCode);
     setCurrency(snapshot.currency);setScope({
       organizationId:snapshot.organizationId,economicEntityId:snapshot.economicEntityId,
@@ -343,6 +362,27 @@ export default function App(){
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
     setInstanceId(snapshot.instanceId);setShowReports(false);
     setMessage('Открыта ревизия '+snapshot.revisionNo);
+  });
+  const chooseDocument=async(next:File|null)=>{
+    if(!next){setDocumentFile(null);return;}
+    try{
+      await validateEvidenceFile(next);
+      setDocumentFile(next);setDirty(true);setError('');
+    }catch(error){
+      setDocumentFile(null);
+      setError(error instanceof Error?error.message:String(error));
+    }
+  };
+  const downloadDocument=()=>execute(async()=>{
+    if(!draft?.attachment)throw new Error('В текущей редакции нет вложения');
+    const blob=await downloadEvidence(draft.instanceId,draft.revisionNo,
+      draft.organizationId,draft.projectId);
+    if(blob.size!==draft.attachment.sizeBytes)throw new Error('Размер скачанного документа отличается от сохранённого');
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=draft.attachment.fileName;
+    document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    setMessage('Скачано вложение '+draft.attachment.fileName);
   });
   const download=()=>execute(async()=>{
     if(!draft)throw new Error('Сначала сохраните отчёт');
@@ -415,7 +455,7 @@ export default function App(){
   const resetEditor=()=>{
     setAttemptedSave(false);setHistoryOpen(false);
     setDraft(null);setInstanceId('');setValues({});setRowEntries([]);setProfileId('');
-    setPreview(null);setFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
+    setPreview(null);setFile(null);setDocumentFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
     setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
   };
   const reset=()=>{if(confirmDiscard())resetEditor();};
@@ -608,7 +648,7 @@ export default function App(){
                   if(!confirmDiscard())return;
                   setScope(newScope());setDraft(null);setInstanceId('');
                   setValues({});setRowEntries([]);setProfileId('');setPreview(null);setPrevious(null);
-                  setFile(null);setDirty(false);setSaveUncertain(false);
+                  setFile(null);setDocumentFile(null);setDirty(false);setSaveUncertain(false);
                   setCommitUncertain(false);saveKeyRef.current=null;
                   setMessage('Новая локальная организация UAT');
                 }}>Новая организация UAT</button>
@@ -618,7 +658,19 @@ export default function App(){
               {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
               {saveUncertain&&<div className="warning" role="alert"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Нажмите «Повторить сохранение»: будет отправлена та же команда с тем же ключом без создания дополнительной редакции. Изменение значений заблокировано до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
-              {evidence&&<div className="warning" role="status"><AlertTriangle size={17}/> Реквизиты документа доступны для сохранения. Прикрепление PDF и изображений через этот экран пока не подключено.</div>}
+              {evidence&&<section className="document-attachment-panel" aria-label="Документальное вложение">
+                 <label htmlFor="evidence-upload">Документ PDF, PNG или JPEG (до 10 МБ)</label>
+                 <input id="evidence-upload" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                   disabled={!editable||busy||saveUncertain||commitUncertain}
+                   onChange={event=>{void chooseDocument(event.target.files?.[0]??null);}}/>
+                 {documentFile&&<p role="status">К сохранению: {documentFile.name} · {documentFile.size} байт</p>}
+                 {draft?.attachment&&<div>
+                   <p>Текущее вложение: {draft.attachment.fileName} · SHA-256 {draft.attachment.sha256.slice(0,16)}…</p>
+                   <button type="button" disabled={busy} onClick={downloadDocument}>Скачать вложение</button>
+                 </div>}
+                 {!draft&&!documentFile&&<p>Для первой редакции требуется файл; следующие редакции могут наследовать его.</p>}
+                 <p className="period-caption">Данные не становятся финансово утверждёнными после загрузки.</p>
+               </section>}
               <div className="sheet-head"><div><b>Показатели отчёта</b><p>Вставка из Excel: Ctrl+V · Enter / ↓ для следующего поля</p></div>
                 <span className="total-badge">{fields.length} полей{rowset?' на строку · '+rowEntries.length+' строк':''}</span></div>
               {rowset?<div className="sheet-scroll">

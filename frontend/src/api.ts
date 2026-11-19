@@ -42,7 +42,8 @@ export type Currency = {code:string;title:string|null;minorUnits:number;status:s
 export type PeriodType = {code:string;title:string};
 export type PeriodRange = {type:string;code:string;startInclusive:string;endExclusive:string};
 export type Row = {rowId:string;rowPosition:number;values:Record<string,string>};
-export type Draft = {instanceId:string;organizationId:string;revisionNo:number;formCode:string;formVersion:string;contentMode:string;values:Record<string,string>;rows:Row[];sha256:string;periodType:string;periodCode:string;currency:string;workflowStatus:string;economicEntityId:string;businessScopeId:string;projectId:string;coverage:string;reportingBasis:string;dataSpace:string};
+export type EvidenceAttachment = {id:string;fileName:string;mediaType:string;sizeBytes:number;sha256:string};
+export type Draft = {attachment?:EvidenceAttachment|null;instanceId:string;organizationId:string;revisionNo:number;formCode:string;formVersion:string;contentMode:string;values:Record<string,string>;rows:Row[];sha256:string;periodType:string;periodCode:string;currency:string;workflowStatus:string;economicEntityId:string;businessScopeId:string;projectId:string;coverage:string;reportingBasis:string;dataSpace:string};
 export type Receipt = {instanceId:string;revisionNo:number;contentSha256:string;result:string};
 export type Profile = {id:string};
 export type PreviewTicket = {previewId:string;profileId:string;instanceId:string;organizationId:string;expectedRevision:number;uploadSha256:string;bindingSha256:string;expiresAt:string;inputCellCount:number;values:Record<string,string>};
@@ -97,8 +98,15 @@ export async function post<T>(path:string,data:unknown,idem:boolean|string=false
     'Content-Type':'application/json',...(key?{'Idempotency-Key':key}:{})
   },body:JSON.stringify(data)})).json() as Promise<T>;
 }
-export async function multipart<T>(path:string,body:FormData,idem=false):Promise<T>{
-  return (await request(path,{method:'POST',headers:idem?{'Idempotency-Key':crypto.randomUUID()}:undefined,body})).json() as Promise<T>;
+export async function multipart<T>(path:string,body:FormData,idem:boolean|string=false):Promise<T>{
+  const key=typeof idem==='string'?idem:idem?crypto.randomUUID():null;
+  return (await request(path,{method:'POST',headers:key?{'Idempotency-Key':key}:undefined,body})).json() as Promise<T>;
+}
+export async function downloadEvidence(instanceId:string,revision:number,organizationId:string,projectId:string):Promise<Blob>{
+  const params=new URLSearchParams({organizationId,projectId});
+  const response=await request('/drafts/'+encodeURIComponent(instanceId)
+    +'/revisions/'+revision+'/attachment?'+params);
+  return response.blob();
 }
 export async function exportXlsx(instanceId:string,org:string,style:Style,locale:Locale):Promise<{file:Blob;name:string}>{
   const params=new URLSearchParams({organizationId:org,styleCode:style,locale});

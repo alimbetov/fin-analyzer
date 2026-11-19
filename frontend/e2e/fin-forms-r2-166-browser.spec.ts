@@ -60,9 +60,11 @@ test('FIN-FORMS-QA-R2.D | all 166 real React forms render and accept edits',asyn
         await first.fill('12');
         await expect(first).toHaveValue('12');
         if(detail.form.contentMode==='EVIDENCE'){
-          // Explicit UX gap; attachment uploader is not present in this screen.
-          await expect(page.getByRole('status')).toContainText(
-            'Прикрепление PDF и изображений через этот экран пока не подключено');
+          const uploader=page.locator('#evidence-upload');
+          await expect(uploader).toBeEnabled();
+          await uploader.setInputFiles({name:'qa-evidence.pdf',mimeType:'application/pdf',
+            buffer:Buffer.from('%PDF-1.4\\nFIN synthetic evidence')});
+          await expect(page.getByText('К сохранению:')).toBeVisible();
         }
       }
       result.rendered=true;
