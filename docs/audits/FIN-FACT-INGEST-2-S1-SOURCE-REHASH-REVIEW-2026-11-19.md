@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-19  
 **Branch:** `feat/fin-form-library-standalone`  
-**Status:** CODE IMPLEMENTED; PG16 166-form read-back GREEN at `d3eb21699f8d786060de7c4d066ebf45344bb215`; final defensive JSON/transaction changes after that SHA require their own CI evidence.  
+**Status:** **INGEST-2 FINAL GREEN for canonical source SHA re-verification** at exact code SHA `59dbb02fd03140c912747b01f94e7452eb38ee64` (Java/H2, PG16, Chromium). **Financial S2, fin_fact and publication remain HOLD.**  
 **Review:** Java21, PostgreSQL 16 Testcontainers, exact source/read-back architecture. **Not** financial S2, not `fin_fact` materialization.
 
 ## 1. Previous failure and core correction
@@ -45,11 +45,11 @@ Reader rejects non-object JSON, non-string values, duplicate JSON keys and trail
 - [Java21/H2](https://github.com/alimbetov/fin-analyzer/actions/runs/44470234615) — SUCCESS.
 - [Chromium](https://github.com/alimbetov/fin-analyzer/actions/runs/44470234446) — SUCCESS.
 
-### Additional hardening on later SHA (final status to verify)
+### Additional hardening verified on final SHA
 
 - `FormFactCandidateService`: `Propagation.REQUIRES_NEW` + `Isolation.REPEATABLE_READ`.
 - `FormFactSourceReader`: Jackson strict duplicate-detection / trailing document rejection; negative JUnit cases.
-- These later changes must all run on the same commit SHA before labeling **FINAL GREEN**.
+- **Verified SUCCESS on the same code SHA `59dbb02fd03140c912747b01f94e7452eb38ee64`:** [Java 21/H2](https://github.com/alimbetov/fin-analyzer/actions/runs/44470613053) — **873 run / 0 failure / 0 error / 14 skipped**, [PG16 + Backend](https://github.com/alimbetov/fin-analyzer/actions/runs/44470613145) — **13 real PostgreSQL 16 test methods / 0 failure / 0 error / 0 skipped**, [Chromium browser](https://github.com/alimbetov/fin-analyzer/actions/runs/44470613318) — **SUCCESS**.
 
 ### Golden compatibility unit testing
 
@@ -80,4 +80,4 @@ Reader rejects non-object JSON, non-string values, duplicate JSON keys and trail
 
 ## 6. S1 decision
 
-**INGEST-2 code gate is technically covered by all 166 PostgreSQL saved-form profiles at d3eb2169…**. Final implementation will be GREEN only after defensive hardening CI on its own exact SHA succeeds. **NEXT: FACT-0** additive Liquibase 019/020 + monthly partition service + PFT-01–18; qualified materialization remains blocked by independent TEST_ONLY FactSet admission until FACT-1. Do not imply 166 reviewed financial metric contracts or production S2.
+**INGEST-2 SOURCE-INTEGRITY GATE GREEN** on `59dbb02fd03140c912747b01f94e7452eb38ee64`: exact SHA rehash for 166 saved PostgreSQL form profiles, strict JSON parser and independent REPEATABLE_READ verified. Financial qualification is NOT implied. **NEXT: FACT-0** additive Liquibase 019/020 + monthly partition service + PFT-01–18; qualified materialization remains blocked by independent TEST_ONLY FactSet admission until FACT-1. Do not imply 166 reviewed financial metric contracts or production S2.
