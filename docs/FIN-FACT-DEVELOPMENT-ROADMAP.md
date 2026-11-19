@@ -3,7 +3,7 @@
 **Branch:** `feat/fin-form-library-standalone`. **Scope:** single Spring Boot modular monolith / PostgreSQL 16.  
 **Review baseline:** HEAD `38ea42877abd37df15335d4e4729242959d887be` (2026-11-19).  
 **Baseline:** 166 form profiles: **3 SINGLE_RECORD, 151 ROWSET, 12 EVIDENCE**; 794 R6 field candidates, **400** numeric candidate fields; **0 approved mapping contracts proved**.  
-**Status:** authoritative implementation roadmap. **INGEST-0/INGEST-1 implementation started 2026-11-19** (read-only candidates, no physical fin_fact). No real S2, no qualified fact persistence or CI qualification beyond runs expressly linked below.
+**Status:** authoritative implementation roadmap. **INGEST-0 and INGEST-1 mock extraction UNIT GREEN 2026-11-19 at `3401bbda096c0f34ddea66f7145878cfdef5752e`**; 166 forms tested using actual seed field names/types. Read-only candidates only: no verified source SHA, production S2, qualified fact or physical fin_fact.
 
 ## 1. Architecture boundaries
 
@@ -15,8 +15,8 @@ Never promote a numeric candidate into a financial metric merely by fieldType. N
 
 | Stage | Goal | Deliverables | Acceptance |
 |---|---|---|---|
-| **INGEST-0** | Complete, accurate registry of **166 forms** | **CODE COMMITTED:** `catalog/fin-fact-ingestion-strategy-r0.tsv`, registry, 166-profile matrix and new [per-field review worklist](FIN-FACT-166-FORM-FIELD-MAPPING-WORKLIST.tsv) | Registry 166/166 (3/151/12) checked; synthetic exact-mode routing test added; all mappings still UNREVIEWED |
-| **INGEST-1** | Real **read-only JSON→typed candidate** transformation | **CODE COMMITTED:** `calc/ingest/FormFactSourceReader`, `FormFactCandidateExtractor`, `FormFactIngestionRegistry`, `FormFactCandidateService`; exact scoped revision ID, BigDecimal, absence/blank/zero, row UUID, evidence SHA/refs | **Java/H2, React/backend and browser CI GREEN at `af3b5a49`**, including 166 synthetic mode routing; outputs remain `UNQUALIFIED_SOURCE_PROJECTION` / `SOURCE_SHA_NOT_REVERIFIED`; no financial metricCode/fin_fact writes |
+| **INGEST-0** | Complete, accurate registry of **166 forms** | **UNIT GREEN:** registry + all 166 profiles, 3/151/12, 877 physical bootstrap fields (793 source + 84 evidence), [per-field review worklist](FIN-FACT-166-FORM-FIELD-MAPPING-WORKLIST.tsv) | Actual current CatalogBootstrap seeds cross-checked with R6; 794 R6 candidates = 793 editable source + 1 excluded derived F02.netProfit; all mappings still UNREVIEWED |
+| **INGEST-1** | Real **read-only JSON→typed candidate** transformation | **UNIT GREEN on `3401bbda`**: exact scoped SourceReader + generic extractor; **665 per-form actual-field mock tests** (4×166+1), 9 extractor, 5 reader, 1 older mode-route tests | Java21/H2 [GREEN](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526181) (863 total /0 failed /10 skipped), [React/backend + existing PG16 fin_intake GREEN](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526183). Still `UNQUALIFIED_SOURCE_PROJECTION` / `SOURCE_SHA_NOT_REVERIFIED`; no fin_fact writes or real S2 |
 | **INGEST-2** | Prove exact immutable source identity | Deterministic `FIN-LIB-CONTENT-V1` canonical rehash shared with FormDraftService; verify row order/evidence; raw canonical DB/source mismatches BLOCK | Test against actual `FormDraftService.save` on PG16 for all 3 modes incl attachment; no fallback to latest revision |
 | **FACT-0** | Physical source→fact storage (PG16) | Additive migrations 019+020, `fin_fact.fact_set` and control unpartitioned, `fact_observation PARTITION BY RANGE(period_start)` monthly composite PK; `FactMonthlyPartitionService` | PG PFT-01..08, append-only/privilege checks, catalog bounds, 001–020 clean & upgrade; no DROP |
 | **FACT-1** | First qualified end-to-end F02 | Exact test-only reviewed F02 3-input mapping, pinned candidate FactSet, trusted issuer, TX-Q facts+event, worker reads exact FactSet, SHA and lineage | F02 three fact rows, replay, rollback, revoke, out-of-order epoch, single-field delta, clean PG & concurrency GREEN |
@@ -26,7 +26,7 @@ Never promote a numeric candidate into a financial metric merely by fieldType. N
 | **CALC-R1** | Efficient node reuse | `CalculationCache`, node-value Caffeine L1, optional Redis L2 OFF | No output changes, cross-tenant isolation, fail-open only for cache availability (never auth) |
 | **CALC-R2** | Measure optional Redis benefit | Repeatable OFF/L1/L1+L2 PG workload benchmark | Redis ON only after verified latency/DB improvement, zero correctness regression |
 
-**Implementation freeze:** start **INGEST-1 now** without touching 001–018, database tables, public APIs, S2, financial methods or unreviewed mapping statuses. This is a real implementation of **unqualified source projection**, not completion of 166 financial transformations.
+**Implementation freeze:** INGEST-0/1 mock extraction GREEN. **NEXT: INGEST-2 exact canonical source SHA re-verification**, before any qualified `fin_fact` writes, approved financial methods or unreviewed mapping promotions. Existing 001–018 and public APIs remain untouched.
 
 ## 2.1 INGEST-1 implementation delivery and boundaries (2026-11-19)
 
@@ -35,8 +35,14 @@ Never promote a numeric candidate into a financial metric merely by fieldType. N
 - **Field-level worklist:** [FIN-FACT-166-FORM-FIELD-MAPPING-WORKLIST.tsv](FIN-FACT-166-FORM-FIELD-MAPPING-WORKLIST.tsv) has **806 worklist rows:** 793 R6 candidate source fields + 1 `F02.netProfit` derived exclusion + 12 evidence-mode placeholders. Of 400 R6 numeric entries, **399** are provisional source numeric candidates, one is a derived candidate. Runtime still has additional evidence metadata fields needing versioned contract mapping; the placeholders are NOT full evidence field contracts.
 - **Known limitation:** source canonical SHA is a **stored claim**, not recalculated from the full `FIN-LIB-CONTENT-V1` source identity. Ingestion stage deliberately returns `SOURCE_SHA_NOT_REVERIFIED`, cannot write `fin_fact` and cannot qualify. **INGEST-2 MUST** share canonical hash implementation with `FormDraftService`, including original `version_label`, rows and evidence fileName/mediaType/SHA.
 - **Delivery policy:** no new external REST endpoint; candidate attributes may include confidential source metadata and must not be logged or returned to unauthorized callers. Do not cache tenant values in public catalog Caffeine.
-- **CI evidence (code SHA `af3b5a49ebcff08359cfec79b1c691f894ef4934`):** [Java 21/H2](https://github.com/alimbetov/fin-analyzer/actions/runs/44466175339), [React/backend regression](https://github.com/alimbetov/fin-analyzer/actions/runs/44466175303), [Chromium browser](https://github.com/alimbetov/fin-analyzer/actions/runs/44466175248) all completed SUCCESS. Earlier Spring CGLIB proxy regression from `final` transactional classes was found through CI logs and fixed; subsequent all three workflows GREEN. This proves candidate extraction and existing regression, **not** PostgreSQL `fin_fact` write or verified source SHA.
+- **CI evidence (code SHA `3401bbda096c0f34ddea66f7145878cfdef5752e`):** [Java 21/H2](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526181) and [React/backend/PG16 existing intake](https://github.com/alimbetov/fin-analyzer/actions/runs/44467526183) completed SUCCESS. Java logs show **FormFact166CatalogMocksTest 665/665 PASS**, full Maven suite **863 tests, 0 failures, 0 errors, 10 skipped**. [Formal technical S1 audit](audits/FIN-FACT-INGEST-0-1-166-MOCK-REVIEW-2026-11-19.md). First iteration of field-mock test had 81 incorrect assertions based on UUID ordering; fixed test to compare values by rowId and reran exact SHA GREEN. No new fin_fact PostgreSQL or financial S2 results are implied.
 - **Suggested focused run:** `mvn -f form-library/pom.xml -Dtest=FormFactCandidateExtractorTest,FormFactSourceReaderTest,FormFact166ModeRoutingTest test`. CI workflow executes on branch push; capture exact head SHA before claiming GREEN.
+
+## 2.2 New evidence — per-form mock test execution
+
+- `form-library/src/test/java/kz/fin/formlib/calc/ingest/FormFact166CatalogMocksTest.java` — JUnit `@TestFactory`: **four named cases per form**, 166 forms, plus 877/794 seed contract assertion (**665 total**). Factual field code/types reconstructed from `CatalogBootstrap`'s exact source catalog inputs, not fabricated `fixtureAmount` for all profiles.
+- The prior `FormFact166ModeRoutingTest` only checks mode routing with one artificial field; the new suite is the stronger input-shape proof.
+- **Limits:** per-form financial metric semantics and source canonical SHA validation are still unapproved; mocks are deterministic synthetic values, not real bank/user reports. No `fact_observation` partitions or source-to-fact publication.
 
 ## 3. Mandatory INPUT/OUTPUT contract for INGEST-1
 
