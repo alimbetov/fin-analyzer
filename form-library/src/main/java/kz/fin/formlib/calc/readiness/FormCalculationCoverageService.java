@@ -25,7 +25,7 @@ import java.util.UUID;
  * executable UAT proof. No new fin_fact/calculation writes are allowed here.
  */
 @Service
-public final class FormCalculationCoverageService {
+public class FormCalculationCoverageService {
   public enum Readiness {
     UAT_F02_TEST_ONLY,
     BLOCKED_CONTRACT_INTEGRITY,
