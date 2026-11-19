@@ -206,8 +206,19 @@ def main():
     for path, columns, rows in build():
         text = "\t".join(columns) + "\n" + "".join("\t".join(row) + "\n" for row in rows)
         if args.check:
-            require(path.is_file() and path.read_text(encoding="utf-8") == text,
-                    "coverage artifact is missing or stale: " + str(path))
+            require(path.is_file(), "coverage artifact missing: " + str(path))
+            actual = path.read_text(encoding="utf-8")
+            if actual != text:
+                old_lines, expected_lines = actual.splitlines(), text.splitlines()
+                mismatch = next((i for i, (old, new) in
+                                 enumerate(zip(old_lines, expected_lines), start=1)
+                                 if old != new), min(len(old_lines), len(expected_lines)) + 1)
+                old = old_lines[mismatch - 1] if mismatch <= len(old_lines) else "<EOF>"
+                new = expected_lines[mismatch - 1] if mismatch <= len(expected_lines) else "<EOF>"
+                raise SystemExit("FAIL CALC154: stale " + str(path) +
+                                 " line " + str(mismatch) +
+                                 " actual=" + repr(old[:500]) +
+                                 " expected=" + repr(new[:500]))
         else:
             path.write_text(text, encoding="utf-8")
         print(f"PASS {path.name}: {len(rows)} rows")
