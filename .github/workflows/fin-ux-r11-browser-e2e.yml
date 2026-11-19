@@ -1,17 +1,20 @@
 name: FIN UX-R1.1 — Real Chromium Browser Functional Qualification
 
 on:
+  workflow_call:
   push:
     branches:
       - feat/fin-form-library-standalone
     paths:
       - frontend/**
       - form-library/**
+      - scripts/**
       - .github/workflows/fin-ux-r11-browser-e2e.yml
   pull_request:
     paths:
       - frontend/**
       - form-library/**
+      - scripts/**
       - .github/workflows/fin-ux-r11-browser-e2e.yml
   workflow_dispatch:
 
@@ -94,6 +97,9 @@ jobs:
             -v "$GITHUB_WORKSPACE/frontend:/work" -w /work \
             mcr.microsoft.com/playwright:v1.56.1-noble \
             bash -lc 'npm install --no-audit --no-fund && npm run test:e2e'
+
+      - name: Fail closed unless all 166 real browser form checks passed
+        run: python3 scripts/check-fin-forms-r2-browser.py
 
       - name: Preserve Playwright browser evidence
         if: always()

@@ -10,6 +10,7 @@ on:
       - compose.local.yml
       - scripts/**
       - .github/workflows/fin-form-studio-local-ci.yml
+      - .github/workflows/fin-ux-r11-browser-e2e.yml
   pull_request:
     paths:
       - frontend/**
@@ -17,6 +18,7 @@ on:
       - compose.local.yml
       - scripts/**
       - .github/workflows/fin-form-studio-local-ci.yml
+      - .github/workflows/fin-ux-r11-browser-e2e.yml
   workflow_dispatch:
 
 permissions:
@@ -138,3 +140,37 @@ jobs:
             exit 1
           }
           Write-Host 'PowerShell smoke script syntax PASS'
+
+  browser-qualification:
+    name: FIN-FORMS-QA-R2 Chromium 166-form qualification
+    uses: ./.github/workflows/fin-ux-r11-browser-e2e.yml
+
+  forms-release-gate:
+    name: FIN-FORMS-QA-R2 release gate
+    if: ${{ always() }}
+    needs:
+      - contract-inventory
+      - frontend
+      - backend
+      - postgres-qualification
+      - powershell-smoke-syntax
+      - browser-qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Fail closed on any missing, failed or skipped mandatory qualification
+        env:
+          CONTRACT: ${{ needs.contract-inventory.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+          BACKEND: ${{ needs.backend.result }}
+          POSTGRES: ${{ needs.postgres-qualification.result }}
+          POWERSHELL: ${{ needs.powershell-smoke-syntax.result }}
+          BROWSER: ${{ needs.browser-qualification.result }}
+        run: |
+          for value in "$CONTRACT" "$FRONTEND" "$BACKEND" "$POSTGRES" "$POWERSHELL" "$BROWSER"; do
+            if [ "$value" != "success" ]; then
+              echo "[FAIL] FIN-FORMS-QA-R2 gate result=$value"
+              exit 1
+            fi
+          done
+          echo "[PASS] FIN-FORMS-QA-R2 CI release qualification (NOT financial S2)"

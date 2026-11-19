@@ -100,9 +100,9 @@ def main() -> int:
             "catalog_review_state": profile["review_state"],
             "test_case": dynamic_cases[i].attrib["name"],
             "status": "PASS",
-            "scope": ("PG16_SAVE_REOPEN_REVISIONS_SHA_HTTP_ATTACHMENT"
+            "scope": ("PG16_HTTP_SAVE_REPLAY_REVISIONS_SHA_ATTACHMENT_TAMPER"
                       if mode == "EVIDENCE"
-                      else "PG16_SAVE_REOPEN_REVISIONS_SHA_HTTP_XLSX_EXPORT"),
+                      else "PG16_HTTP_SAVE_REPLAY_REVISIONS_SHA_XLSX_IMPORT_STALE"),
             "financial_s2": "NOT_APPROVED",
         })
     with (out / "form-coverage.csv").open("w", encoding="utf-8", newline="") as f:
@@ -112,7 +112,7 @@ def main() -> int:
 
     metadata = {
         "commit_sha": os.environ.get("GITHUB_SHA", "LOCAL"),
-        "report": "FIN-166-PG16-LIFECYCLE-V1",
+        "report": "FIN-FORMS-QA-R2-POSTGRESQL-V1",
         "tests": len(cases),
         "form_cases": len(rows),
         "extra_integrity_cases": len(extra_cases),
@@ -121,8 +121,8 @@ def main() -> int:
         "skipped": 0,
         "mode_counts": EXPECTED_MODES,
         "financial_s2": "NOT_APPROVED",
-        "browser_166_e2e": "NOT_PROVEN",
-        "xlsx_import_154": "NOT_PROVEN",
+        "browser_166_e2e": "SEPARATE_RELEASE_GATE",
+        "xlsx_import_154": "PASS",
         "test_xml_sha256": hashlib.sha256(xml_data).hexdigest(),
         "catalog_manifest_sha256": hashlib.sha256(raw_manifest).hexdigest(),
         "per_form": rows,
@@ -131,8 +131,8 @@ def main() -> int:
         json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print("[PASS] FIN 166/166 PostgreSQL form lifecycles, "
-          "154 XLSX exports, 12 evidence attachments; 3 extra integrity tests")
+    print("[PASS] FIN-FORMS-QA-R2: 166/166 REST lifecycles, "
+          "154 XLSX round-trips, 12 attachment integrity checks; 3 extra tests")
     print("[INFO] Saved " + str(out / "form-coverage.csv"))
     print("[INFO] Production S2 and full 166-form browser E2E: NOT PROVEN")
     return 0
