@@ -38,7 +38,7 @@ public final class FormFactSourceIntegrityVerifier {
     this.fingerprints=new FormContentFingerprint(mapper);
   }
 
-  public void verify(FormFactCandidateExtractor.SourceSnapshot source) {
+  public String verify(FormFactCandidateExtractor.SourceSnapshot source) {
     if(source == null || source.scope() == null)
       throw new IllegalArgumentException("SOURCE_SNAPSHOT_REQUIRED");
     var rev=revisions.findById(source.revisionId())
@@ -109,5 +109,6 @@ public final class FormFactSourceIntegrityVerifier {
       throw new IllegalStateException("SOURCE_CONTENT_SHA_MISMATCH");
     if(!Objects.equals(hashes.rowOrderSha256(),rev.getRowOrderSha256()))
       throw new IllegalStateException("SOURCE_ROW_ORDER_SHA_MISMATCH");
+    return hashes.rowOrderSha256();
   }
 }

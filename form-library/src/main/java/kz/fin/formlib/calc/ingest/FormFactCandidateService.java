@@ -31,10 +31,11 @@ public class FormFactCandidateService {
   public FormFactCandidateExtractor.Projection extractExact(
       UUID revisionId, UUID organizationId, UUID projectId) {
     var source=sourceReader.readExact(revisionId,organizationId,projectId);
-    verifier.verify(source);
+    String verifiedRowOrderSha256 = verifier.verify(source);
     var projected=extractor.extract(source);
     return new FormFactCandidateExtractor.Projection(
-        projected.revisionId(), projected.formVersionId(), projected.formCode(),
+        projected.revisionId(), projected.instanceId(), projected.formVersionId(),
+        projected.formCode(), projected.contentMode(), verifiedRowOrderSha256,
         projected.scope(), projected.sourceSha256Claim(),
         projected.sourceSchemaSha256(), projected.sourceMappingSha256(),
         projected.ingestionRegistrySha256(),

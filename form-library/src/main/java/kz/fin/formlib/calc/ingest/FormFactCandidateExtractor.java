@@ -58,7 +58,8 @@ public final class FormFactCandidateExtractor {
       UUID rowId, String sourceFieldCode, String fieldType,
       String valueState, String sourceValue) {}
   public record Projection(
-      UUID revisionId, UUID formVersionId, String formCode,
+      UUID revisionId, UUID instanceId, UUID formVersionId, String formCode,
+      String contentMode, String rowOrderSha256,
       Scope scope, String sourceSha256Claim, String sourceSchemaSha256,
       String sourceMappingSha256, String ingestionRegistrySha256,
       String sourceIntegrityState, String qualificationState,
@@ -151,7 +152,8 @@ public final class FormFactCandidateExtractor {
         n.rowId() == null ? "" : n.rowId().toString()).thenComparing(AttributeCandidate::sourceFieldCode));
     evidence.sort(Comparator.comparing(e -> e.evidenceId().toString()));
 
-    return new Projection(source.revisionId(), source.formVersionId(), source.formCode(),
+    return new Projection(source.revisionId(), source.instanceId(),
+        source.formVersionId(), source.formCode(), source.contentMode(), null,
         source.scope(), source.claimedCanonicalContentSha256(), source.sourceSchemaSha256(),
         source.sourceMappingSha256(), registry.manifestSha256(),
         "SOURCE_SHA_NOT_REVERIFIED", "UNQUALIFIED_SOURCE_PROJECTION",
