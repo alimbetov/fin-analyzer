@@ -1,0 +1,191 @@
+package kz.fin.formlib.calc.ingest;
+
+import kz.fin.formlib.service.FormAttachmentStore;
+import kz.fin.formlib.service.FormDraftService;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Opt-in PostgreSQL 16 read-back gate for exact FIN-LIB-CONTENT-V1.
+ * Each test uses a dedicated synthetic organization and fresh report slot.
+ * NO fin_fact writes and NO independent financial S2.
+ */
+@Testcontainers
+@EnabledIfSystemProperty(named="fin.postgres.uat.enabled",matches="true")
+@SpringBootTest(properties={
+    "fin.uat.editor.enabled=false",
+    "fin.attachments.directory=./target/ingest2-verified-attachments"
+})
+class Ingest2PostgresqlIntegrityTest {
+  @Container
+  static final PostgreSQLContainer<?> db=new PostgreSQLContainer<>("postgres:16-alpine")
+      .withDatabaseName("fin_ingest2_qualification")
+      .withUsername("fin").withPassword("pg_ingest2_only");
+
+  @DynamicPropertySource
+  static void dataSource(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url",db::getJdbcUrl);
+    registry.add("spring.datasource.username",db::getUsername);
+    registry.add("spring.datasource.password",db::getPassword);
+    registry.add("spring.datasource.driver-class-name",()->"org.postgresql.Driver");
+  }
+
+  @Autowired FormDraftService drafts;
+  @Autowired FormFactCandidateService candidates;
+  @Autowired FormFactSourceReader sourceReader;
+  @Autowired FormFactSourceIntegrityVerifier verifier;
+  @Autowired FormAttachmentStore attachments;
+  @Autowired JdbcTemplate sql;
+
+  private record Slot(UUID org,UUID entity,UUID scope,UUID project) {
+    static Slot random() {
+      return new Slot(UUID.randomUUID(),UUID.randomUUID(),
+          UUID.randomUUID(),UUID.randomUUID());
+    }
+  }
+
+  private static FormDraftService.DraftRequest request(
+      Slot s,String formCode, UUID instance,int revision,
+      Map<String,String> values,List<FormDraftService.RowInput> rows) {
+    return new FormDraftService.DraftRequest(
+        instance,s.org(),s.entity(),s.scope(),s.project(),formCode,
+        "M","2026-11","KZT","PERIOD_ONLY","MANAGEMENT","SYNTHETIC",
+        revision,values,rows,"ingest2-ci","source SHA rehash");
+  }
+
+  @Test void f02ExactHistoricalRevisionIsVerifiedNotLatest() {
+    var slot=Slot.random();
+    var first=drafts.save(request(slot,"F02",null,0,
+        Map.of("netRevenue","00120.50","cogs","40.00","operatingExpenses","10"),
+        List.of()),"ingest2-f02-first-"+slot.org());
+    var updated=drafts.save(request(slot,"F02",first.instanceId(),1,
+        Map.of("netRevenue","220.5","cogs","40","operatingExpenses","10"),
+        List.of()),"ingest2-f02-update-"+slot.org());
+    assertNotEquals(first.contentSha256(),updated.contentSha256());
+
+    var original=candidates.extractExact(first.revisionId(),slot.org(),slot.project());
+    var latest=candidates.extractExact(updated.revisionId(),slot.org(),slot.project());
+    assertEquals("SOURCE_SHA_REVERIFIED",original.sourceIntegrityState());
+    assertEquals("UNQUALIFIED_SOURCE_PROJECTION",original.qualificationState());
+    assertEquals(first.contentSha256(),original.sourceSha256Claim());
+    assertEquals(3,original.numeric().size());
+    assertEquals("120.5",original.numeric().stream()
+        .filter(n->n.sourceFieldCode().equals("netRevenue"))
+        .findFirst().orElseThrow().numericValue().toPlainString());
+    assertEquals("220.5",latest.numeric().stream()
+        .filter(n->n.sourceFieldCode().equals("netRevenue"))
+        .findFirst().orElseThrow().numericValue().toPlainString());
+    assertThrows(IllegalArgumentException.class,
+        ()->candidates.extractExact(first.revisionId(),UUID.randomUUID(),slot.project()));
+    assertThrows(IllegalArgumentException.class,
+        ()->candidates.extractExact(first.revisionId(),slot.org(),UUID.randomUUID()));
+
+    var source=sourceReader.readExact(first.revisionId(),slot.org(),slot.project());
+    var corruptedValues=new java.util.TreeMap<>(source.values());
+    corruptedValues.put("cogs","41");
+    var forged=new FormFactCandidateExtractor.SourceSnapshot(
+        source.revisionId(),source.instanceId(),source.formVersionId(),
+        source.formCode(),source.contentMode(),source.claimedCanonicalContentSha256(),
+        source.sourceSchemaSha256(),source.sourceMappingSha256(),source.scope(),
+        source.fields(),corruptedValues,source.rows(),source.evidence());
+    assertEquals("SOURCE_CONTENT_SHA_MISMATCH",assertThrows(
+        IllegalStateException.class,()->verifier.verify(forged)).getMessage());
+
+    assertEquals(0,sql.queryForObject(
+        "SELECT count(*) FROM information_schema.tables WHERE table_schema='fin_fact'",
+        Integer.class));
+  }
+
+  @Test void rowsetOrderAndValueHashesAreIndependentlyReconstructed() {
+    var slot=Slot.random();
+    UUID rowA=UUID.randomUUID(),rowB=UUID.randomUUID();
+    Map<String,String> a=Map.of("paymentRef","PAY-A","postedAt","2026-11-17",
+        "amount","100","purpose","Purchase","invoiceRef","INV-A");
+    Map<String,String> b=Map.of("paymentRef","PAY-B","postedAt","2026-11-18",
+        "amount","200","purpose","Purchase","invoiceRef","INV-B");
+    var first=drafts.save(request(slot,"DF-CSH-01",null,0,Map.of(),
+        List.of(new FormDraftService.RowInput(rowA,1,a),
+            new FormDraftService.RowInput(rowB,2,b))),
+        "ingest2-rowset-first-"+slot.org());
+    var reordered=drafts.save(request(slot,"DF-CSH-01",first.instanceId(),1,
+        Map.of(),List.of(new FormDraftService.RowInput(rowA,2,a),
+            new FormDraftService.RowInput(rowB,1,b))),
+        "ingest2-rowset-reorder-"+slot.org());
+    assertEquals(first.contentSha256(),reordered.contentSha256(),
+        "Presentation reorder must not affect economic content identity");
+    String firstOrder=sql.queryForObject(
+        "SELECT row_order_sha256 FROM fin_intake.lib_form_revision WHERE id=?",
+        String.class,first.revisionId());
+    String nextOrder=sql.queryForObject(
+        "SELECT row_order_sha256 FROM fin_intake.lib_form_revision WHERE id=?",
+        String.class,reordered.revisionId());
+    assertNotEquals(firstOrder,nextOrder);
+
+    var original=candidates.extractExact(first.revisionId(),slot.org(),slot.project());
+    var changed=candidates.extractExact(reordered.revisionId(),slot.org(),slot.project());
+    assertEquals("SOURCE_SHA_REVERIFIED",original.sourceIntegrityState());
+    assertEquals("SOURCE_SHA_REVERIFIED",changed.sourceIntegrityState());
+    assertEquals(2,original.numeric().size());
+    assertEquals(2,changed.numeric().size());
+    assertEquals(2,original.numeric().stream().map(n->n.rowId()).distinct().count());
+
+    var src=sourceReader.readExact(first.revisionId(),slot.org(),slot.project());
+    var swapped=List.of(
+        new FormFactCandidateExtractor.Row(src.rows().get(0).rowId(),2,src.rows().get(0).values()),
+        new FormFactCandidateExtractor.Row(src.rows().get(1).rowId(),1,src.rows().get(1).values()));
+    var forged=new FormFactCandidateExtractor.SourceSnapshot(
+        src.revisionId(),src.instanceId(),src.formVersionId(),src.formCode(),
+        src.contentMode(),src.claimedCanonicalContentSha256(),src.sourceSchemaSha256(),
+        src.sourceMappingSha256(),src.scope(),src.fields(),src.values(),swapped,src.evidence());
+    assertEquals("SOURCE_ROW_ORDER_SHA_MISMATCH",
+        assertThrows(IllegalStateException.class,()->verifier.verify(forged)).getMessage());
+  }
+
+  @Test void evidenceMetadataAndStoredBytesAreBothRequired() throws Exception {
+    var slot=Slot.random();
+    var bytes="%PDF-1.4\nsynthetic evidence content".getBytes(StandardCharsets.UTF_8);
+    var upload=FormAttachmentStore.validate("bank-statement.pdf",bytes);
+    var saved=drafts.saveWithAttachment(request(slot,"D01",null,0,
+        Map.of("documentRef","REF-2026-11","documentType","BANK_STATEMENT",
+            "documentDate","2026-11-19","version","1","issuerRef","BANK",
+            "attachmentRef","FILE","status","VALID"),
+        List.of()),"ingest2-evidence-"+slot.org(),upload);
+    var projection=candidates.extractExact(saved.revisionId(),slot.org(),slot.project());
+    assertEquals("SOURCE_SHA_REVERIFIED",projection.sourceIntegrityState());
+    assertEquals("UNQUALIFIED_SOURCE_PROJECTION",projection.qualificationState());
+    assertTrue(projection.numeric().isEmpty());
+    assertEquals(7,projection.attributes().size());
+    assertEquals(1,projection.evidence().size());
+
+    var attachment=attachments.find(saved.revisionId()).orElseThrow();
+    Path file=Path.of("target/ingest2-verified-attachments")
+        .toAbsolutePath().normalize().resolve(attachment.id()+".bin");
+    byte[] original=Files.readAllBytes(file);
+    try {
+      Files.write(file,"tampered financial proof".getBytes(StandardCharsets.UTF_8));
+      assertThrows(org.springframework.web.server.ResponseStatusException.class,
+          ()->candidates.extractExact(saved.revisionId(),slot.org(),slot.project()));
+    } finally {
+      Files.write(file,original);
+    }
+    assertEquals("SOURCE_SHA_REVERIFIED",
+        candidates.extractExact(saved.revisionId(),slot.org(),slot.project()).sourceIntegrityState());
+  }
+}
