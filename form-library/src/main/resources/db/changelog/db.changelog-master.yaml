@@ -65,3 +65,5 @@ databaseChangeLog:
       file: db/changelog/032-fin-calc-candidate-last-asof-postgresql.sql
   - include:
       file: db/changelog/033-fin-calc-candidate-group-ratio-postgresql.sql
+  - include:
+      file: db/changelog/034-fin-calc-candidate-metric-operation-bindings-postgresql.sql
