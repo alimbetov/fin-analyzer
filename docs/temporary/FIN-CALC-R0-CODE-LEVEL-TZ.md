@@ -190,7 +190,7 @@ TX-E  independent transaction; lock plan+fin_fact.factset_control in prescribed 
       CAS current_result pointer, mark plan PUBLISHED; COMMIT
 ```
 
-Retry TX-E after crash without duplicate result. A revoked/obsolete plan remains historically explainable but cannot become CURRENT. PostgreSQL row locking in test authority and publication MUST use same lock order; external authority production integration remains HOLD.
+**Duplicate completion gate:** on existing `(organization_id,execution_fingerprint)` result, verify same `output_values_sha256` and pinned binding/lineage identity before returning existing result. If economic outputs differ, record `NON_DETERMINISTIC_CALCULATION`, BLOCK current publication and retain evidence; cache hit/reuse flags alone are not economic differences. Retry TX-E after crash without duplicate result. A revoked/obsolete plan remains historically explainable but cannot become CURRENT. PostgreSQL row locking in test authority and publication MUST use same lock order; external authority production integration remains HOLD.
 
 ### Concurrency resource properties (initial **hypotheses**, tune by benchmark)
 
