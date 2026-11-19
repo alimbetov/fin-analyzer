@@ -204,4 +204,47 @@ class Calc166IntervalAggregatePostgresqlTest {
     assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,wrongGrain));
   }
 
+  @Test void groupByUsesExactFactsetAndOneDimension() {
+    var f=source();
+    var rows=jdbc.query("""
+      SELECT dimension_digest,observation_count,total_value
+      FROM fin_calc.candidate_interval_group_by(
+        ?::uuid,?::uuid,?::varchar,?::varchar,?::date,?::date,
+        ?::varchar,?::char(3))
+      """,(rs,i)->new Object[]{rs.getString(1),rs.getLong(2),rs.getBigDecimal(3)},
+      f.org(),f.factset(),"F02","F02.netRevenue",f.start(),f.end(),"KZT","KZT");
+    assertEquals(1,rows.size());
+    assertEquals(f.dimension(),rows.getFirst()[0].toString().trim());
+    assertEquals(2L,rows.getFirst()[1]);
+    assertEquals(0,new BigDecimal("200.00").compareTo((BigDecimal)rows.getFirst()[2]));
+  }
+
+  @Test void groupByFailsOnWrongUnitAndMissingMetric() {
+    var f=source();
+    String call="""
+      SELECT total_value FROM fin_calc.candidate_interval_group_by(
+        ?::uuid,?::uuid,?::varchar,?::varchar,?::date,?::date,
+        ?::varchar,?::char(3))
+      """;
+    assertThrows(DataAccessException.class,()->jdbc.queryForList(call,
+      f.org(),f.factset(),"F02","F02.netRevenue",f.start(),f.end(),"USD","KZT"));
+    assertThrows(DataAccessException.class,()->jdbc.queryForList(call,
+      f.org(),f.factset(),"F02","F02.noSuchMetric",f.start(),f.end(),"KZT","KZT"));
+  }
+
+  @Test void ratioOfSumsRejectsMissingDenominatorAndSameMetric() {
+    var f=source();
+    String call="""
+      SELECT ratio FROM fin_calc.candidate_ratio_of_sums(
+        ?::uuid,?::uuid,?::varchar,?::varchar,?::varchar,
+        ?::date,?::date,?::char(64),?::varchar,?::char(3))
+      """;
+    assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,
+      f.org(),f.factset(),"F02","F02.netRevenue","F02.cogs",f.start(),f.end(),
+      f.dimension(),"KZT","KZT"));
+    assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,
+      f.org(),f.factset(),"F02","F02.netRevenue","F02.netRevenue",f.start(),f.end(),
+      f.dimension(),"KZT","KZT"));
+  }
+
 }
