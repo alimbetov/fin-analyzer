@@ -28,7 +28,7 @@ Use package root `kz.fin.formlib.calc`; **all names below are NEW** (not claims 
 | **R0.B1 — Pure kernel** | `domain/TypedValue.java`, `domain/ValueState.java`, `domain/CalcScope.java`, `domain/NodeDescriptor.java`, `domain/FormulaDescriptor.java`, `domain/NodeResult.java`, `kernel/F02CalculationKernel.java`, `kernel/DagValidator.java`, `kernel/DagPlanner.java`, `kernel/FingerprintService.java` | No Spring/DB dependency in pure kernel; identical operands+versions yield identical SHA; changed operatingExpenses affects only operatingResult |
 | **R0.B2 — Preview** | `api/CalculationPreviewController.java`, `service/PreviewCalculationService.java`, `config/CalculationProperties.java` | Explicit loopback-only and feature flag, bound request body, no DB writes; frontend sequence/debounce protection |
 | **R0.B3 — DB/outbox** | Liquibase 019, `persistence/CalcJdbcRepository.java`, `outbox/OutboxAppender.java`, `outbox/CalcOutboxDispatcher.java` | Same TX as revision; five additive PostgreSQL calc tables; idempotent draft event, no qualified job without FactSet |
-| **R0.B3F — Source→Fact pilot (P0)** | Liquibase **020**, `ingest/SourceRevisionReader.java`, `SourceFactAssembler.java`, `TrustedQualificationGateway.java`, `FactSetCommitter.java`, `QualifiedFactReader.java`; 3 fact tables | Reads pinned F02 source, validates exact canonical source/field/mapping SHA; commits TEST_ONLY FactSet + 3 observations + trusted outbox in TX-Q; worker reads facts, not draft JSON; STF-01–STF-16 PG tests |
+| **R0.B3F — Monthly Partitioned Source→Fact (P0)** | Liquibase **020** + `partition/FactMonthlyPartitionService.java` + F02 source assembler, gateway, committer and qualified reader | Monthly `RANGE(period_start)` observation routing; F02 typed TEST_ONLY 3-row FactSet; no JSON fallback, no auto DROP; STF-01..16 + PFT-01..18 PostgreSQL tests |
 | **R0.B4 — Worker** | `worker/CalcWorkerScheduler.java`, `worker/CalcJobClaimer.java`, `worker/CalcJobExecutor.java`, `worker/CalcLeaseHeartbeat.java`, `worker/CalcJobReaper.java`, `worker/CalcPublicationGate.java` | Bounded 2–4-way parallel execution; **QualifiedFactReader** pins trusted observations for CPU calculation; claim, heartbeat, fenced commit and separate publication; recovery |
 | **R0.C1 — Reuse** | `service/NodeChangeImpactService.java`, `cache/CalcDescriptorCache.java`, `service/PreviousResultNodeLookup.java` | Caffeine **descriptor/graph only**. Node value reuse from verified PostgreSQL immutable result, different output snapshot for new FactSet |
 | **R0.C2 — Guard/metrics** | `admission/TrustedQualificationGateway.java`, `admission/RejectingQualificationGateway.java`, `admission/TestOnlyQualificationGateway.java` (**test source set only**), `service/CalcObservability.java` | No HTTP approve; production default fail closed; trace retries/latency without PII |
@@ -127,7 +127,7 @@ final class F02CalculationKernel {
 
 ## 3. PostgreSQL 16 migration 019 — physical contract
 
-Create `form-library/src/main/resources/db/changelog/019-fin-calc-r0-postgresql.sql` with Liquibase `dbms:postgresql` and include at end of master YAML. New schema `fin_calc`. **Then** create `020-fin-fact-r0-pilot-postgresql.sql` for `fin_fact.fact_set`, `fin_fact.fact_observation`, `fin_fact.factset_control` and add FK `fin_calc.calc_plan.factset_id → fin_fact.fact_set.id`. Detailed columns, strict TEST_ONLY qualification, and transactional tests: [Source-to-Fact contract](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md). R0 has **5 calc + 3 fact = 8 physical tables**. **JDBC-only mappings** (no new Hibernate entities) so H2 can remain supported when calc is OFF. Never edit changelogs 001–018.
+Create `019-fin-calc-r0-postgresql.sql` for 5 `fin_calc` tables; `020-fin-fact-r0-pilot-postgresql.sql` for **unpartitioned** multisource `fact_set` and `factset_control` + **monthly RANGE(period_start) partitioned** `fact_observation` and FK from calc_plan to header. Binding [Partition/166 Form Contract](./FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md), [PG16 DDL draft](./sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql), [Source-to-Fact](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md). Parent has composite PK `(period_start, observation_id)` and every UNIQUE includes period_start. R0 has 5 calc +3 fact parent/control tables + N month partitions; no auto DROP. **JDBC-only mappings** (no new Hibernate entities) so H2 can remain supported when calc is OFF. Never edit changelogs 001–018.
 
 Five tables required; this is a **column-level specification**, not a claim that the SQL exists.
 
@@ -138,6 +138,10 @@ Five tables required; this is a **column-level specification**, not a claim that
 5. `fin_calc.calc_current_result`: stable full scope + `method_code/version policy`, `result_id uuid fk`, `pointer_version bigint`, `approval_epoch bigint`, `activated_at`; UNIQUE(stable full scope including method variant). CAS and trusted authority guard; **no caching of this table**.
 
 **Mandatory constraints:** non-null for identity columns; `CHECK(attempt_count>=0, fencing_token>=0, pointer_version>=0)`; SHA-256 regexp/length checks where suitable; checked status transitions in code+tests; FK to plan/result; result immutability enforced by PG trigger or restricted DB role; **no inserts to `fin_fact` except via trusted `FactSetCommitter` TX-Q**. `fin_fact.factset_control` is the required LOCAL_TEST_ONLY authority epoch lock; **do not treat calc_plan as authorization state** or pretend this is a production external approval transaction.
+
+### Mandatory monthly partition preflight
+
+Adapt provided `TablePartitionService` **patterns**, not daily/drop implementation. Implement `FactMonthlyPartitionService.ensureMonthlyRange(YearMonth first,last,dryRun)` with fixed whitelisted `fin_fact.fact_observation`, short Spring-owned transactional DDL, advisory xact lock, catalog verification (RANGE period_start DATE and child bounds), bounded retry, dry-run/health and failure metrics. Do not create/drop partition inside FormDraftService, TX-A or TX-Q. Missing historical partition blocks qualified ingest until explicit maintenance creates it. No automatic DROP. Test two adjacent months and wrong-bound child.
 
 ### Outbox integration
 
@@ -265,12 +269,12 @@ cd frontend && npm ci && npm run check
 
 The final CI must use **one exact commit SHA**, with real PostgreSQL migration **001–020** on a clean DB and a documented upgrade path from 018. `mvn verify` in H2 alone is not proof of PG concurrency.
 
-**R0 acceptance gates:** A01–A25/A27/A29–A31 and Source-to-Fact STF-01–STF-16 in master/addendum; 0 invalid published current pointers; 0 committed revisions without outbox on the enabled PostgreSQL path; 0 duplicate immutable results for the same exact full binding; 100% determinism; 2–4 **actual concurrently executing** jobs; rollback/no-op produces no outbox event; no cache influence on admission. No performance number is considered achieved without measured test evidence.
+**R0 acceptance gates:** A01–A25/A27/A29–A34, Source-to-Fact STF-01–STF-16 and Partitioned Ingest PFT-01–PFT-18; 0 invalid published current pointers; 0 committed revisions without outbox on the enabled PostgreSQL path; 0 duplicate immutable results for the same exact full binding; 100% determinism; 2–4 **actual concurrently executing** jobs; rollback/no-op produces no outbox event; no cache influence on admission. No performance number is considered achieved without measured test evidence.
 
 ## 6. Handoff checklist for Codex
 
 1. Work only on `feat/fin-form-library-standalone`; capture initial HEAD, don't merge or change old migrations.
-2. Deliver B1 first and run pure unit tests; then B2 preview; B3 calc schema+outbox; **B3F fact migration/assembler/qualification TX-Q**; B4 bounded workers consuming `fin_fact`; C1 node reuse; C2 resilience; D qualification. R0 B1 pure kernel may GREEN independently, but full end-to-end must NOT be marked GREEN before FactSet.
+2. Deliver B1 pure unit tests, B2 preview, B3 calc schema+outbox; **B3F.1 monthly fact parent and safe partition maintenance**, **B3F.2 F02 test-only assembler/qualified TX-Q**; B4 bounded workers consuming pinned `fin_fact`, C1 reuse, C2 resilience, D full E2E; later R1-INGEST ROWSET/EVIDENCE/ReportGrid per-form qualification. R0 B1 pure kernel may GREEN independently, but full end-to-end must NOT be marked GREEN before FactSet.
 3. After each slice post: changed file list, exact SHA, tests executed/not executed, SQL negative evidence, bugs fixed.
 4. Do **not** represent a synthetic `TEST_QUALIFIED` as independent financial S2. Do not mark release READY without real authority and IAM/ABAC.
 5. On ambiguity, preserve source data and fail closed rather than adding hidden approval shortcuts.
