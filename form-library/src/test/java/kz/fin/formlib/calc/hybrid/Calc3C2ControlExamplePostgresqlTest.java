@@ -15,6 +15,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -35,6 +37,8 @@ class Calc3C2ControlExamplePostgresqlTest {
 
   @Autowired JdbcTemplate jdbc;
   @Autowired Calc3C2ControlExampleBootstrap bootstrap;
+  @Autowired RequiredOutputReviewDraftService drafts;
+  @Autowired FinancialMethodologyReviewPacketService packets;
 
   @Test void threePinnedExamplesAreSyntheticAndNotS2Approved(){
     assertEquals(3,jdbc.queryForObject("""
@@ -129,4 +133,60 @@ class Calc3C2ControlExamplePostgresqlTest {
       "SELECT count(*) FROM fin_calc.financial_control_example_revision",Integer.class));
     assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM fin_calc.calc_plan",Integer.class));
   }
+  private UUID version(String code){
+    return jdbc.queryForObject("""
+      SELECT v.id FROM fin_lib.lib_form_definition f
+      JOIN fin_lib.lib_form_version v ON v.id=f.current_version_id
+      WHERE f.form_code=?
+      """,UUID.class,code);
+  }
+
+  @Test void reviewPacketBindsExactDraftFormulaAndControlWithoutS2() throws Exception {
+    UUID formula=jdbc.queryForObject("""
+      SELECT id FROM fin_calc.formula_contract_revision
+      WHERE output_metric_code='F02.grossProfit'
+      """,UUID.class);
+    var draft=drafts.appendUnqualified(new RequiredOutputReviewDraftService.DraftRequest(
+      "F02",version("F02"),null,List.of(
+        new RequiredOutputReviewDraftService.OutputDecision(
+          "F02.netRevenue","REQUIRED","SOURCE",null),
+        new RequiredOutputReviewDraftService.OutputDecision(
+          "F02.grossProfit","REQUIRED","DERIVED",formula)),
+      "test-reviewer","Unapproved candidate, independent S2 pending"));
+    var packet=packets.preview(draft.id());
+    assertEquals(draft.bindingSha256(),packet.draftBindingSha256());
+    assertEquals(2,packet.requiredOutputs());
+    assertEquals(1,packet.derivedOutputs());
+    assertEquals(1,packet.syntheticControlExamples());
+    assertEquals(64,packet.packetSha256().length());
+    assertEquals(packet.packetSha256(),packets.preview(draft.id()).packetSha256());
+    assertFalse(packet.qualifiedForExecution());
+    assertTrue(packet.blockers().contains("FINANCIAL_METHODOLOGY_S2_NOT_VERIFIED"));
+    assertTrue(packet.blockers().contains("MODERATOR_IAM_IDENTITY_NOT_VERIFIED"));
+    assertTrue(packet.blockers().contains("FORMULA_POLICY_UNREVIEWED:F02.grossProfit"));
+    assertTrue(packet.blockers().contains(
+      "INDEPENDENT_CONTROL_VALIDATION_REQUIRED:F02.grossProfit"));
+    assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM fin_calc.calc_result",Integer.class));
+  }
+
+  @Test void reviewPacketRejectsSupersededDraftAndNeverGrantsExecution() throws Exception {
+    var first=drafts.appendUnqualified(new RequiredOutputReviewDraftService.DraftRequest(
+      "C09",version("C09"),null,List.of(
+        new RequiredOutputReviewDraftService.OutputDecision(
+          "C09.amount","OPTIONAL","SOURCE",null)),
+      "test-reviewer","First unqualified draft"));
+    var second=drafts.appendUnqualified(new RequiredOutputReviewDraftService.DraftRequest(
+      "C09",version("C09"),first.id(),List.of(
+        new RequiredOutputReviewDraftService.OutputDecision(
+          "C09.amount","REQUIRED","SOURCE",null)),
+      "test-reviewer","Updated unqualified draft"));
+    assertThrows(IllegalStateException.class,()->packets.preview(first.id()));
+    var packet=packets.preview(second.id());
+    assertEquals(1,packet.requiredOutputs());
+    assertEquals(0,packet.derivedOutputs());
+    assertEquals(0,packet.syntheticControlExamples());
+    assertFalse(packet.qualifiedForExecution());
+    assertTrue(packet.blockers().contains("FINANCIAL_METHODOLOGY_S2_NOT_VERIFIED"));
+  }
+
 }
