@@ -1,3 +1,45 @@
+# FIN FACT — MacBook / Linux quick smoke (Java 21 + Docker)
+
+Для текущих этапов INGEST-2, FACT-0 и **FACT-1 test-only** достаточно
+Java 21, Maven и Docker Desktop. **Не нужны** Keycloak, Redis, React,
+локальный PostgreSQL Compose, FIN HTAP workers и независимый S2.
+
+Обновить текущую ветку, запустить Docker Desktop и выполнить **из корня**:
+
+```bash
+git switch feat/fin-form-library-standalone
+git pull
+java -version
+mvn -version
+docker info
+bash scripts/smoke-fin-fact.sh --quick
+```
+
+Доступные режимы:
+
+| Команда | Проверка | Docker |
+|---|---|---|
+| `bash scripts/smoke-fin-fact.sh --unit` | 20 Java-only unit-тестов типов/канонического SHA и source reader | Не нужен |
+| `bash scripts/smoke-fin-fact.sh --quick` | **6 PostgreSQL 16** smoke-сценариев: F02 readback SHA, месячная схема, 2 месяца, tenant/scope/immutable source, 3 facts+outbox/idempotent replay, TX-Q rollback | Нужен |
+| `bash scripts/smoke-fin-fact.sh --extended` | **18 PostgreSQL 16** интеграционных кейсов: в том числе проверка всех 166 форм и исторический upgrade 018→021 | Нужен |
+
+Скрипт запускает `mvn clean test` только с выбранными JUnit-классами,
+проверяет **точное ожидаемое число тестов** и отклоняет skipped/failed/error.
+База и данные живут в удаляемых после теста Testcontainers; постоянный
+`compose.local.yml` volume не трогается. Проверка не
+требует запущенного backend или frontend. Повторять smoke можно безопасно.
+
+Точно такой же `--quick` запускается отдельным GitHub Actions
+workflow [FIN FACT — Quick PG16 Smoke](../.github/workflows/fin-fact-quick-smoke.yml).
+Проверенный успешный smoke доказывает **техническое хранение и
+синтетическую тестовую F02 TX-Q**, **не** утверждение бухгалтерских
+показателей, S2/IAM или работающие DAG/Worker.
+
+Если Docker Desktop ещё не настроен, запустите `--unit`:
+проверка PostgreSQL будет недоступна, и это нельзя обозначать как PG GREEN.
+
+---
+
 # FIN Local Smoke — Windows
 
 The PowerShell smoke checks the **running** FIN deployment at `127.0.0.1`:
