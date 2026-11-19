@@ -102,11 +102,13 @@ jobs:
       - name: Run isolated PostgreSQL Testcontainers integration
         run: >-
           mvn -B -ntp -f form-library/pom.xml
-          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,FactR0PostgresqlUpgradeTest
+          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,Fact1BUatCommitterPostgresqlTest,CalcR01PostgresqlTest,FactR0PostgresqlUpgradeTest
           -Dfin.postgres.uat.enabled=true
           test
       - name: Fail closed on FACT-1.B PG16 source/commit/replay matrix
         run: python3 scripts/check-fin-fact1b-junit.py --out-dir target/fin-fact1b
+      - name: Fail closed on CALC-R0.1 PostgreSQL TX-B matrix
+        run: python3 scripts/check-fin-calc-r01-junit.py --out-dir target/calc-r01
       - name: Validate exactly 166 independently executed PG16 report cases
         run: python3 scripts/check-fin-166-form-junit.py --out-dir target/fin-166
       - name: Preserve JUnit evidence for each of 166 report forms
@@ -120,6 +122,8 @@ jobs:
             target/fin-166/form-coverage.json
             form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.fact.Fact1BUatCommitterPostgresqlTest.xml
             target/fin-fact1b/fact1b-coverage.json
+            form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.fact.CalcR01PostgresqlTest.xml
+            target/calc-r01/calc-r01-coverage.json
           if-no-files-found: error
           retention-days: 30
 
