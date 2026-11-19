@@ -1,0 +1,56 @@
+name: FIN CALC-166 — Candidate SQL PG16 Gate
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'docs/FIN-CALC-R0-*-BASELINE.tsv'
+      - 'scripts/fin-calc-166-merge-candidate-registry.sql'
+      - 'scripts/check-fin-calc166-candidate-inventory.py'
+      - 'form-library/src/main/**'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/hybrid/Calc166IntervalAggregatePostgresqlTest.java'
+      - 'form-library/pom.xml'
+      - '.github/workflows/fin-calc166-pg16-candidate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-pg16:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify 166 forms, 793 source fields and one derived candidate
+        run: python3 scripts/check-fin-calc166-candidate-inventory.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Execute dedicated PostgreSQL 16 Testcontainers acceptance
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc166IntervalAggregatePostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Reject silent skips and errors
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          paths=glob.glob("form-library/target/surefire-reports/TEST-*Calc166IntervalAggregatePostgresqlTest.xml")
+          if len(paths)!=1:
+              sys.exit("FAIL: no dedicated CALC-166 PG16 surefire XML")
+          root=ET.parse(paths[0]).getroot()
+          values={k:int(root.attrib.get(k,"0")) for k in ("tests","errors","failures","skipped")}
+          print(values)
+          if values!={"tests":2,"errors":0,"failures":0,"skipped":0}:
+              sys.exit("FAIL: PG16 CALC-166 expected 2 PASS and zero skipped")
+          PY
