@@ -2,6 +2,13 @@ package kz.fin.formlib.calc.ingest;
 
 import kz.fin.formlib.service.FormAttachmentStore;
 import kz.fin.formlib.service.FormDraftService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import java.io.ByteArrayInputStream;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Testcontainers
 @EnabledIfSystemProperty(named="fin.postgres.uat.enabled",matches="true")
+@AutoConfigureMockMvc
 @SpringBootTest(properties={
     "fin.uat.editor.enabled=false",
     "fin.attachments.directory=./target/ingest2-verified-attachments"
@@ -53,6 +61,8 @@ class Ingest2PostgresqlIntegrityTest {
   @Autowired FormFactSourceIntegrityVerifier verifier;
   @Autowired FormAttachmentStore attachments;
   @Autowired JdbcTemplate sql;
+  @Autowired MockMvc http;
+  @Autowired ObjectMapper json;
 
   private record Slot(UUID org,UUID entity,UUID scope,UUID project) {
     static Slot random() {
@@ -129,8 +139,24 @@ class Ingest2PostgresqlIntegrityTest {
     };
   }
 
-  private void verifyCompleteLifecycle(String code,List<String[]> definition) {
+  private void verifyCompleteLifecycle(String code,List<String[]> definition) throws Exception {
     String mode=definition.getFirst()[1];
+    var catalogResponse=http.perform(get("/api/v1/forms/"+code))
+        .andExpect(status().isOk()).andReturn();
+    var detail=json.readTree(catalogResponse.getResponse().getContentAsByteArray());
+    assertEquals(code,detail.path("summary").path("formCode").asText(),code);
+    assertEquals(mode,detail.path("summary").path("contentMode").asText(),code);
+    assertEquals(definition.size(),detail.path("fields").size(),code);
+    for(String[] field:definition) {
+      boolean found=false;
+      for(var rendered:detail.path("fields")) {
+        if(field[2].equals(rendered.path("fieldCode").asText())) {
+          assertEquals(field[3],rendered.path("fieldType").asText(),code+"."+field[2]);
+          found=true;
+        }
+      }
+      assertTrue(found,"FORM_HTTP_FIELD_MISSING:"+code+"."+field[2]);
+    }
     Slot tenant=Slot.random();
     Map<String,String> values=new java.util.TreeMap<>();
     for(String[] field:definition) {
@@ -178,6 +204,14 @@ class Ingest2PostgresqlIntegrityTest {
     assertEquals("M",opened.periodType(),code);
     assertEquals("2026-11",opened.periodCode(),code);
     assertEquals(top,opened.values(),"PERSISTED_VALUES_CHANGED:"+code);
+    var initialHttp=http.perform(get("/api/v1/drafts/"+first.instanceId())
+        .param("organizationId",tenant.org().toString()))
+        .andExpect(status().isOk()).andReturn();
+    var initialPayload=json.readTree(initialHttp.getResponse().getContentAsByteArray());
+    assertEquals(code,initialPayload.path("formCode").asText(),code);
+    assertEquals(1,initialPayload.path("revisionNo").asInt(),code);
+    assertEquals(first.contentSha256(),initialPayload.path("sha256").asText(),code);
+    assertEquals(opened.rows().size(),initialPayload.path("rows").size(),code);
     assertEquals(inputRows.size(),opened.rows().size(),code);
     for(var expected:inputRows) {
       var actual=opened.rows().stream()
@@ -261,6 +295,28 @@ class Ingest2PostgresqlIntegrityTest {
     assertEquals(first.contentSha256(),historical.sha256(),code);
     assertEquals(opened.values(),historical.values(),code);
     assertEquals(opened.rows(),historical.rows(),code);
+    var historicalHttp=http.perform(get("/api/v1/drafts/"+first.instanceId()+"/revisions/1")
+        .param("organizationId",tenant.org().toString()))
+        .andExpect(status().isOk()).andReturn();
+    var historicalPayload=json.readTree(historicalHttp.getResponse().getContentAsByteArray());
+    assertEquals(1,historicalPayload.path("revisionNo").asInt(),code);
+    assertEquals(first.contentSha256(),historicalPayload.path("sha256").asText(),code);
+    var currentHttp=http.perform(get("/api/v1/drafts/"+first.instanceId())
+        .param("organizationId",tenant.org().toString()))
+        .andExpect(status().isOk()).andReturn();
+    assertEquals(revised.contentSha256(),
+        json.readTree(currentHttp.getResponse().getContentAsByteArray())
+          .path("sha256").asText(),code);
+    // XLSX byte stream is independently parsed, not merely asserted non-empty.
+    var export=http.perform(get("/api/v1/drafts/"+first.instanceId()+"/export.xlsx")
+        .param("organizationId",tenant.org().toString())
+        .param("styleCode","EXCEL").param("locale","ru"))
+        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+    assertTrue(export.length>100,"XLSX_EXPORT_EMPTY:"+code);
+    try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(export))) {
+      assertNotNull(workbook.getSheet("REPORT"),"XLSX_REPORT_SHEET_MISSING:"+code);
+      assertNotNull(workbook.getSheet("PARAMETERS"),"XLSX_PARAMS_SHEET_MISSING:"+code);
+    }
     assertEquals(original.sourceSha256Claim(),
         candidates.extractExact(first.revisionId(),tenant.org(),tenant.project())
             .sourceSha256Claim(),code);
@@ -275,6 +331,9 @@ class Ingest2PostgresqlIntegrityTest {
 
     assertThrows(org.springframework.web.server.ResponseStatusException.class,
         ()->drafts.read(first.instanceId(),UUID.randomUUID()),code);
+    http.perform(get("/api/v1/drafts/"+first.instanceId())
+        .param("organizationId",UUID.randomUUID().toString()))
+        .andExpect(status().isNotFound());
     assertThrows(IllegalArgumentException.class,()->
         candidates.extractExact(first.revisionId(),UUID.randomUUID(),tenant.project()),code);
     assertThrows(IllegalArgumentException.class,()->
