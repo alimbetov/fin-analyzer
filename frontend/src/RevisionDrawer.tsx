@@ -1,4 +1,5 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
+import type {KeyboardEvent as ReactKeyboardEvent} from 'react';
 import {ChevronRight,Clock3,Download,X} from 'lucide-react';
 import type {Draft,Field} from './api';
 import {get,request} from './api';
@@ -12,6 +13,8 @@ export default function RevisionDrawer({instanceId,organizationId,projectId,late
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const [downloading,setDownloading]=useState(false);
+  const [downloadError,setDownloadError]=useState('');
+  const dialogRef=useRef<HTMLElement>(null);
   useEffect(()=>{setSelected(latestRevision)},[instanceId,latestRevision]);
   useEffect(()=>{
     let active=true;
@@ -23,13 +26,22 @@ export default function RevisionDrawer({instanceId,organizationId,projectId,late
     return()=>{active=false};
   },[instanceId,organizationId,selected]);
   useEffect(()=>{
-    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')onClose()};
-    document.addEventListener('keydown',escape);
-    return()=>document.removeEventListener('keydown',escape);
-  },[onClose]);
+    const previousFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    dialogRef.current?.querySelector<HTMLButtonElement>('[aria-label="Закрыть историю"]')?.focus();
+    return()=>previousFocus?.focus();
+  },[]);
+  function handleDialogKey(event:ReactKeyboardEvent<HTMLElement>){
+    if(event.key==='Escape'){event.preventDefault();event.stopPropagation();onClose();return;}
+    if(event.key!=='Tab')return;
+    const buttons=Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')??[]);
+    if(!buttons.length)return;
+    const first=buttons[0],last=buttons[buttons.length-1];
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+  }
   async function downloadAttachment(){
     if(!revision?.attachment)return;
-    setDownloading(true);setError('');
+    setDownloading(true);setDownloadError('');
     try{
       const url='/drafts/'+encodeURIComponent(instanceId)+'/revisions/'+selected+'/attachment?'+
         new URLSearchParams({organizationId,projectId});
@@ -39,11 +51,11 @@ export default function RevisionDrawer({instanceId,organizationId,projectId,late
       const anchor=document.createElement('a');anchor.href=objectUrl;
       anchor.download=revision.attachment.fileName;document.body.append(anchor);
       anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
-    }catch(e){setError(String(e))}
+    }catch(e){setDownloadError(String(e))}
     finally{setDownloading(false)}
   }
   return <div className="history-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}>
-    <aside className="history-drawer" role="dialog" aria-modal="true" aria-label="История редакций">
+    <aside ref={dialogRef} className="history-drawer" role="dialog" aria-modal="true" aria-label="История редакций" onKeyDown={handleDialogKey}>
       <header className="history-heading">
         <div><span className="eyebrow">ИСТОРИЯ ОТЧЁТА</span><h2>Редакции</h2><p>Прошлые версии доступны только для просмотра</p></div>
         <button type="button" aria-label="Закрыть историю" onClick={onClose}><X size={20}/></button>
@@ -59,13 +71,14 @@ export default function RevisionDrawer({instanceId,organizationId,projectId,late
         {loading?<p role="status">Загрузка редакции…</p>:error?<p role="alert">{error}</p>:revision&&<>
           <div className="history-meta"><strong>Редакция {revision.revisionNo}</strong><span>{revision.periodCode} · {revision.currency}</span></div>
           <div className="history-fields">
-            {fields.map(field=><div key={field.fieldCode}><span>{field.title||field.fieldCode}</span>
+            {revision.contentMode!=='ROWSET'&&fields.map(field=><div key={field.fieldCode}><span>{field.title||field.fieldCode}</span>
               <strong>{revision.values[field.fieldCode]||'—'}</strong></div>)}
             {revision.rows.length>0&&<div className="history-rowset"><strong>Табличные строки: {revision.rows.length}</strong>
               {revision.rows.map((row,index)=><details key={row.rowId}><summary>Строка {index+1} <ChevronRight size={14}/></summary>
                 {fields.map(field=><p key={field.fieldCode}>{field.title||field.fieldCode}: {row.values[field.fieldCode]||'—'}</p>)}
               </details>)}</div>}
           </div>
+          {downloadError&&<p role="alert" className="history-download-error">{downloadError}</p>}
           {revision.attachment&&<button className="history-download" type="button" onClick={downloadAttachment} disabled={downloading}>
             <Download size={17}/>{downloading?'Скачивание…':'Скачать '+revision.attachment.fileName}
           </button>}
