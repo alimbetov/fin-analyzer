@@ -189,4 +189,29 @@ class Calc3C2ControlExamplePostgresqlTest {
     assertTrue(packet.blockers().contains("FINANCIAL_METHODOLOGY_S2_NOT_VERIFIED"));
   }
 
+  @Test void reviewReadinessViewCoversAll154WithoutFabricatedApproval(){
+    assertEquals(154,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc3c2_financial_review_readiness_v1
+      """,Integer.class));
+    assertEquals(145,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc3c2_financial_review_readiness_v1
+      WHERE has_direct_numeric_source
+      """,Integer.class));
+    assertEquals(9,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc3c2_financial_review_readiness_v1
+      WHERE reference_only
+      """,Integer.class));
+    assertEquals(3,jdbc.queryForObject("""
+      SELECT synthetic_control_example_count
+      FROM fin_calc.calc3c2_financial_review_readiness_v1
+      WHERE form_code='F02'
+      """,Integer.class));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc3c2_financial_review_readiness_v1
+      WHERE financial_approval_state<>'NOT_S2_APPROVED'
+        OR calc_plan_execution_admitted=true
+        OR mandatory_state<>'REVIEW_REQUIRED'
+      """,Integer.class));
+  }
+
 }
