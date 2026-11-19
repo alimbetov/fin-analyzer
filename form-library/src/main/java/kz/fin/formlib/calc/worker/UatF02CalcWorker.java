@@ -140,7 +140,7 @@ public final class UatF02CalcWorker {
     var verified=verifiedReader.verify(claim.planId(),claim.organizationId(),
         claim.scopeKey());
     var expectedJava=kernel.evaluate(verified.observations());
-    var evaluated=expectedJava;
+    final F02CalculationKernel.Result evaluated;
     if(nativeSqlEnabled) {
       if(nativeSqlKernel==null)
         throw new IllegalStateException("CALC_SQL_F02_KERNEL_UNAVAILABLE");
@@ -148,6 +148,8 @@ public final class UatF02CalcWorker {
       if(!expectedJava.equals(computedSql))
         throw new IllegalStateException("CALC_SQL_F02_PARITY_MISMATCH");
       evaluated=computedSql;
+    } else {
+      evaluated=expectedJava;
     }
     String resultSha=FactDigest.sha("FIN-FACT-CALC-RESULT-V1",
         verified.executionFingerprint(),verified.bindingSha256(),
