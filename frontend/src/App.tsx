@@ -255,6 +255,8 @@ export default function App(){
     if(switchForm(code))setDecisionContext(context);
   }
   const save=()=>execute(async()=>{
+    // A lost response is not a failed write. Replaying a frozen command
+    // with the same Idempotency-Key is safe; never create a new key here.
     setAttemptedSave(true);
     if(!form||!editable)throw new Error('Для этой формы запись черновика недоступна.');
     if(!draft&&!dirty&&Object.keys(values).length===0&&rowEntries.length===0)throw new Error('Сначала заполните отчёт');
@@ -312,7 +314,7 @@ export default function App(){
         setDirty(true);
         throw new Error('Уже существует отчёт за этот период. Открыта ревизия '+
           existing.revisionNo+'. Введённые значения сохранены в редакторе, но ещё не записаны в БД. '+
-          'Проверьте их и нажмите «Сохранить ревизию» ещё раз.');
+          'Проверьте их и нажмите «Сохранить» ещё раз.');
       }
       throw error;
     }
@@ -576,7 +578,7 @@ export default function App(){
                 }}><FolderTree size={18}/></Tool>
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
                 {draft&&<button className="history-trigger" type="button" disabled={busy} onClick={()=>setHistoryOpen(true)}><GitBranch size={16}/> История · {draft.revisionNo}</button>}
-                <button className="primary-save" type="button" disabled={busy||!editable||!dirty||commitUncertain||saveUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} Сохранить</button>
+                <button className="primary-save" type="button" disabled={busy||!editable||(!dirty&&!saveUncertain)||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} {saveUncertain?'Повторить сохранение':'Сохранить'}</button>
 
                 {!evidence&&<Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>}
                 {!evidence&&<Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain||saveUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>}
@@ -612,7 +614,7 @@ export default function App(){
               </div>}
               {!editable&&form&&<div className="warning" role="status"><AlertTriangle size={17}/> Запись отключена: {editorBlockReason[eligibility.reason??'']??'Контракт формы не позволяет изменение.'} Каталог не даёт разрешения на запись. Код: {eligibility.reason??'UNKNOWN'}.</div>}
               {commitUncertain&&<div className="warning"><AlertTriangle size={17}/> Commit мог сохраниться. Откройте экземпляр заново и сверьте номер ревизии перед следующей операцией.</div>}
-              {saveUncertain&&<div className="warning"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Повторите сохранение с тем же Idempotency-Key; значения заблокированы до сверки.</div>}
+              {saveUncertain&&<div className="warning" role="alert"><AlertTriangle size={17}/> Ответ на сохранение не подтверждён. Нажмите «Повторить сохранение»: будет отправлена та же команда с тем же ключом без создания дополнительной редакции. Изменение значений заблокировано до сверки.</div>}
               {dirty&&<div className="warning"><AlertTriangle size={17}/> Есть несохранённые изменения.</div>}
               {evidence&&<div className="warning" role="status"><AlertTriangle size={17}/> Реквизиты документа доступны для сохранения. Прикрепление PDF и изображений через этот экран пока не подключено.</div>}
               <div className="sheet-head"><div><b>Показатели отчёта</b><p>Вставка из Excel: Ctrl+V · Enter / ↓ для следующего поля</p></div>
@@ -686,7 +688,7 @@ export default function App(){
               </div></details>}
             </div>
             <div className="editor-footer"><span className="dot"/> {message}<span className="footer-sha">{draft?'SHA256 '+draft.sha256.slice(0,16):'Unsaved'}</span></div>
-            <div className="editor-sticky-actions"><span className={dirty?"unsaved-indicator":"saved-indicator"}>{dirty?"Не сохранено":draft?"Сохранено · редакция "+draft.revisionNo:"Новый отчёт"}</span><span className="sticky-progress">{completion}% заполнено</span><button type="button" className="primary-save" disabled={busy||!editable||!dirty||saveUncertain||commitUncertain} onClick={save}><Save size={16}/> Сохранить изменения</button></div>
+            <div className="editor-sticky-actions"><span className={saveUncertain||dirty?"unsaved-indicator":"saved-indicator"}>{saveUncertain?"Результат записи неизвестен":dirty?"Не сохранено":draft?"Сохранено · редакция "+draft.revisionNo:"Новый отчёт"}</span><span className="sticky-progress">{completion}% заполнено</span><button type="button" className="primary-save" disabled={busy||!editable||(!dirty&&!saveUncertain)||commitUncertain} onClick={save}><Save size={16}/> {saveUncertain?'Повторить сохранение':'Сохранить изменения'}</button></div>
           </section>}
         </div>
         </>}
