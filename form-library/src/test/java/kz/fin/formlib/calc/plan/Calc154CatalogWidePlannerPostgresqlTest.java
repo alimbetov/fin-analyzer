@@ -13,6 +13,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -51,6 +54,31 @@ class Calc154CatalogWidePlannerPostgresqlTest {
       inv.forms().stream().map(Calc154CatalogWidePlanner.FormPlan::formCode).toList()).size());
     assertEquals(0,sql.queryForObject("SELECT count(*) FROM fin_calc.calc_plan",Integer.class));
     assertEquals(0,sql.queryForObject("SELECT count(*) FROM fin_calc.calc_result",Integer.class));
+
+    // Emit the exact live PostgreSQL contract state for all 154 forms.
+    // This report is a readiness inventory, NEVER 154 completed calculations.
+    try{
+      Path folder=Path.of("target/fin-calc154");
+      Files.createDirectories(folder);
+      var out=new StringBuilder(
+        "formCode\\tformVersionId\\tcontentMode\\tschemaSha256\\t"+
+        "directNumericFields\\tformulaCandidates\\toperations\\t"+
+        "mandatoryOutputStatus\\tfinanciallyApproved\\texecutable\\t"+
+        "blockers\\tmanifestSha256\\n".replace("\\\\t","\\t"));
+      for(var form:inv.forms()){
+        String ops=form.candidates().stream()
+          .map(Calc154CatalogWidePlanner.FormulaCandidate::operation)
+          .distinct().sorted().collect(java.util.stream.Collectors.joining(";"));
+        out.append(String.join("\\t",form.formCode(),form.formVersionId().toString(),
+          form.contentMode(),form.schemaSha256(),
+          Integer.toString(form.directNumericFields()),
+          Integer.toString(form.candidates().size()),ops,
+          "REVIEW_REQUIRED","false","false",
+          String.join(";",form.blockers()),form.manifestSha256())).append('\\n');
+      }
+      Files.writeString(folder.resolve("154-form-calc4b-coverage.tsv"),
+        out.toString(),StandardCharsets.UTF_8);
+    }catch(java.io.IOException e){throw new IllegalStateException("CALC154_REPORT_WRITE_FAILED",e);}
   }
 
   @TestFactory Stream<DynamicTest> everyNumericFormHasTypedSourcesOrExplicitBlocker(){
