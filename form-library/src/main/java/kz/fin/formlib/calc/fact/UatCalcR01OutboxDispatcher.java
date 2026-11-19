@@ -82,10 +82,7 @@ public final class UatCalcR01OutboxDispatcher {
     if(max<1||max>32||fault==null)throw new IllegalArgumentException("CALC_R01_BATCH_INVALID");
     int planned=0,reused=0,stale=0;
     for(int i=0;i<max;i++){
-      var tx=new TransactionTemplate(manager);
-      tx.setIsolationLevel(TransactionTemplate.ISOLATION_REPEATABLE_READ);
-      tx.setTimeout(25);
-      State outcome=tx.execute(status->dispatchOne(fault));
+      State outcome=dispatchInTxWithBoundedRetry(fault);
       if(outcome==null)break;
       switch(outcome){
         case PLANNED -> planned++;
@@ -94,6 +91,40 @@ public final class UatCalcR01OutboxDispatcher {
       }
     }
     return new BatchResult(planned,reused,stale);
+  }
+
+  private State dispatchInTxWithBoundedRetry(FaultPoint fault){
+    for(int attempt=0;attempt<5;attempt++){
+      try{
+        var tx=new TransactionTemplate(manager);
+        // SKIP LOCKED consumers use READ COMMITTED. Financial sources/observations
+        // are immutable; authority pointer is explicitly locked FOR SHARE.
+        // REPEATABLE READ can raise 40001 when concurrent consumers ACK the
+        // same outbox row while another snapshot is already held.
+        tx.setIsolationLevel(TransactionTemplate.ISOLATION_READ_COMMITTED);
+        tx.setTimeout(25);
+        return tx.execute(status->dispatchOne(fault));
+      }catch(RuntimeException ex){
+        if(attempt==4||!retryable(ex))throw ex;
+        try{Thread.sleep(25L*(attempt+1));}
+        catch(InterruptedException interrupted){
+          Thread.currentThread().interrupt();
+          throw new IllegalStateException("CALC_R01_RETRY_INTERRUPTED",interrupted);
+        }
+      }
+    }
+    throw new IllegalStateException("CALC_R01_RETRY_EXHAUSTED");
+  }
+
+  private static boolean retryable(Throwable error){
+    for(Throwable t=error;t!=null;t=t.getCause()){
+      if(t instanceof SQLException sql
+          && ("40001".equals(sql.getSQLState())
+              ||"40P01".equals(sql.getSQLState())
+              ||"55P03".equals(sql.getSQLState())))
+        return true;
+    }
+    return false;
   }
 
   private State dispatchOne(FaultPoint fault){
