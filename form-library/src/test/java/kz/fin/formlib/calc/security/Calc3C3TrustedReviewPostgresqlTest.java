@@ -162,10 +162,10 @@ class Calc3C3TrustedReviewPostgresqlTest {
 
   @Test void supersededDraftNeverReceivesPreS2Request() throws Exception{
     principal("author-p09",FinancialReviewIamIdentity.AUTHOR_ROLE);
-    var first=intake.authorDraft("F02",version("F02"),null,
-      List.of(source("F02.cogs")),"First review candidate");
-    var second=intake.authorDraft("F02",version("F02"),first.id(),
-      List.of(source("F02.netRevenue")),"Superseding review candidate");
+    var first=intake.authorDraft("F01",version("F01"),null,
+      List.of(source("F01.assets")),"First review candidate");
+    var second=intake.authorDraft("F01",version("F01"),first.id(),
+      List.of(source("F01.liabilities")),"Superseding review candidate");
     principal("reviewer",FinancialReviewIamIdentity.REVIEWER_ROLE);
     assertThrows(IllegalStateException.class,()->intake.submitForIndependentS2(first.id()));
     assertEquals("PRE_S2_REVIEW_ONLY",intake.submitForIndependentS2(second.id()).status());
@@ -202,7 +202,7 @@ class Calc3C3TrustedReviewPostgresqlTest {
   }
 
   @Test void authorOnlyCannotSubmitAndReviewerOnlyCannotAuthor() throws Exception {
-    var draft=author("C09","C09.amount");
+    var draft=author("C08","C08.fixedCost");
     assertThrows(AccessDeniedException.class,()->intake.submitForIndependentS2(draft.id()));
     principal("reviewer",FinancialReviewIamIdentity.REVIEWER_ROLE);
     assertThrows(AccessDeniedException.class,()->intake.authorDraft(
