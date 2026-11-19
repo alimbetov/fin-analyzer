@@ -1,0 +1,55 @@
+name: FIN CALC-3B — 154 Requiredness & Dependency Matrices
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'docs/FIN-CALC3B-*.tsv'
+      - 'docs/FIN-CALC-R0-COVERAGE-166-BASELINE.tsv'
+      - 'docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv'
+      - 'form-library/src/main/resources/catalog/calc154-formula-contracts-v1.tsv'
+      - 'form-library/src/main/resources/catalog/analytics-model-catalog.tsv'
+      - 'scripts/generate-fin-calc3b-review.py'
+      - '.github/workflows/fin-calc3b-review-matrix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review-matrices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify 154 unresolved mandatory output sets and all dependencies
+        run: python3 scripts/generate-fin-calc3b-review.py --check
+      - name: Reject accidental finance approval and false numeric evidence
+        run: |
+          python3 - <<'PY'
+          import csv
+          from pathlib import Path
+          def rows(name):
+              with Path('docs',name).open(encoding='utf-8') as f:
+                  return list(csv.DictReader(f,delimiter='\t'))
+          requirements=rows('FIN-CALC3B-REQUIREDNESS-REVIEW.tsv')
+          inputs=rows('FIN-CALC3B-FORMULA-TYPED-INPUTS.tsv')
+          model=rows('FIN-CALC3B-MODEL-FORM-DEPENDENCIES.tsv')
+          assert len(requirements)==154 and len(inputs)==21 and len(model)==97
+          assert all(x['mandatoryOutputState']=='REVIEW_REQUIRED'
+                     and x['mandatoryOutputCount']=='UNKNOWN'
+                     and x['mandatoryOutputMetricCodes']=='NOT_DETERMINED'
+                     and x['financialApprovalState']=='NOT_S2_APPROVED'
+                     for x in requirements)
+          assert sum(x['sourceKind']=='FORMULA_CANDIDATE' for x in inputs)==2
+          assert all(x['inputRequirednessState']=='REVIEW_REQUIRED' for x in inputs)
+          assert sum(x['sourceMode']=='EVIDENCE' for x in model)==1
+          assert all(x['numericEligible']=='false' for x in model
+                     if x['sourceMode']=='EVIDENCE')
+          assert all(x['financialApprovalState']=='NOT_S2_APPROVED' for x in model)
+          print('PASS CALC3B fail-closed 154/21/97 governance matrices')
+          PY
