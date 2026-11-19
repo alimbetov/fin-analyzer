@@ -103,12 +103,17 @@ jobs:
           -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,FactR0PostgresqlUpgradeTest
           -Dfin.postgres.uat.enabled=true
           test
+      - name: Validate exactly 166 independently executed PG16 report cases
+        run: python3 scripts/check-fin-166-form-junit.py --out-dir target/fin-166
       - name: Preserve JUnit evidence for each of 166 report forms
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fin-166-form-pg16-junit
-          path: form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.ingest.Ingest2PostgresqlIntegrityTest.xml
+          path: |
+            form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.ingest.Ingest2PostgresqlIntegrityTest.xml
+            target/fin-166/form-coverage.csv
+            target/fin-166/form-coverage.json
           if-no-files-found: error
           retention-days: 30
 

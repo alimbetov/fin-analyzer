@@ -100,6 +100,11 @@ class Ingest2PostgresqlIntegrityTest {
     for(var row:physical)
       byForm.computeIfAbsent(row[0],k->new java.util.ArrayList<>()).add(row);
     assertEquals(166,byForm.size(),"CATALOG_166_COVERAGE");
+    var certifiedRegistry=FormFactIngestionRegistry.loadDefault();
+    assertEquals(certifiedRegistry.profiles().keySet(),byForm.keySet(),
+        "POSTGRES_166_CATALOG_MUST_MATCH_REPORT_MANIFEST");
+    for(var entry:byForm.entrySet())
+      certifiedRegistry.require(entry.getKey(),entry.getValue().getFirst()[1]);
     assertEquals(877,physical.size(),"CATALOG_877_FIELD_CONTRACTS");
     assertEquals(3,byForm.values().stream().filter(v->
         "SINGLE_RECORD".equals(v.getFirst()[1])).count());
