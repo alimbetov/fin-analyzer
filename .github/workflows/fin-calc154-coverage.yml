@@ -8,6 +8,7 @@ on:
       - 'docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv'
       - 'docs/FIN-CALC154-*.tsv'
       - 'form-library/src/main/resources/catalog/analytics-model-catalog.tsv'
+      - 'form-library/src/main/resources/catalog/calc154-formula-contracts-v1.tsv'
       - 'scripts/generate-fin-calc154-coverage.py'
       - 'scripts/check-fin-calc166-candidate-inventory.py'
       - '.github/workflows/fin-calc154-coverage.yml'
@@ -30,6 +31,21 @@ jobs:
         run: python3 scripts/check-fin-calc166-candidate-inventory.py
       - name: Rebuild deterministically and reject untracked changes
         run: python3 scripts/generate-fin-calc154-coverage.py --check
+      - name: Require contract SHA for every candidate and none for source fields
+        run: |
+          python3 - <<'PY'
+          import csv,re
+          from pathlib import Path
+          with Path('docs/FIN-CALC154-METRIC-COVERAGE.tsv').open() as f:
+              rows=list(csv.DictReader(f,delimiter='\t'))
+          assert len(rows)==804
+          candidate=[r for r in rows if r['kind']=='CALCULATED_CANDIDATE']
+          assert len(candidate)==10
+          assert all(re.fullmatch('[0-9a-f]{64}',r['contractSha256']) for r in candidate)
+          assert all(not r['contractSha256'] for r in rows if r not in candidate)
+          assert all(r['status'] in ('CANDIDATE_UNQUALIFIED','UAT_TEST_ONLY') for r in candidate)
+          print('PASS CALC154 candidate SHA manifest')
+          PY
       - name: Check that candidates have no implicit S2 or COMPLETE promotion
         run: |
           python3 - <<'PY'
