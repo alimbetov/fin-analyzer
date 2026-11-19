@@ -31,6 +31,7 @@ public class FormDraftService {
   private final ObjectMapper mapper;
   private final FieldMetricContractGuard contractGuard;
   private final FormAttachmentStore attachments;
+  private final FormContentFingerprint contentFingerprint;
 
   public record RowInput(UUID rowId, int rowPosition, Map<String,String> values) {}
   public record DraftRequest(UUID instanceId, UUID organizationId, UUID economicEntityId,
@@ -59,6 +60,7 @@ public class FormDraftService {
     this.forms=forms;this.versions=versions;this.fields=fields;this.instances=instances;
     this.revisions=revisions;this.rows=rows;this.receipts=receipts;
     this.currencies=currencies;this.mapper=mapper;this.contractGuard=contractGuard;this.attachments=attachments;
+    this.contentFingerprint=new FormContentFingerprint(mapper);
   }
   private static ResponseStatusException bad(String code) {
     return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,code);
@@ -336,19 +338,22 @@ public class FormDraftService {
       prepared.sort(Comparator.comparingInt(RowInput::rowPosition).thenComparing(RowInput::rowId));
     }
 
-    // Financial content identity is independent of purely visual row_position.
-    // Scope and revision-pinned form version remain part of the domain hash.
-    String content=json(List.of(req.organizationId().toString(),req.economicEntityId().toString(),
-      req.businessScopeId().toString(),req.projectId().toString(),req.formCode(),
+    // INGEST-2 shares the exact historical canonical encoder with readback.
+    var context=new FormContentFingerprint.Context(req.organizationId(),
+      req.economicEntityId(),req.businessScopeId(),req.projectId(),req.formCode(),
       version.getVersionLabel(),period.periodType(),period.periodCode(),req.coverage(),
-      req.currency(),req.reportingBasis(),req.dataSpace(),normalized,
-      prepared.stream().sorted(Comparator.comparing(RowInput::rowId))
-        .map(r->List.of(r.rowId().toString(),r.values())).toList()));
-    if(upload!=null)content=json(List.of(content,upload.fileName(),upload.mediaType(),upload.sha256()));
-    else if(inherited!=null)content=json(List.of(content,inherited.fileName(),inherited.mediaType(),inherited.sha256()));
-    String contentHash=sha("FIN-LIB-CONTENT-V1|"+content);
-    String orderHash=sha("FIN-LIB-ROW-ORDER-V1|"+
-       prepared.stream().map(r->r.rowPosition()+":"+r.rowId()).toList());
+      req.currency(),req.reportingBasis(),req.dataSpace());
+    var contentRows=prepared.stream()
+      .map(r->new FormContentFingerprint.Row(r.rowId(),r.rowPosition(),r.values()))
+      .toList();
+    var contentAttachment=upload!=null
+      ?new FormContentFingerprint.Attachment(upload.fileName(),upload.mediaType(),upload.sha256())
+      :inherited!=null
+        ?new FormContentFingerprint.Attachment(inherited.fileName(),inherited.mediaType(),inherited.sha256())
+        :null;
+    var hashes=contentFingerprint.compute(context,normalized,contentRows,contentAttachment);
+    String contentHash=hashes.contentSha256();
+    String orderHash=hashes.rowOrderSha256();
     // A fresh idempotency key must not create a phantom revision when
     // neither the financial content nor the explicit row order changed.
     // A replay of the SAME key was already returned above.
