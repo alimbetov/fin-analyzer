@@ -71,8 +71,8 @@ jobs:
       - name: Backend regression and Liquibase smoke (test datasource)
         run: mvn -B -ntp -f form-library/pom.xml clean verify
 
-  # INGEST-2 gate below verifies exact FIN-LIB-CONTENT-V1 source snapshots.
-  # This is NOT financial S2 or qualified fin_fact materialization.
+  # INGEST-2 source SHA and FACT-0 PostgreSQL partition/storage gates.
+  # FACT-0 fixtures use direct synthetic TEST_ONLY SQL, NOT financial S2 approval.
 
   postgres-qualification:
     name: PostgreSQL 16 / fin_intake REST qualification
@@ -99,7 +99,7 @@ jobs:
       - name: Run isolated PostgreSQL Testcontainers integration
         run: >-
           mvn -B -ntp -f form-library/pom.xml
-          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest
+          -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest
           -Dfin.postgres.uat.enabled=true
           test
 
