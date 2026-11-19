@@ -43,9 +43,9 @@ test('form opens a scoped period tree and resumes and saves a report',async({pag
   await expect(list.locator('.saved-year > summary strong')).toHaveText(['2025']);
   // Switching forms must never carry over a filter that hides the new form's reports.
   await page.getByPlaceholder('Код или название...').fill('D01');
-  await page.locator('.form-list-item').filter({hasText:'D01 ·'}).click();
+  await page.locator('.form-list-item').filter({has:page.locator('small').filter({hasText:/^D01 ·/})}).click();
   await page.getByPlaceholder('Код или название...').fill('F02');
-  await page.locator('.form-list-item').filter({hasText:'F02 ·'}).click();
+  await page.locator('.form-list-item').filter({has:page.locator('small').filter({hasText:/^F02 ·/})}).click();
   await expect(list.getByRole('combobox',{name:'Фильтр по году'})).toHaveValue('ALL');
   await expect(list.locator('.saved-year > summary strong')).toHaveText(['2026','2025']);
   await list.getByRole('textbox',{name:'Поиск по сохранённым отчётам'}).fill('2026-10');
