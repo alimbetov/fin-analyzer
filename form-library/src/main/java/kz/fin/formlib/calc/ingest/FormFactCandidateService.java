@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
  * NO fin_fact write, NO metric mapping, NO qualifier, NO controller exposure.
  */
 @Service
-public final class FormFactCandidateService {
+public class FormFactCandidateService {
   private final FormFactSourceReader sourceReader;
   private final FormFactCandidateExtractor extractor;
 
