@@ -72,26 +72,6 @@ class CalcR02PostgresqlTest {
         WHERE state IN ('READY','RETRY','RUNNING')
         """);
   }
-  private static QualificationDecision synthetic(CandidateFactSet c,
-      TrustedRequestPrincipal p,long epoch){
-    UUID decisionId=UUID.randomUUID();
-    Instant at=Instant.now().minusSeconds(1);
-    String sha="0".repeat(64);
-    var initial=new QualificationDecision(decisionId,"FIN_TEST_ONLY_ISSUER",
-        "SYNTHETIC_R02","Ed25519",sha,"NOT_SIGNED_TEST_ONLY",
-        QualificationDecision.AUDIENCE,p.expectedNonce(),
-        at,at,at.plusSeconds(180),c.scope().stableScopeKey(),
-        c.candidateFactsetSha256(),c.sourceSetSha256(),c.descriptorSha256(),
-        c.mappingBundleSha256(),sha,epoch,QualificationDecision.TEST_ONLY_MODE);
-    return new QualificationDecision(decisionId,initial.issuerId(),
-        initial.keyId(),initial.signatureAlgorithm(),initial.signedPayload(),
-        initial.signatureBase64(),initial.audience(),initial.nonce(),
-        initial.issuedAt(),initial.notBefore(),initial.expiresAt(),
-        initial.stableScopeKey(),initial.candidateFactsetSha256(),
-        initial.sourceSetSha256(),initial.descriptorSha256(),
-        initial.mappingBundleSha256(),initial.canonicalBinding(),
-        epoch,initial.qualificationMode());
-  }
 
   private Input prepare(Slot s,UUID user,UUID instance,int expected,long epoch,
       String revenue,String cogs,String opex){
@@ -105,11 +85,9 @@ class CalcR02PostgresqlTest {
     var mapping=F02MappingDescriptor.testOnlyPilot(exact.formVersionId(),
         exact.sourceSchemaSha256(),exact.sourceMappingSha256());
     var fact=assembler.assemble(exact,mapping);
-    var principal=new TrustedRequestPrincipal(user.toString(),"FIN_TEST_ONLY",
-        fact.scope(),UUID.randomUUID().toString(),
-        Set.of(TrustedRequestPrincipal.QUALIFY_ACTION));
-    var trusted=new VerifiedQualification(synthetic(fact,principal,epoch),
-        principal,Instant.now());
+    var admission=TestOnlyF02Approval.create(fact,user,epoch);
+    var principal=admission.principal();
+    var trusted=admission.verified();
     var persisted=committer.commitExact(fact,mapping,trusted,principal,user);
     assertEquals(1,dispatcher.dispatchBatch(32).planned());
     UUID planId=sql.queryForObject("""
