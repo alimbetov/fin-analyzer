@@ -204,9 +204,9 @@ public class Calc3BModelBootstrap implements ApplicationRunner {
     }
 
     var foundInputs=db.query("""
-        SELECT model_revision_id,ordinal,source_form_code,source_form_version_id,
-          source_schema_sha256,content_mode,numeric_eligible,binding_sha256,
-          dependency_state,approval_state
+        SELECT i.model_revision_id,i.ordinal,i.source_form_code,i.source_form_version_id,
+          i.source_schema_sha256,i.content_mode,i.numeric_eligible,i.binding_sha256,
+          i.dependency_state,i.approval_state
         FROM fin_calc.model_candidate_input_form i
         JOIN fin_calc.model_candidate_revision m ON m.id=i.model_revision_id
         WHERE m.catalog_revision='CATALOG_CANDIDATE_V1'
@@ -228,8 +228,8 @@ public class Calc3BModelBootstrap implements ApplicationRunner {
         throw new IllegalStateException("CALC3B_MODEL_INPUT_DRIFT:"+e[2]);
     }
     var foundOutputs=db.query("""
-        SELECT model_revision_id,ordinal,output_metric_code,formula_state,
-          requiredness_state,approval_state
+        SELECT o.model_revision_id,o.ordinal,o.output_metric_code,o.formula_state,
+          o.requiredness_state,o.approval_state
         FROM fin_calc.model_candidate_output_metric o
         JOIN fin_calc.model_candidate_revision m ON m.id=o.model_revision_id
         WHERE m.catalog_revision='CATALOG_CANDIDATE_V1'
