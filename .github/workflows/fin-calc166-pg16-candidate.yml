@@ -51,6 +51,6 @@ jobs:
           root=ET.parse(paths[0]).getroot()
           values={k:int(root.attrib.get(k,"0")) for k in ("tests","errors","failures","skipped")}
           print(values)
-          if values!={"tests":9,"errors":0,"failures":0,"skipped":0}:
-              sys.exit("FAIL: PG16 CALC-166 expected 9 PASS and zero skipped")
+          if values!={"tests":10,"errors":0,"failures":0,"skipped":0}:
+              sys.exit("FAIL: PG16 CALC-166 expected 10 PASS and zero skipped")
           PY
