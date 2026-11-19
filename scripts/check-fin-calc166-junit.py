@@ -53,8 +53,21 @@ try:
         raise ValueError("CALC_166_PHYSICAL_FIELD_DRIFT")
     if any(f["binding_state"]!="CANDIDATE_UNQUALIFIED" for f in fields):
         raise ValueError("CALC_166_MISLEADING_FIELD_APPROVAL")
-    if any(not any("R16A_FORM_"+code in n for n in names) for code in codes):
+    # Surefire JUnit XML records DynamicTest display names as the factory
+    # method plus sequential [1]..[166], NOT the user displayName
+    # "R16A_FORM_F02". The factory streams the same sorted PG snapshot as
+    # the exported TSV, so require every distinct dynamic index.
+    expected_dynamic={
+        f"r16a_03EveryFormIndependentPg16ContractGate()[{i}]"
+        for i in range(1,167)
+    }
+    actual_dynamic={n for n in names
+        if n.startswith("r16a_03EveryFormIndependentPg16ContractGate()")}
+    if actual_dynamic!=expected_dynamic:
         raise ValueError("CALC_166_ONE_OR_MORE_FORM_TESTS_NOT_RUN")
+    if "r16a_01PhysicalInventoryFromActualPostgresNotTSV" not in names or (
+            "r16a_02OnlyPinnedF02UatCanPassAndNoFormGetsProductionS2" not in names):
+        raise ValueError("CALC_166_SUMMARY_OR_NEGATIVE_TEST_NOT_RUN")
     manifest={
         "contract":"FIN-CALC-166.A-PG16-LIVE-CURRENT-VERSIONS-V1",
         "status":"PHYSICAL_CONTRACT_CANDIDATES_NOT_FINANCIAL_S2",
