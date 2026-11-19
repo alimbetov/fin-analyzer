@@ -103,6 +103,14 @@ jobs:
           -Dtest=ReactLocalPostgresIntegrationTest,R16BPostgresqlContractTest,Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,FactR0PostgresqlUpgradeTest
           -Dfin.postgres.uat.enabled=true
           test
+      - name: Preserve JUnit evidence for each of 166 report forms
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-166-form-pg16-junit
+          path: form-library/target/surefire-reports/TEST-kz.fin.formlib.calc.ingest.Ingest2PostgresqlIntegrityTest.xml
+          if-no-files-found: error
+          retention-days: 30
 
   powershell-smoke-syntax:
     name: PowerShell 7 smoke script parser
