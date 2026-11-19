@@ -1,0 +1,50 @@
+name: FIN CALC-3C.3 — Trusted Review PG16 Gate
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/pom.xml'
+      - 'form-library/src/main/resources/application.yml'
+      - 'form-library/src/main/resources/db/changelog/042-fin-calc3c3-trusted-review-intake-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/security/**'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/security/**'
+      - '.github/workflows/fin-calc3c3-trusted-review-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pg16-trusted-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Validate seven real PostgreSQL 16 IAM and segregation tests
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc3C3TrustedReviewPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Fail closed if any PG test was skipped or errored
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          xml=glob.glob('form-library/target/surefire-reports/TEST-*Calc3C3TrustedReviewPostgresqlTest.xml')
+          if len(xml)!=1: sys.exit('FAIL CALC3C3: PG16 XML missing')
+          root=ET.parse(xml[0]).getroot()
+          actual={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
+          print(actual)
+          if actual!={'tests':7,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('FAIL CALC3C3: exactly seven tests must PASS')
+          PY
