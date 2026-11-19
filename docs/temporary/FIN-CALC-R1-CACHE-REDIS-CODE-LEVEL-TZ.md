@@ -171,18 +171,18 @@ fin:
         max-keys: 256
       payload:
         max-bytes: 2048
-      redis:
-        enabled: false
-        ttl: PT15M
-        connect-timeout: 150ms
-        command-timeout: 50ms
-        breaker-failures: 5
-        breaker-open: PT30S
-        key-prefix: "fin:calc:node:v1"
-        # credentials, TLS and HMAC key via environment/secret store ONLY
+    redis:
+      enabled: false
+      ttl: PT15M
+      connect-timeout: 150ms
+      command-timeout: 50ms
+      breaker-failures: 5
+      breaker-open: PT30S
+      key-prefix: "fin:calc:node:v1"
+      # credentials, TLS and HMAC key via environment/secret store ONLY
 ```
 
-The setting path `fin.calc.cache.redis.enabled` above must be **reconciled with the master** `fin.calc.redis.enabled`. **Canonical public flag remains `fin.calc.redis.enabled=false`**, and the implementation should move `redis` to `fin.calc.redis` before merging. Do not ship two flags with different meaning.
+**Canonical feature flag:** `fin.calc.redis.enabled=false` (same as the master R0 contract). Do not introduce an alias `fin.calc.cache.redis.enabled`; there must be exactly one authoritative Redis enablement flag.
 
 Required operational controls: TLS where Redis is remote; ACL least privilege; authenticated credentials from environment/secret store; disable potentially dangerous Redis commands for application identity; max key/TTL, no user-controlled raw prefixes; bounded Lettuce pending command queue and timeouts. Redis must be treated as semi-trusted transient storage.
 
