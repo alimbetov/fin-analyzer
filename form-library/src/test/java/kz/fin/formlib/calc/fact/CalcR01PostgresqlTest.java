@@ -252,7 +252,7 @@ class CalcR01PostgresqlTest {
           ""","a".repeat(64),id);
       assertEquals("CALC_R01_EVENT_BINDING_MISMATCH",
           assertThrows(IllegalArgumentException.class,
-              ()->dispatcher.dispatchBatch(1)).getMessage());
+              ()->dispatcher.dispatchBatch(32)).getMessage());
       assertEquals(0,count("fin_calc.calc_plan",f.slot.org));
       assertEquals(0,count("fin_calc.calc_job",f.slot.org));
       assertNull(sql.queryForObject("""
@@ -297,8 +297,10 @@ class CalcR01PostgresqlTest {
 
   @Test void r01_09DisabledDefaultRejectsDispatch(){
     var f=fresh();
+    // Defer this event before exercising the disabled object; no fixture leakage.
+    sql.update("UPDATE fin_calc.calc_outbox_event SET next_attempt_at=now()+interval '1 day' WHERE id=?",eventId(f));
     var denied=new UatCalcR01OutboxDispatcher(
-        null,null,null,null,null,null,null,false);
+        null,null,mapper,null,null,null,null,false);
     assertEquals("CALC_R01_DISPATCH_DISABLED",
         assertThrows(IllegalStateException.class,()->denied.dispatchBatch(1))
             .getMessage());
