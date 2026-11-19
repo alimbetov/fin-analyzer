@@ -133,8 +133,10 @@ class Ingest2PostgresqlIntegrityTest {
       if("EVIDENCE".equals(mode))assertTrue(projection.numeric().isEmpty(),code);
       if("ROWSET".equals(mode)) {
         assertEquals(2,sourceRows.size(),code);
+        var sourceRowIds=sourceRows.stream()
+            .map(FormDraftService.RowInput::rowId).collect(java.util.stream.Collectors.toSet());
         assertTrue(projection.numeric().stream().allMatch(n ->
-            sourceRows.stream().anyMatch(row->row.rowId().equals(n.rowId()))),code);
+            sourceRowIds.contains(n.rowId())),code);
       }
     }
     assertEquals(3,singles);
