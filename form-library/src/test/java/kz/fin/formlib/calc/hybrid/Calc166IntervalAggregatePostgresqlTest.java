@@ -60,7 +60,9 @@ class Calc166IntervalAggregatePostgresqlTest {
 
   record Fixture(UUID org,UUID factset,String dimension,LocalDate start,LocalDate end){}
 
-  private Fixture source() {
+  private Fixture source() { return source(false); }
+
+  private Fixture source(boolean asOf) {
     YearMonth month=YearMonth.of(2026,11);
     partitions.ensureMonthlyRange(month,month,false);
     UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),
@@ -100,12 +102,16 @@ class Calc166IntervalAggregatePostgresqlTest {
         CAST('[]' AS jsonb),:sourceSha,:mapSha,1,2,:factSha,
         :bindingSha,1,'TEST_QUALIFIED','CALC166_TEST')
       """,p);
+    if(asOf) partitions.ensureMonthlyRange(month,month,false);
     for(int i=0;i<2;i++){
       var row=new MapSqlParameterSource().addValues(p.getValues())
           .addValue("observation",UUID.randomUUID())
           .addValue("rowKey","ROW-"+i)
           .addValue("key",sha("KEY:"+factset+":"+i))
           .addValue("value",new BigDecimal(i==0?"125.25":"74.75"))
+          .addValue("observationStart",asOf?start.plusDays(i):start)
+          .addValue("observationEnd",asOf?start.plusDays(i+1):end)
+          .addValue("semantics",asOf?"AS_OF":"INTERVAL")
           .addValue("valueSha",sha("VALUE:"+i));
       new NamedParameterJdbcTemplate(jdbc).update("""
         INSERT INTO fin_fact.fact_observation(
@@ -115,9 +121,9 @@ class Calc166IntervalAggregatePostgresqlTest {
           period_type,period_end_exclusive,period_semantics,dimension_digest,
           dimensions_jsonb,observation_key_sha256,value_kind,value_state,
           numeric_value,unit_code,currency_code,canonical_value_sha256)
-        VALUES(:start,:observation,:id,:source,'F02',:version,:rowKey,'netRevenue',
+        VALUES(:observationStart,:observation,:id,:source,'F02',:version,:rowKey,'netRevenue',
           :sourceSha,:mapSha,'F02.netRevenue','TEST_ONLY_V1',
-          'M',:end,'INTERVAL',:dim,'{}'::jsonb,:key,
+          'M',:observationEnd,:semantics,:dim,'{}'::jsonb,:key,
           'NUMERIC','PRESENT',:value,'KZT','KZT',:valueSha)
         """,row);
     }
@@ -158,4 +164,44 @@ class Calc166IntervalAggregatePostgresqlTest {
     Object[] metric=arguments(f);metric[3]="F02.unknown";
     assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,metric));
   }
+  @Test void lastAsOfChoosesLatestSnapshotNotSum() {
+    var f=source(true);
+    String call="""
+      SELECT observation_date,numeric_value
+      FROM fin_calc.candidate_last_asof(
+        ?::uuid,?::uuid,?::varchar,?::varchar,?::date,?::char(64),
+        ?::varchar,?::char(3))
+      """;
+    var rows=jdbc.query(call,(rs,i)->new Object[]{
+      rs.getDate(1).toLocalDate(),rs.getBigDecimal(2)},
+      f.org(),f.factset(),"F02","F02.netRevenue",
+      f.start().plusDays(2),f.dimension(),"KZT","KZT");
+    assertEquals(1,rows.size());
+    assertEquals(f.start().plusDays(1),rows.getFirst()[0]);
+    assertEquals(0,new BigDecimal("74.75").compareTo((BigDecimal)rows.getFirst()[1]));
+    assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM fin_calc.calc_result",Integer.class));
+  }
+
+  @Test void lastAsOfRejectsMissingFutureWrongTenantAndIntervalSource() {
+    var f=source(true);
+    String call="""
+      SELECT numeric_value FROM fin_calc.candidate_last_asof(
+        ?::uuid,?::uuid,?::varchar,?::varchar,?::date,?::char(64),
+        ?::varchar,?::char(3))
+      """;
+    Object[] missing={f.org(),f.factset(),"F02","F02.netRevenue",
+      f.start().minusDays(1),f.dimension(),"KZT","KZT"};
+    assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,missing));
+    Object[] future=missing.clone();future[4]=f.end();
+    assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,future));
+    Object[] tenant=missing.clone();tenant[0]=UUID.randomUUID();tenant[4]=f.start();
+    assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,tenant));
+    Object[] wrongUnit=missing.clone();wrongUnit[4]=f.start();wrongUnit[6]="USD";
+    assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,wrongUnit));
+    var interval=source(false);
+    Object[] wrongGrain={interval.org(),interval.factset(),"F02","F02.netRevenue",
+      interval.start(),interval.dimension(),"KZT","KZT"};
+    assertThrows(DataAccessException.class,()->jdbc.queryForObject(call,BigDecimal.class,wrongGrain));
+  }
+
 }
