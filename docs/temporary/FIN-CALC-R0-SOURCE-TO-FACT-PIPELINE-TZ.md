@@ -119,7 +119,7 @@ qualification_epoch bigint NOT NULL, revoked boolean NOT NULL,
 row_version bigint NOT NULL, updated_at timestamptz NOT NULL
 ```
 
-TX-Q, TX-E, local test revoke and CURRENT reader coordinate against same guarded scope and epoch. A newly qualified FactSet advances active binding; old immutable results remain historical, but are not CURRENT while replacement is pending. A new *draft* does not alter control. PostgreSQL locking and compare-and-swap rules must be consistent and tested.
+The stable_scope_key is a versioned canonical hash of **organizationId + economicEntityId + businessScopeId + projectId + sourceFormCode + target period start/end + currency + coverage + reportingBasis + dataSpace**; it deliberately excludes revisionId/formVersionId so superseding approved versions serialize on the SAME row. **A factset_control row may point only to a FactSet with identical full scope and organization**: enforce with a composite foreign key where practical or transactional scope-join validation plus PostgreSQL negative tests, not just a UUID FK. TX-Q, TX-E, local test revoke and CURRENT reader coordinate against same guarded scope and epoch. A newly qualified FactSet advances active binding; old immutable results remain historical, but are not CURRENT while replacement is pending. A new *draft* does not alter control. PostgreSQL locking and compare-and-swap rules must be consistent and tested.
 
 **Do not mistake TEST_ONLY control for production S2.** External authority in another DB cannot be transactionally serialized by merely calling its REST API before COMMIT. Production publication remains HOLD pending a versioned authority epoch and verified live read/revoke protocol.
 
@@ -189,7 +189,7 @@ interface QualifiedFactReader {
 | STF-05 | Wrong source hash/formVersion/schema/scope | BLOCK before commit |
 | STF-06 | Unapproved F02.netProfit mapping/fourth source | BLOCK; no implicit output-to-fact promotion |
 | STF-07 | Missing/non-numeric/overflow/invalid cost convention | BLOCK or explicit domain state, no silent zero |
-| STF-08 | Different currency/entity/project/basis/dataSpace/period | no cross-scope mixing |
+| STF-08 | Different currency/entity/project/basis/dataSpace/period; forged control.active_factset_id of another tenant | no cross-scope mixing and no foreign-tenant active pointer |
 | STF-09 | Fact row corrupted or removed | digest verification fails; no result/publication |
 | STF-10 | Draft correction with no new qualification | old qualified factset unchanged; no qualified job |
 | STF-11 | New FactSet with only operatingExpenses changed | 1 dirty, 2 reused, new complete result+lineage |
