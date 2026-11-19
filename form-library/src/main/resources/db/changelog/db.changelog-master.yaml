@@ -81,3 +81,5 @@ databaseChangeLog:
       file: db/changelog/040-fin-calc3c2-control-examples-postgresql.sql
   - include:
       file: db/changelog/041-fin-calc3c2-financial-review-readiness-view.sql
+  - include:
+      file: db/changelog/042-fin-calc3c3-trusted-review-intake-postgresql.sql
