@@ -145,7 +145,7 @@ Change impact:
 
 ### CALC-FR-12. ОБЯЗАТЕЛЬНЫЙ Source→Fact / FactSet boundary (P0)
 
-**Структурный разрыв выявлен при S1 data-flow review**: исходное ТЗ имело абстрактный "Approved FactSet", но не определяло, как значения F02 переходят из `fin_intake.lib_form_revision.values_json TEXT` в проверенные факт-таблицы. Полный контракт, Java интерфейсы, DDL и тесты F01–F16: [Source-to-Fact Pipeline TЗ](temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md).
+**Структурный разрыв выявлен при S1 data-flow review**: исходное ТЗ имело абстрактный "Approved FactSet", но не определяло, как значения F02 переходят из `fin_intake.lib_form_revision.values_json TEXT` в проверенные факт-таблицы. Полный контракт, Java интерфейсы, DDL и тесты STF-01–STF-16: [Source-to-Fact Pipeline TЗ](temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md).
 
 1. **TX-A**: сохранение новой `fin_intake` revision + `DRAFT_REVISION_SAVED` outbox. Это событие **не публикует** fact и не запускает квалифицированный DAG.
 2. **PinnedSourceReader**: читает точный revision UUID, `form_version_id`, полный scope из DB и верифицирует существующий `FIN-LIB-CONTENT-V1` canonical hash (не `SHA256(values_json)`). Не читает `current_revision_id` для пинованного плана.
@@ -241,7 +241,7 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 | A28 | Identical benchmark workloads Redis OFF vs Caffeine vs Caffeine+Redis (R2) | store p95/p99, CPU, PG load, cache hit/miss, error budget, compare exact `outputValuesSha256`, and record release decision |
 | A29 | Source-to-Fact qualification seam: test-only F02 revision | `fin_fact.fact_set` + exactly 3 typed observations + trusted event atomically committed, exact SHA/lineage |
 | A30 | Source correction, stale mapping, source SHA mismatch and out-of-order qualification | reject wrong facts/current, preserve history, no implicit draft promotion |
-| A31 | Full PostgreSQL migration 001–020, failed TX-Q, replay, source tampering and backfill discovery | F01–F16 in source-to-fact appendix GREEN; no historical checksums rewritten |
+| A31 | Full PostgreSQL migration 001–020, failed TX-Q, replay, source tampering and backfill discovery | STF-01–STF-16 in source-to-fact appendix GREEN; no historical checksums rewritten |
 
 ### Проверяемые SQL-постусловия
 - Счётчик `fin_intake.lib_form_revision` соответствует коммитам save; rollback не оставляет `calc_outbox_event`.
@@ -256,7 +256,7 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 | **R0.A — Contract + Coverage** | Данное ТЗ, baseline 166 форм, 3 F02 formulas, аудит исходников | Полнота и неизобретённые зависимости подтверждены; DESIGN READY |
 | **R0.B — Minimal Calculation Kernel + Fact boundary** | Typed F02 DAG, preview, additive calc 019 + fact 020 tables, pinned source→fact assembler, TEST_ONLY qualification, outbox, bounded multithreaded workers, Caffeine descriptor/DAG L1 | A02–A09 + A22 + A29 PostgreSQL + React GREEN |
 | **R0.C — Incremental + Safety** | Field-level impact, per-node + execution fingerprints, stale/lease/fencing, revoke, method changes, parallel DAG branches above measured threshold | A10–A17 + A23/A24/A27 PostgreSQL concurrency GREEN |
-| **R0.D — Qualification** | CI full regression, browser, source→fact+recalculation PostgreSQL E2E, measurements, technical review | A18–A25/A27/A29–A31 и F01–F16 GREEN на одном SHA, локальный TEST_ONLY пилот разрешён |
+| **R0.D — Qualification** | CI full regression, browser, source→fact+recalculation PostgreSQL E2E, measurements, technical review | A18–A25/A27/A29–A31 и STF-01–STF-16 GREEN на одном SHA, локальный TEST_ONLY пилот разрешён |
 | **CALC-R1 — Cache Adapter (вне R0)** | Port `CalculationCache`, optional Redis L2 adapter, OFF by default | A25/A26 GREEN, fallback и безопасность доказаны |
 | **CALC-R2 — Redis Performance Gate (вне R0)** | Benchmark Redis OFF / L1 / L1+L2 для multi-worker workloads | A28 GREEN и статистически обоснованное enable/disable решение |
 | **Production S2/IAM Gate (отдельно)** | Реальный S2/IAM, FactSet authority, approved publish, масштабирование на 166 форм | Нет HOLD; финансовый выпуск отдельно |
@@ -274,7 +274,7 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 ## 12. Definition of Done
 
 **R0.A**: ТЗ + две baseline-матрицы в ветке, точно 166 form rows и 794 unique R6 field rows, все формы включены, отсутствующие поля/semantics видны, формулы/зависимости честно кандидатные, без изменений исполняемого кода/миграций.  
-**R0.D**: F02 preview + **persisted immutable fin_fact with 3 typed F02 observations** + synthetic qualified E2E + DAG + PostgreSQL queue + bounded multithreaded workers + fencing + immutable result + Caffeine L1; тесты A01–A25, A27, A29–A31, F01–F16 (A26 — R1, A28 — R2) CI GREEN на одном SHA.  
+**R0.D**: F02 preview + **persisted immutable fin_fact with 3 typed F02 observations** + synthetic qualified E2E + DAG + PostgreSQL queue + bounded multithreaded workers + fencing + immutable result + Caffeine L1; тесты A01–A25, A27, A29–A31, STF-01–STF-16 (A26 — R1, A28 — R2) CI GREEN на одном SHA.  
 **Production**: НЕ READY, пока нет независимого финансового S2, IAM/ABAC и реального approved FactSet admission.
 
 ### Review reference
@@ -284,7 +284,7 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 ### Temporary code-level implementation workpacks
 
 - `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migrations 019/020, F02 DAG, bounded workers, outbox, tests.
-- `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, TX-Q and tests F01–F16.
+- `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, TX-Q and tests STF-01–STF-16.
 - `docs/temporary/FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md` — CalculationCache interfaces, Caffeine node values, optional Redis L2, feature flags, fallback.
 - `docs/temporary/FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md` — 3-mode benchmark scripts/fixtures, telemetry, correctness and Redis activation gate.
 
