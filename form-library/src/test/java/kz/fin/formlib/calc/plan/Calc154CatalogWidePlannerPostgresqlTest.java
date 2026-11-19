@@ -104,10 +104,12 @@ class Calc154CatalogWidePlannerPostgresqlTest {
   }
 
   @Test void snapshotIsDeterministicAndDoesNotCreateFinancialArtifacts(){
-    var a=planner.inventory(),b=planner.inventory();
+    var a=planner.inventory();
+    var b=planner.inventory();
     assertEquals(a.inventorySha256(),b.inventorySha256());
     for(int i=0;i<154;i++){
-      var left=a.forms().get(i),right=b.forms().get(i);
+      var left=a.forms().get(i);
+      var right=b.forms().get(i);
       assertEquals(left.formCode(),right.formCode());
       assertEquals(left.manifestSha256(),right.manifestSha256());
     }
