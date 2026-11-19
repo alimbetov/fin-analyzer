@@ -49,3 +49,5 @@ databaseChangeLog:
       file: db/changelog/024-fin-calc-f02-native-sql-postgresql.sql
   - include:
       file: db/changelog/025-fin-calc-f02-precise-integer-ratio-postgresql.sql
+  - include:
+      file: db/changelog/026-fin-calc-f02-exact-decimal-output-postgresql.sql

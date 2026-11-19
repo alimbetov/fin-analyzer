@@ -94,6 +94,18 @@ class SqlF02ParityPostgresqlTest {
       assertEquals(javaKernel.evaluate(sources),nativeKernel.evaluate(sources),
           "randomized SQL/Java parity at index="+i);
     }
+    // Exact fractional ratios even when the integer portion is >16 digits.
+    for(String[] v:new String[][]{
+        {"0.03","99999999999999999999.98","1.01"},
+        {"0.07","99999999999999999999.98","0.00"},
+        {"0.09","99999999999999999999.99","0.00"},
+        {"12.01","99999999999999999999.98","0.01"},
+        {"12500000000000000000.03","99999999999999999999.98","0.01"}
+    }){
+      var data=inputs(v[0],v[1],v[2]);
+      assertEquals(javaKernel.evaluate(data),nativeKernel.evaluate(data),
+          "large exact fractional ratio, revenue="+v[0]+", costs="+v[1]);
+    }
   }
 
   @Test void sql03NativeRoundHalfEvenDiffersFromPostgresDefaultRound(){

@@ -120,6 +120,7 @@ class FactR0PostgresqlUpgradeTest {
           AND filename NOT LIKE '%023-%'
           AND filename NOT LIKE '%024-%'
           AND filename NOT LIKE '%025-%'
+          AND filename NOT LIKE '%026-%'
         ORDER BY id,author,filename
         """);
     assertEquals(originalChecksums,checksumsAfter,
