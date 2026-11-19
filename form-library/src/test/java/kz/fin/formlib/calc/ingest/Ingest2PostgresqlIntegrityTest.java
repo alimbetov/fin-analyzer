@@ -187,9 +187,14 @@ class Ingest2PostgresqlIntegrityTest {
     assertEquals("SOURCE_CONTENT_SHA_MISMATCH",assertThrows(
         IllegalStateException.class,()->verifier.verify(forged)).getMessage());
 
-    assertEquals(0,sql.queryForObject(
+    // FACT-0 schema exists, but an ordinary form save MUST NOT materialize
+    // financially qualified facts or enqueue a qualified calculation.
+    assertEquals(3,sql.queryForObject(
         "SELECT count(*) FROM information_schema.tables WHERE table_schema='fin_fact'",
         Integer.class));
+    assertEquals(0,sql.queryForObject("SELECT count(*) FROM fin_fact.fact_set",Integer.class));
+    assertEquals(0,sql.queryForObject("SELECT count(*) FROM fin_fact.fact_observation",Integer.class));
+    assertEquals(0,sql.queryForObject("SELECT count(*) FROM fin_calc.calc_job",Integer.class));
   }
 
   @Test void rowsetOrderAndValueHashesAreIndependentlyReconstructed() {
