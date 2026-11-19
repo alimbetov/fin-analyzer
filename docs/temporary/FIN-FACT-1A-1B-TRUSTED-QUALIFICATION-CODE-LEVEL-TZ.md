@@ -143,26 +143,34 @@ Already implemented 019/020/021 are immutable. Start any new migration with `022
 
 ## 8. Negative and positive PostgreSQL/JUnit gates (QF-01..QF-24)
 
-| Test | Required proof |
-|---|---|
-| QF-01/02 | Exact 3 F02 fields, zero vs missing distinct, deterministic typed candidate digest |
-| QF-03/04 | Fourth DERIVED field, negative/overflow/noncanonical numeric or unsupported sign rejected |
-| QF-05/06 | ROWSET/EVIDENCE, wrong formVersion/schema/mapping/descriptor rejected |
-| QF-07 | Wrong org/entity/businessScope/project/currency/period/basis/coverage/dataSpace denied |
-| QF-08/09 | Invalid/unknown signature key, none alg, expiry/notBefore/audience/nonce denied |
-| QF-10 | Principal with wrong tenant or missing ABAC action denied |
-| QF-11 | One valid synthetic TEST_ONLY receipt → 1 header, exactly 3 rows, 1 outbox |
-| QF-12/13 | Exact decision replay idempotent; conflicting digest/decisionId rejected |
-| QF-14 | 8+ parallel same-decision requests via separate PG connections → one immutable set/event |
-| QF-15/16 | New qualified revision monotonic epoch; old out-of-order decision cannot rewind |
-| QF-17 | Concurrent revoke vs TX-Q; local lock correctness and external limit reported |
-| QF-18 | Fault after header, row2, control, before outbox → full rollback |
-| QF-19 | Missing month partition → reject, no implicit DDL in business TX |
-| QF-20 | Exact source changes/mismatch between read and TX-Q → reject |
-| QF-21 | Corrupt/missing observation, source/lineage/count hash mismatch → BLOCK reader |
-| QF-22 | Cross-tenant receipt, foreign FactSet/control FK → PostgreSQL + Java reject |
-| QF-23 | Historical 018→022 upgrade, 001–021 checksums preserved |
-| QF-24 | S2 unavailable / revoked issuer key → production fail-closed, no test issuer in JAR |
+One separately reportable test per ID; when grouped by a JUnit `@ParameterizedTest`, report each parameter case independently. Provide a PostgreSQL log/SQL assertion when a test exercises persistence.
+
+| ID | Mandatory test | Expected proof |
+|---|---|---|
+| QF-01 | Exact INGEST-2 F02 source | Three known source fields and deterministic sorted typed candidate digest |
+| QF-02 | Zero vs missing vs blank | `0` stays numeric zero; absent/blank required value BLOCK, never coerce |
+| QF-03 | Fourth derived `netProfit`/unknown field | Reject before database writes |
+| QF-04 | Invalid numeric/overflow/sign convention | Reject exponent where noncanonical, overflow and negative pilot cost magnitude |
+| QF-05 | Wrong source kind | ROWSET/EVIDENCE/ReportGrid cannot qualify with F02 SINGLE_RECORD mapper |
+| QF-06 | Wrong formVersion/schema/mapping/descriptor | Exact UUID/SHA mismatch rejects even when field names are identical |
+| QF-07 | Foreign full scope | Org/entity/businessScope/project/period/basis/currency/dataSpace mismatch denies |
+| QF-08 | Unknown key, unsupported signature algorithm or invalid signature | `INVALID_QUALIFICATION_SIGNATURE`; zero DB mutations |
+| QF-09 | Expired, premature, wrong audience/nonce | Fail closed including boundary clock/clock-skew tests |
+| QF-10 | Missing server principal/ABAC action | Reject independently of supplied client scope UUIDs |
+| QF-11 | Valid synthetic test-only signed receipt | Exactly one header, three observations, matching local epoch and one outbox |
+| QF-12 | Exact issuerId+decisionId replay | Same FactSet ID and epoch; zero additional rows/events |
+| QF-13 | Same decision ID, different candidate/binding SHA | `QUALIFICATION_REPLAY_CONFLICT`; no insert or pointer update |
+| QF-14 | Eight or more parallel identical decisions | Separate real PG connections → one FactSet/outbox, no deadlock |
+| QF-15 | Two approved revisions same stable scope | Two immutable FactSets; monotonic epoch, newest valid active |
+| QF-16 | Older decision arrives after new epoch | Older event cannot rewind pointer, including after revocation |
+| QF-17 | Concurrent revoke versus TX-Q | PostgreSQL local serialization and externally unsolved atomicity explicitly reported |
+| QF-18 | Inject error at header/row2/control/before-outbox | Each failpoint rolls back all header, facts, receipt, control and outbox |
+| QF-19 | Missing/wrong month partition | Reject before/inside TX-Q, never DDL in business transaction |
+| QF-20 | Source SHA/scope/version changes between read and TX-Q | Re-read pinned state and BLOCK before commit |
+| QF-21 | Persisted observation deleted/corrupt/mismatch count or lineage | `FACTSET_INTEGRITY_MISMATCH` and no result/current publication |
+| QF-22 | Cross-tenant receipt, foreign FactSet/control FK | DB FK and Java scope guard both deny |
+| QF-23 | Persistent historical upgrade 018→022+ | Exact source checksums/values and migrations 001–021 preserved |
+| QF-24 | S2 unavailable/revoked key/unknown issuer epoch | Runtime rejects; test issuer absent from production executable JAR |
 
 **DoD for A:** Java typed contract + canonicalization + fail-closed gateway and unit/negative tests PASS; no production write API.
 **DoD for B:** main-source transactional committer + reviewed 022 receipt storage + PG16 tests QF-01..24 PASS at same SHA, existing 6/6 quick smoke and 166-form INGEST regression remain GREEN. Still `PRODUCTION HOLD` without independent S2/IAM.
