@@ -10,7 +10,7 @@
 
 | Stage | Code-level TЗ | Core implementation | DoD / no-go |
 |---|---|---|---|
-| **CALC-R0** | [R0 code-level](./FIN-CALC-R0-CODE-LEVEL-TZ.md) + [Source→Fact contract](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md) | F02 typed DAG, **pinned JSON→3 typed fin_fact observations**, exact TEST_ONLY qualified FactSet, PostgreSQL outbox/queue, bounded multithreaded workers + immutable results + Caffeine descriptor/DAG L1 | PostgreSQL 16 migrations 001–020 + F01–F16 + A01–A25/A27/A29–A31 + Java/React E2E on one SHA; no real S2 |
+| **CALC-R0** | [R0 code-level](./FIN-CALC-R0-CODE-LEVEL-TZ.md) + [Source→Fact contract](./FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md) | F02 typed DAG, **pinned JSON→3 typed fin_fact observations**, exact TEST_ONLY qualified FactSet, PostgreSQL outbox/queue, bounded multithreaded workers + immutable results + Caffeine descriptor/DAG L1 | PostgreSQL 16 migrations 001–020 + STF-01–STF-16 + A01–A25/A27/A29–A31 + Java/React E2E on one SHA; no real S2 |
 | **CALC-R1** | [R1 code-level](./FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md) | `CalculationCache` port, Caffeine node values L1, optional Redis L2 OFF by default, pg/CPU fallback | Cache failure ≡ correct output; no cross-tenant leak; no Redis dependency for app correctness |
 | **CALC-R2** | [R2 code-level](./FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md) | Reproducible OFF/L1/L1+L2 benchmark, exact fixture SHAs, performance + correctness report | Enable Redis **only** after measured benefit; `KEEP_DISABLED_NO_GAIN` is a valid outcome |
 
