@@ -61,6 +61,7 @@ public final class FormFactIngestionRegistry {
           || parsed.values().stream().filter(v -> v.mode() == Mode.ROWSET).count() != 151
           || parsed.values().stream().filter(v -> v.mode() == Mode.SINGLE_RECORD).count() != 3
           || parsed.values().stream().filter(v -> v.mode() == Mode.EVIDENCE).count() != 12
+          || parsed.get("F02") == null
           || !Objects.equals(parsed.get("F02").reviewState(), "TEST_ONLY_PILOT_PENDING")) {
         throw new IllegalStateException("INGEST_REGISTRY_BASELINE_MISMATCH");
       }
