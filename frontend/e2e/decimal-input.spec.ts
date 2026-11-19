@@ -12,7 +12,7 @@ test('ROWSET accepts an unambiguous localized decimal at full precision',async({
 
   const [response] = await Promise.all([
     page.waitForResponse(r=>r.url().endsWith('/api/v1/drafts')&&r.request().method()==='POST'),
-    page.getByRole('button',{name:'Сохранить ревизию'}).click()
+    page.getByRole('button',{name:'Сохранить',exact:true}).click()
   ]);
   expect(response.status(),await response.text()).toBe(200);
   await expect(page.locator('.editor-footer')).toContainText('Сохранено: ревизия 1');
