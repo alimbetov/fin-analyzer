@@ -83,8 +83,8 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
     seedRequirements(numeric);
 
     List<Formula> formulas = sql.query("""
-        SELECT id,form_code,form_version_id,source_schema_sha256,
-          output_metric_code,source_metrics_jsonb::text
+        SELECT c.id,c.form_code,c.form_version_id,c.source_schema_sha256,
+          c.output_metric_code,c.source_metrics_jsonb::text
         FROM fin_calc.formula_contract_revision c
         JOIN fin_lib.lib_form_definition f ON f.current_version_id=c.form_version_id
         WHERE c.formula_version IN ('F01_CANDIDATE_V1','F02_TEST_ONLY_V1',
@@ -154,14 +154,14 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
     if(!rows.isEmpty())sql.batchUpdate(insert,rows);
 
     var saved=sql.query("""
-        SELECT form_code,form_version_id,source_schema_sha256,
-          requirement_version,mandatory_output_state,mandatory_outputs_jsonb IS NULL,
-          obligation_blockers,approval_state,source_definition_sha256,binding_sha256
+        SELECT r.form_code,r.form_version_id,r.source_schema_sha256,
+          r.requirement_version,r.mandatory_output_state,r.mandatory_outputs_jsonb IS NULL,
+          r.obligation_blockers,r.approval_state,r.source_definition_sha256,r.binding_sha256
         FROM fin_calc.form_calculation_requirement_revision r
         JOIN fin_lib.lib_form_definition f ON f.form_code=r.form_code
           AND f.current_version_id=r.form_version_id
         WHERE r.requirement_version='CALC3B_REVIEW_V1'
-        "",(r,i)->new String[]{r.getString(1),r.getObject(2,UUID.class).toString(),
+        """,(r,i)->new String[]{r.getString(1),r.getObject(2,UUID.class).toString(),
           r.getString(3),r.getString(4),r.getString(5),String.valueOf(r.getBoolean(6)),
           r.getString(7),r.getString(8),r.getString(9),r.getString(10)});
     if(saved.size()!=154)throw new IllegalStateException("CALC3B_FORM_REQUIREMENT_COUNT_DRIFT");
@@ -235,9 +235,9 @@ public class Calc3BRequirementBootstrap implements ApplicationRunner {
           a[6],a[7],a[8],a[9],a[0]}).toList());
     }
     var actual=sql.query("""
-        SELECT formula_revision_id,ordinal,source_metric_code,source_kind,
-          source_form_version_id,source_schema_sha256,source_field_code,field_type,
-          source_formula_revision_id,binding_sha256,requiredness_state
+        SELECT i.formula_revision_id,i.ordinal,i.source_metric_code,i.source_kind,
+          i.source_form_version_id,i.source_schema_sha256,i.source_field_code,i.field_type,
+          i.source_formula_revision_id,i.binding_sha256,i.requiredness_state
         FROM fin_calc.formula_typed_input_binding i
         JOIN fin_calc.formula_contract_revision c ON c.id=i.formula_revision_id
         JOIN fin_lib.lib_form_definition f ON f.current_version_id=c.form_version_id
