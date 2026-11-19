@@ -39,6 +39,11 @@ export default function SavedReports({
   const [selectedYear,setSelectedYear]=useState('ALL');
   const [selectedStatus,setSelectedStatus]=useState('ALL');
   useEffect(()=>{
+    // Filters are scoped to the selected form. Reusing an old year's filter
+    // can misleadingly hide every report after switching forms.
+    setQuery('');setSelectedYear('ALL');setSelectedStatus('ALL');
+  },[formCode]);
+  useEffect(()=>{
     panel.current?.focus({preventScroll:true});
     panel.current?.scrollIntoView({block:'nearest'});
   },[formCode]);
