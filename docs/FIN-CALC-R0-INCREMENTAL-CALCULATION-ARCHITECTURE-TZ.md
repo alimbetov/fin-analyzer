@@ -110,7 +110,7 @@ R0 придерживается **пяти таблиц**, без отдельн
 
 | Таблица | Минимальные поля и ограничения |
 |---|---|
-| `calc_outbox_event` | `id PK`, `producer`, `event_type`, `aggregate_id`, `revision_id`, `payload_sha256`, `payload_json`, `occurred_at`, `published_at`, `attempts`, UNIQUE(producer, producer_event_id); payload SHA не является дедупликационным ключом жизненного цикла |
+| `calc_outbox_event` | `id PK`, `producer`, `producer_event_id`, `event_type`, `aggregate_id`, `revision_id`, `payload_sha256`, `payload_json`, `occurred_at`, `published_at`, `attempts`, UNIQUE(producer, producer_event_id); payload SHA не является дедупликационным ключом жизненного цикла |
 | `calc_plan` | `id PK`, tenant/project/period scope, `factset_id`, `factset_sha256`, `qualification_binding_sha256`, `qualification_epoch`, `method_id/version`, `config_sha256`, `params_sha256`, `artifact_sha256`, `dag_snapshot_json`, `dag_sha256`, `status`, `created_at` |
 | `calc_job` | `id PK`, `plan_id FK`, `node_group_key`, `fingerprint`, `status`, `priority`, `attempt_count`, `available_at`, `lease_owner`, `lease_until`, `fencing_token`, `last_error_code`, timestamps; UNIQUE(plan_id,node_group_key) |
 | `calc_result` | `id PK`, tenant/project scope, `plan_id FK`, `fingerprint`, `result_sha256`, `result_json` (canonical numeric strings/states), `lineage_json`, `computed_at`, `qualification_mode`; unique tenant-scope+fingerprint; UPDATE/DELETE forbidden |
