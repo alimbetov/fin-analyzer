@@ -134,7 +134,7 @@ class CalcR01PostgresqlTest {
           r.getString(6),r.getString(7),r.getString(8)},f.slot.org);
   }
 
-  @Test void r01_01PublishedUatFactsetCreatesPlanAndReadyJobWithExactFingerprint(){
+  @Test void r01_01PublishedUatFactsetCreatesPlanAndReadyJobWithExactFingerprint() throws Exception {
     var f=fresh();
     assertEquals(0,count("fin_calc.calc_job",f.slot.org));
     var batch=dispatcher.dispatchBatch(8);
@@ -303,5 +303,7 @@ class CalcR01PostgresqlTest {
         assertThrows(IllegalStateException.class,()->denied.dispatchBatch(1))
             .getMessage());
     assertEquals(0,count("fin_calc.calc_job",f.slot.org));
+    // This negative test must not leave a READY event for a different test.
+    sql.update("UPDATE fin_calc.calc_outbox_event SET next_attempt_at=now()+interval '1 day' WHERE id=?",eventId(f));
   }
 }
