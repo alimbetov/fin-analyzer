@@ -18,7 +18,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.dao.DataAccessException;
+import java.time.OffsetDateTime;
 
 /**
  * CALC-R0.1 / TX-B — one PostgreSQL transaction for a locked outbox event,
@@ -32,13 +33,24 @@ public final class UatCalcR01OutboxDispatcher {
   private static final String PRODUCER="FACT1B_F02_UAT";
   private static final String EVENT="FACTSET_QUALIFIED";
   enum FaultPoint { NONE, AFTER_PLAN, AFTER_JOB, BEFORE_ACK }
-  public record BatchResult(int planned,int reused,int stale) {
+  public record BatchResult(int planned,int reused,int stale,int deferred,int quarantined) {
     public BatchResult {
-      if(planned<0||reused<0||stale<0)throw new IllegalArgumentException("CALC_BATCH_INVALID");
+      if(planned<0||reused<0||stale<0||deferred<0||quarantined<0)
+        throw new IllegalArgumentException("CALC_BATCH_INVALID");
     }
     public int processed(){return planned+reused+stale;}
+    public int rejected(){return deferred+quarantined;}
   }
-  private enum State { PLANNED, REUSED, STALE }
+  private enum State { PLANNED, REUSED, STALE, DEFERRED, QUARANTINED }
+  private static final class RejectedEvent extends IllegalArgumentException {
+    private final UUID eventId;
+    private RejectedEvent(UUID id,RuntimeException cause){
+      super(cause.getMessage(),cause);
+      eventId=id;
+    }
+  }
+  private record PendingFailure(int failures,OffsetDateTime processedAt,
+      OffsetDateTime quarantinedAt) {}
   private record EventRow(UUID id,UUID org,String scope,String decisionId,String payload) {}
   private record Stored(
       UUID id,UUID org,UUID entity,UUID business,UUID project,UUID user,
@@ -80,17 +92,27 @@ public final class UatCalcR01OutboxDispatcher {
   BatchResult dispatchBatchWithFault(int max,FaultPoint fault){
     if(!enabled)throw new IllegalStateException("CALC_R01_DISPATCH_DISABLED");
     if(max<1||max>32||fault==null)throw new IllegalArgumentException("CALC_R01_BATCH_INVALID");
-    int planned=0,reused=0,stale=0;
+    int planned=0,reused=0,stale=0,deferred=0,quarantined=0;
     for(int i=0;i<max;i++){
-      State outcome=dispatchInTxWithBoundedRetry(fault);
+      State outcome;
+      try{
+        outcome=dispatchInTxWithBoundedRetry(fault);
+      }catch(RejectedEvent rejected){
+        // The business TX-B has already rolled back. Do NOT ACK invalid events.
+        // A short independent TX records a bounded retry/quarantine, allowing
+        // healthy events behind a poison event to progress in this same batch.
+        outcome=recordFailure(rejected);
+      }
       if(outcome==null)break;
       switch(outcome){
         case PLANNED -> planned++;
         case REUSED -> reused++;
         case STALE -> stale++;
+        case DEFERRED -> deferred++;
+        case QUARANTINED -> quarantined++;
       }
     }
-    return new BatchResult(planned,reused,stale);
+    return new BatchResult(planned,reused,stale,deferred,quarantined);
   }
 
   private State dispatchInTxWithBoundedRetry(FaultPoint fault){
@@ -116,6 +138,51 @@ public final class UatCalcR01OutboxDispatcher {
     throw new IllegalStateException("CALC_R01_RETRY_EXHAUSTED");
   }
 
+  private State recordFailure(RejectedEvent rejected){
+    var tx=new TransactionTemplate(manager);
+    tx.setIsolationLevel(TransactionTemplate.ISOLATION_READ_COMMITTED);
+    tx.setTimeout(10);
+    return tx.execute(status -> {
+      var failures=sql.query("""
+          SELECT failure_count,processed_at,quarantined_at
+          FROM fin_calc.calc_outbox_event WHERE id=? FOR UPDATE
+          """,(r,i)->new PendingFailure(r.getInt(1),
+              r.getObject(2,OffsetDateTime.class),
+              r.getObject(3,OffsetDateTime.class)),rejected.eventId);
+      if(failures.size()!=1)
+        throw new IllegalStateException("CALC_R01_FAILED_EVENT_LOST");
+      var previous=failures.getFirst();
+      // Another consumer might have successfully processed this event after
+      // our rollback. Never requeue or quarantine an already acknowledged row.
+      if(previous.processedAt!=null||previous.quarantinedAt!=null)
+        return State.DEFERRED;
+      int next=previous.failures+1;
+      boolean dead=next>=5;
+      int waitSeconds=switch(Math.min(next,4)){
+        case 1 -> 60;
+        case 2 -> 300;
+        case 3 -> 900;
+        default -> 3600;
+      };
+      String raw=rejected.getMessage();
+      String reason=raw!=null&&raw.matches("[A-Z0-9_]{1,75}")
+          ?raw:"CALC_R01_REJECTED";
+      int updated=sql.update("""
+          UPDATE fin_calc.calc_outbox_event
+          SET failure_count=failure_count+1,attempts=attempts+1,
+              next_attempt_at=now()+(? * interval '1 second'),
+              quarantined_at=CASE WHEN ? THEN now() ELSE NULL END,
+              last_error_code=?
+          WHERE id=? AND processed_at IS NULL AND quarantined_at IS NULL
+          """,waitSeconds,dead,reason,rejected.eventId);
+      if(updated!=1)throw new IllegalStateException("CALC_R01_FAILURE_RECEIPT_CONFLICT");
+      org.slf4j.LoggerFactory.getLogger(getClass()).warn(
+          "CALC_R01_EVENT_REJECTED id={} code={} failure_count={} quarantined={}",
+          rejected.eventId,reason,next,dead);
+      return dead?State.QUARANTINED:State.DEFERRED;
+    });
+  }
+
   private static boolean retryable(Throwable error){
     for(Throwable t=error;t!=null;t=t.getCause()){
       if(t instanceof SQLException sql
@@ -135,7 +202,7 @@ public final class UatCalcR01OutboxDispatcher {
                payload_jsonb::text payload
         FROM fin_calc.calc_outbox_event
         WHERE producer=? AND event_type=? AND processed_at IS NULL
-          AND next_attempt_at<=now()
+          AND next_attempt_at<=now() AND quarantined_at IS NULL
         ORDER BY created_at,id
         FOR UPDATE SKIP LOCKED LIMIT 1
         """,(r,i)->new EventRow(r.getObject("id",UUID.class),
@@ -143,7 +210,7 @@ public final class UatCalcR01OutboxDispatcher {
           r.getString("producer_event_id"),r.getString("payload")),PRODUCER,EVENT);
     if(events.isEmpty())return null;
     var event=events.getFirst();
-
+    try {
     JsonNode payload=json(event.payload);
     if(!payload.isObject()||payload.size()!=5
         ||!"TEST_QUALIFIED".equals(text(payload,"mode")))
@@ -269,6 +336,12 @@ public final class UatCalcR01OutboxDispatcher {
       throw new IllegalStateException("CALC_R01_FORCED_ROLLBACK");
     acknowledge(event.id,null);
     return inserted==1?State.PLANNED:State.REUSED;
+    }catch(RuntimeException ex){
+      if(ex instanceof DataAccessException
+          ||"CALC_R01_FORCED_ROLLBACK".equals(ex.getMessage()))
+        throw ex;
+      throw new RejectedEvent(event.id,ex);
+    }
   }
 
   private CandidateFactSet reconstruct(Stored f){
