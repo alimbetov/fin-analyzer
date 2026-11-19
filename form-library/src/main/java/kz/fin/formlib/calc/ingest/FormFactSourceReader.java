@@ -24,7 +24,7 @@ import java.util.UUID;
  * a shared canonical source rehash, including attachment filename identity.
  */
 @Service
-public final class FormFactSourceReader {
+public class FormFactSourceReader {
   private final FormRevisionRepository revisions;
   private final FormInstanceRepository instances;
   private final FormVersionRepository versions;
