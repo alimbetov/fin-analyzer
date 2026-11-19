@@ -1,6 +1,6 @@
 # ТЗ FIN CALC-R0 — Incremental Calculation Architecture Foundation (FIN HTAP v2)
 
-**Статус:** SPECIFICATION HARDENED AFTER SOURCE→FACT S1 DATA-FLOW REVIEW / 166-FORM + 794-FIELD BASELINES / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
+**Статус:** SPECIFICATION HARDENED AFTER S1B PARTITIONED FACT / 166-FORM INGESTION REVIEW / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
 **Репозиторий:** `alimbetov/fin-analyzer`  
 **Единственная рабочая ветка:** `feat/fin-form-library-standalone`; без создания ветки, merge в `main`, изменения старых миграций или переноса старого FIN Analyzer Backend.  
 **Роль:** новая минимальная расчётная основа в standalone FIN Form Library, а не заявление о готовом production HTAP.  
@@ -159,9 +159,21 @@ Change impact:
 
 **Новая минимальная модель R0**: пять таблиц `fin_calc` **плюс три** `fin_fact` (`fact_set`, `fact_observation`, `factset_control`). Это не отдельный DWH и не допуск к реальным банковским данным. Наличие Redis/Caffeine не изменяет trust boundary.
 
+### CALC-FR-13. Партиционирование fin_fact и общий JSON→Fact контракт для 166 форм (P0)
+
+**Обязательное дополнение:** [FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ](temporary/FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md), [матрица 166 форм](FIN-FACT-R0-166-FORM-INGESTION-COVERAGE.tsv), [проект PostgreSQL 16 DDL](temporary/sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql). Детальное повторное ревью: [S1B](audits/FIN-CALC-R0-S1B-PARTITIONED-166-INGESTION-REVIEW-2026-11-19.md).
+
+- **Физическая модель:** unpartitioned multisource `fin_fact.fact_set` с набором exact source revisions/formVersions, unpartitioned `factset_control`, и **monthly `fact_observation PARTITION BY RANGE(period_start)`**. Один FactSet может содержать несколько форм и периодов; поле `source_form_code`/`source_form_version_id` хранится для каждой observation/source reference, а не единственной обязательной формой заголовка.
+- **PG16 PK/UNIQUE:** `PRIMARY KEY(period_start,observation_id)` и `UNIQUE(period_start,factset_id,observation_key_sha256)`. Уникальный `UUID PRIMARY KEY` на partitioned parent **запрещён**. Все SQL joins/reader predicates передают известные периоды для pruning, иначе факт-выборка по FactSet может просматривать множество месячных partitions.
+- **Логика 166:** 3 SINGLE_RECORD, 151 ROWSET с неизменяемыми row UUID и измерениями, 12 EVIDENCE — 0 numeric facts по умолчанию. `400` числовых кандидатов R6 **не** равны 400 финансово проверенным метрикам. Каждая форма/версия требует полевого MEASURE/DIMENSION/DATE/EVIDENCE/SKIP mapping, периода, grain, unit, rounding и разрешённых источников. R0 исполняет только TEST_ONLY F02; весь остальной охват — отдельная проверяемая дорожная карта.
+- **SQL MERGE:** не обновлять и не удалять финансовые факты при коррекции формы. Для новой допущенной редакции создаётся новый FactSet+observation snapshot. Точный replay дедуплицируется на уровне qualified binding и canonical factset SHA (с проверкой равенства содержимого), а active epoch выбирает CURRENT; история остаётся append-only.
+- **Partition maintenance:** заимствовать из user-supplied `TablePartitionService` только advisory xact lock, ограниченные транзакции/DDL timeouts, каталог/идемпотентность, retry, dry-run и метрики. Заменить day→month и проверять actual partition key+DATE+bounds. Автоматический `DROP` запрещён; DDL вынести из TX-A/TX-Q. Не выполнять SQL из HTTP вводимых имён схем/таблиц.
+- **Приёмка:** PostgreSQL 16 PFT-01..18 + A32..A34, включая фактическое routing по двум месяцам, корректность бизнес-ключей, pruning, backfill, 166-form mapping status и отсутствие cross-tenant/current ошибок.
+
+
 ## 5. Минимальная модель хранения (схемы `fin_calc` + `fin_fact`)
 
-R0 имеет **восемь новых таблиц**: пять `fin_calc` ниже и три `fin_fact` по CALC-FR-12. Это минимальный полный source→fact→calculate пилот, без Kafka, DWH и отдельной таблицы на каждый узел DAG. `019-fin-calc-r0-postgresql.sql` создаёт calc-контур, `020-fin-fact-r0-pilot-postgresql.sql` — факт-контур и FK `calc_plan.factset_id → fin_fact.fact_set.id`:
+R0 имеет **восемь новых таблиц**: пять `fin_calc` ниже и три `fin_fact` по CALC-FR-12. Это минимальный полный source→fact→calculate пилот, без Kafka, DWH и отдельной таблицы на каждый узел DAG. **`fin_fact.fact_observation` — месяц RANGE(period_start)**, `fact_set`/`factset_control` — обычные таблицы; точный состав PK/FK/UNIQUE и мультиформенная membership в CALC-FR-13. Старые схематичные PK из первоначального Source-to-Fact ТЗ заменены. `019-fin-calc-r0-postgresql.sql` создаёт calc-контур, `020-fin-fact-r0-pilot-postgresql.sql` — факт-контур и FK `calc_plan.factset_id → fin_fact.fact_set.id`:
 
 | Таблица | Минимальные поля и ограничения |
 |---|---|
@@ -242,6 +254,9 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 | A29 | Source-to-Fact qualification seam: test-only F02 revision | `fin_fact.fact_set` + exactly 3 typed observations + trusted event atomically committed, exact SHA/lineage |
 | A30 | Source correction, stale mapping, source SHA mismatch and out-of-order qualification | reject wrong facts/current, preserve history, no implicit draft promotion |
 | A31 | Full PostgreSQL migration 001–020, failed TX-Q, replay, source tampering and backfill discovery | STF-01–STF-16 in source-to-fact appendix GREEN; no historical checksums rewritten |
+| A32 | PostgreSQL 16 monthly fact partitions and partition maintenance | PFT-01..08: valid composite PK/UNIQUE, wrong bounds BLOCK, multi-node safe ensure, no auto-drop |
+| A33 | 166-form adapter discovery and multi-form FactSet | PFT-09..15: 3/151/12 modes, row UUID/dimensions, one multi-source dataset, source conflict blocking |
+| A34 | Fact partition/source qualification gate end-to-end | PFT-16..18: tenant-safe epoch, correct migration, 166 entries fully classified, no invented S2 |
 
 ### Проверяемые SQL-постусловия
 - Счётчик `fin_intake.lib_form_revision` соответствует коммитам save; rollback не оставляет `calc_outbox_event`.
@@ -254,9 +269,9 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 | Этап | Содержимое | Условие завершения |
 |---|---|---|
 | **R0.A — Contract + Coverage** | Данное ТЗ, baseline 166 форм, 3 F02 formulas, аудит исходников | Полнота и неизобретённые зависимости подтверждены; DESIGN READY |
-| **R0.B — Minimal Calculation Kernel + Fact boundary** | Typed F02 DAG, preview, additive calc 019 + fact 020 tables, pinned source→fact assembler, TEST_ONLY qualification, outbox, bounded multithreaded workers, Caffeine descriptor/DAG L1 | A02–A09 + A22 + A29 PostgreSQL + React GREEN |
+| **R0.B — Minimal Calculation Kernel + Partitioned Fact boundary** | Typed F02 DAG, preview, additive calc 019 + **monthly partitioned fact 020**, safe partition manager, pinned source→fact assembler, TEST_ONLY qualification, outbox, bounded workers, Caffeine descriptor/DAG L1 | A02–A09 + A22/A29/A32 PostgreSQL + React GREEN |
 | **R0.C — Incremental + Safety** | Field-level impact, per-node + execution fingerprints, stale/lease/fencing, revoke, method changes, parallel DAG branches above measured threshold | A10–A17 + A23/A24/A27 PostgreSQL concurrency GREEN |
-| **R0.D — Qualification** | CI full regression, browser, source→fact+recalculation PostgreSQL E2E, measurements, technical review | A18–A25/A27/A29–A31 и STF-01–STF-16 GREEN на одном SHA, локальный TEST_ONLY пилот разрешён |
+| **R0.D — Qualification** | CI full regression, browser, **partitioned** source→fact+recalculation PostgreSQL E2E, measurements and technical review | A18–A25/A27/A29–A34, STF-01–16 и PFT-01–18 GREEN на одном SHA, локальный TEST_ONLY пилот разрешён |
 | **CALC-R1 — Cache Adapter (вне R0)** | Port `CalculationCache`, optional Redis L2 adapter, OFF by default | A25/A26 GREEN, fallback и безопасность доказаны |
 | **CALC-R2 — Redis Performance Gate (вне R0)** | Benchmark Redis OFF / L1 / L1+L2 для multi-worker workloads | A28 GREEN и статистически обоснованное enable/disable решение |
 | **Production S2/IAM Gate (отдельно)** | Реальный S2/IAM, FactSet authority, approved publish, масштабирование на 166 форм | Нет HOLD; финансовый выпуск отдельно |
@@ -274,7 +289,7 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 ## 12. Definition of Done
 
 **R0.A**: ТЗ + две baseline-матрицы в ветке, точно 166 form rows и 794 unique R6 field rows, все формы включены, отсутствующие поля/semantics видны, формулы/зависимости честно кандидатные, без изменений исполняемого кода/миграций.  
-**R0.D**: F02 preview + **persisted immutable fin_fact with 3 typed F02 observations** + synthetic qualified E2E + DAG + PostgreSQL queue + bounded multithreaded workers + fencing + immutable result + Caffeine L1; тесты A01–A25, A27, A29–A31, STF-01–STF-16 (A26 — R1, A28 — R2) CI GREEN на одном SHA.  
+**R0.D**: F02 preview + **persisted immutable fin_fact with 3 typed F02 observations** + synthetic qualified E2E + DAG + PostgreSQL queue + bounded multithreaded workers + fencing + immutable result + Caffeine L1; тесты A01–A25, A27, A29–A34, STF-01–STF-16 и PFT-01–PFT-18 (A26 — R1, A28 — R2) CI GREEN на одном SHA.  
 **Production**: НЕ READY, пока нет независимого финансового S2, IAM/ABAC и реального approved FactSet admission.
 
 ### Review reference
@@ -285,6 +300,9 @@ R0 имеет **восемь новых таблиц**: пять `fin_calc` ни
 
 - `docs/temporary/FIN-CALC-R0-CODE-LEVEL-TZ.md` — class/package contracts, PostgreSQL migrations 019/020, F02 DAG, bounded workers, outbox, tests.
 - `docs/temporary/FIN-CALC-R0-SOURCE-TO-FACT-PIPELINE-TZ.md` — **P0 source→fact audit closure**: source extraction, typed observations, TEST_ONLY FactSet, epoch, TX-Q and tests STF-01–STF-16.
+- `docs/temporary/FIN-FACT-R0-PARTITIONED-166-FORM-INGESTION-TZ.md` — S1B: monthly PG16 partitioning, multi-form FactSets, 166-form ingestion strategies, PFT-01..18.
+- `docs/temporary/sql/FIN-FACT-PARTITIONED-PG16-DDL-DRAFT.sql` — reviewable **SQL draft only**, not included in Liquibase.
+- `docs/FIN-FACT-R0-166-FORM-INGESTION-COVERAGE.tsv` — 166-form source adapter matrix, candidate values and review/implementation statuses.
 - `docs/temporary/FIN-CALC-R1-CACHE-REDIS-CODE-LEVEL-TZ.md` — CalculationCache interfaces, Caffeine node values, optional Redis L2, feature flags, fallback.
 - `docs/temporary/FIN-CALC-R2-REDIS-BENCHMARK-CODE-LEVEL-TZ.md` — 3-mode benchmark scripts/fixtures, telemetry, correctness and Redis activation gate.
 
