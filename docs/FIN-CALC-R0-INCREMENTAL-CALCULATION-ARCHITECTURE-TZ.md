@@ -1,6 +1,6 @@
 # ТЗ FIN CALC-R0 — Incremental Calculation Architecture Foundation (FIN HTAP v2)
 
-**Статус:** SPECIFICATION + 166-FORM BASELINE / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
+**Статус:** SPECIFICATION REVISED AFTER S1 TECHNICAL REVIEW / 166-FORM + 794-FIELD BASELINES / IMPLEMENTATION NOT STARTED / FINANCIAL S2 HOLD  
 **Репозиторий:** `alimbetov/fin-analyzer`  
 **Единственная рабочая ветка:** `feat/fin-form-library-standalone`; без создания ветки, merge в `main`, изменения старых миграций или переноса старого FIN Analyzer Backend.  
 **Роль:** новая минимальная расчётная основа в standalone FIN Form Library, а не заявление о готовом production HTAP.  
@@ -27,7 +27,7 @@ Transactional outbox доставляет события, PostgreSQL queue да�
 - Существующий `ReportDerivedTotalService` поддерживает только `SUM`/`LAST_VALUE` для Report Grid как `UNQUALIFIED_DRAFT`. `FormDraftService` отдельно сохраняет immutable JSON/ROWSET в `fin_intake`. Автоматической единой проекции и FIN HTAP writer в этой ветке нет.
 - У standalone нет production IAM/S2 authority. `X-FIN-UAT-Token` — метка корреляции, не разрешение. Выполнение на реальных персональных/банковских финансовых данных и открытый production доступ запрещены.
 
-**Приложение:** `docs/FIN-CALC-R0-COVERAGE-166-BASELINE.tsv` — одна строка на каждую форму. Поля `candidate_operations_not_approved` являются **гипотезами для ревью**, а не готовыми формулами. `consumer_models_declared` — обратные ссылки из каталога моделей; НЕ прямые зависимости между формами. Значение `NOT_DECLARED` означает отсутствие утверждённого формального form→form dependency. `NOT_AUTHORED` / `NOT_PROVEN_PER_FORM` запрещают интерпретировать строку как реализованную методику.
+**Приложения:** `docs/FIN-CALC-R0-COVERAGE-166-BASELINE.tsv` — одна строка на каждую форму; `docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv` — одна строка на каждое из 794 R6 кандидатных полей с явными пробелами по time semantics, units, source metric binding, aggregation и qualification. 84 runtime evidence metadata и расхождения с фактическими физическими таблицами должны быть отдельно reconciled по DB, а не замаскированы автоматически. Сводная form-matrix не является исполняемым calculation coverage contract. Поля `candidate_operations_not_approved` являются **гипотезами для ревью**, а не готовыми формулами. `consumer_models_declared` — обратные ссылки из каталога моделей; НЕ прямые зависимости между формами. Значение `NOT_DECLARED` означает отсутствие утверждённого формального form→form dependency. `NOT_AUTHORED` / `NOT_PROVEN_PER_FORM` запрещают интерпретировать строку как реализованную методику.
 
 ## 3. Термины и границы доверия
 
@@ -45,7 +45,8 @@ Transactional outbox доставляет события, PostgreSQL queue да�
 ### CALC-FR-01. Полная source-матрица 166 форм
 - Зафиксировать все 166 форм, группы, семантическую зернистость (grain), bootstrap content mode, известные исходные поля/типы, candidate operations, модели-потребители, отсутствие/наличие зависимости и статусы.
 - Контроль: 166 уникальных code; 8/10/14/12/59/63; 794 R6 полей для 154 кодов; 42 модели; не терять 12 document/external-tax форм; запрещены выдуманные поля, формулы, S2 approval.
-- Для утверждения формул отдельно потребуется полевой `fieldCode → metricCode/version → value kind → time semantics → aggregation policy → unit → null/missing policy` контракт. `R0 baseline != R1 formula approval`.
+- Для утверждения формул отдельно потребуется полевой `fieldCode → metricCode/version → value kind → time semantics → aggregation policy → unit → null/missing policy` контракт, зафиксированный для **каждого** релевантного поля и версии формы. `R0 baseline != R1 formula approval`.
+- Автоматически проверять оба TSV по exact source SHA и кодам: 166 уникальных formCode и 794 уникальных `(formCode,fieldCode)`; наличие поля в R6 не доказывает его наличие в runtime, правильную unit-policy или готовность к вычислению.
 
 ### CALC-FR-02. Typed operations без runtime-скриптов
 - MVP операции `SUBTRACT`, `DIVIDE` и проверка неполного ввода, реализованные в Java `BigDecimal` по жесткому allowlist и версии дескриптора. Никаких `eval`, SpEL из пользовательского ввода, динамического SQL и JavaScript-формул на сервере.
@@ -53,7 +54,7 @@ Transactional outbox доставляет события, PostgreSQL queue да�
 - Не приводить MISSING/NOT_APPLICABLE к нулю; DELTA по STOCK не равен сумме остатков; несовместимые периоды, валюты и units должны блокироваться.
 
 ### CALC-FR-03. F02 pilot DAG
-Пиновать точную версию F02 (`FIN-FORM-V2` или её реальный `form_version_id`), три входа `netRevenue`, `cogs`, `operatingExpenses` с типом MONEY. Все они должны пройти действующий field-contract guard.
+Пиновать **реальный** `fin_lib.lib_form_version.id` F02 вместе с `schema_sha256`, `mapping_sha256` и `FIN-FORM-V2` (UUID у bootstrap может различаться между БД), три входа `netRevenue`, `cogs`, `operatingExpenses` с типом MONEY. Все они должны пройти действующий field-contract guard **и** локальную тестовую проверку типов, unit, period semantics, decimal precision, signed cost convention. `FieldMetricContractGuard.matches()` — структурная сверка с `fin_lib.lib_field_binding_contract`, НЕ независимое S2-утверждение. Выходы F02 пилота являются отдельными локальными derived codes; не регистрировать их как APPROVED `metric_code`.
 
 ```text
 F02.netRevenue ─┬─> grossProfit = netRevenue - cogs ──┬─> grossMargin = grossProfit / netRevenue
@@ -79,29 +80,36 @@ Change impact:
 - Draft событие допустимо **только для локальной проекции/предпросмотра**. Оно не запускает Qualified Workers.
 - Только доверенное `FACTSET_QUALIFIED` с exact binding может инициировать qualification plan. Также учитывать `QUALIFICATION_REVOKED`, `METHOD_CONFIG_ACTIVATED` от их авторитетных источников; эти события являются **целевыми интерфейсами**, не существующими сейчас producer'ами.
 - Event delivery at-least-once; дедупликация по source event ID + topic/domain; возможна обработка out of order, порядок определяется revision/binding epoch, а не временем поступления.
+- R0 без брокера: `processed_at` означает завершение DB-local dispatch, не Kafka publish. Брать outbox пачками через `SKIP LOCKED` и **одной** транзакцией фиксировать дедупликацию consumer, создание плана/job (только trusted event) и `processed_at`; при rollback все операции откатываются. Retry ограниченный, poison event получает `FAILED_FINAL`, а зависшие события видны мониторингу. Payload содержит ID+SHA, не сырые финансовые значения; финансовый source читается по pinned revision.
 
 ### CALC-FR-06. Incremental DAG Planner
 - `GraphDescriptor` immutable/versioned. Build из allowlisted descriptors; запрет циклов, отсутствующих входов, несовместимых grain/unit/time semantics, неутверждённого переназначения `metricCode`.
 - Impact сравнивает **точные canonical values по fieldCode/rowId/period** у версий inputs; изменение визуального порядка `ROWSET` не меняет финансовое содержимое, если алгоритм не чувствителен к порядку.
 - R0: один небольшой DAG в одном job, а не отдельный PostgreSQL job для каждой операции. Будущая partitioning стратегия — только по бенчмаркам.
+- Учитывать **два** уровня: целый binding/plan меняется при новой квалифицированной редакции, а отдельный node может сохранить тот же результат. Для адресного пересчёта сравнивать `nodeFingerprint`, построенный **только из реально потребляемых значений и соответствующих версий операций**, а не из SHA всего FactSet/редакции. Транзитивно грязные узлы пересчитать в топологическом порядке; неподверженные узлы могут быть использованы только при совпадении typed inputs, period, unit, config и valid state.
+- При новой квалификации/F02 revision создавать **новый полный immutable result snapshot**, содержащий как пересчитанные, так и безопасно переиспользованные значения узлов, но с **новым binding/lineage**. Не перепривязывать прежнюю строку `calc_result` к чужому `plan_id`; историю сохранять.
 - При идентичном fingerprint — reuse валидного immutable результата, но **перед возвращением как CURRENT повторная проверка актуального admission обязательна**.
 
 ### CALC-FR-07. PostgreSQL Job Queue
 - `PENDING → RUNNING → SUCCEEDED`; альтернативы `FAILED_RETRYABLE`, `FAILED_FINAL`, `SUPERSEDED`, `BLOCKED_STALE_APPROVAL`. У plan отдельный `PUBLISHED`/rejected state.
 - `SELECT ... FOR UPDATE SKIP LOCKED` + `UPDATE RETURNING` в **короткой транзакции claim**. Worker выполняет CPU расчёт **после COMMIT claim**.
 - Каждому claim присваивается монотонный `fencing_token`; `lease_until`, `lease_owner`, heartbeat, max attempts, bounded retry with backoff + jitter, expired-lease recovery, terminal failure visibility.
-- `SUCCEEDED` записывается только conditional update по текущим token/owner/lease и после проверки версии плана. Устаревший worker не должен портить state или current pointer.
+- `SUCCEEDED` записывается только conditional update по текущим token/owner/lease и после проверки версии плана. Устаревший worker не должен портить state или current pointer. Проверка lease и fence должна быть в том же UPDATE/transaction, что и запись результата; недостаточно Java-проверки до вычисления.
+- PostgreSQL queue даёт `at-least-once` вычисление, но **at-most-one accepted result per exact execution binding** и fenced publication. Expired RUNNING reaper увеличивает fence и переносит в PENDING/FAILED_RETRYABLE; worker heartbeat продлевает только своё действующее владение.
 - Нагрузка ограничена размером пула/очереди; никаких безлимитных virtual threads.
 
-### CALC-FR-08. Fingerprint и immutable результаты
-- Использовать canonical serialization **с версией и однозначными границами полей** (JSON canonical/length-prefixed, не простое сцепление без разделителей).
-- `fingerprint = SHA-256(domainTag, contractVersion, tenantScope, methodologyId+version, artifactSha256, effectiveConfigSha256, paramsSha256, qualifiedFactSetId+sha, orderedInputs[revisionId,formVersionId,contentSHA,rowOrderSHA if semantically relevant,unit,time], targetPeriod, grain, currency/basis/coverage, calculationPolicyVersion)`.
-- Fingerprint **не то же самое**, что `resultSha256`; `executionId` не часть fingerprint; результат имеет reproducible source lineage.
-- Результат append-only, уникальность fingerprint в разрешённой tenant-scope; конкурентные дублёры возвращают одну ссылку. `Caffeine` только для immutable descriptors/graphs, не источник истины для прав и revocation.
+### CALC-FR-08. Двухуровневый fingerprint, reuse и immutable результаты
+- Использовать canonical serialization **с версией и однозначными границами полей** (canonical JSON/length-prefixed, не конкатенация неоднозначных строк). Числа нормализуются по явной numeric/scale policy, а состояния MISSING/NULL/NOT_APPLICABLE участвуют в digest.
+- **`executionFingerprint` (full binding):** SHA-256 по domain tag, версии контракта, полному tenant/entity/businessScope/project/period/currency/basis/coverage/dataSpace scope, exact FactSet ID+SHA+admission epoch, methodology/variant+version, approved config/params/artifact SHA, ordered pinned revisions и input source hashes, DAG descriptor SHA. Это ключ **отдельного утверждённого исполнения** и одной полной immutable result-записи.
+- **`nodeFingerprint` (computational reuse):** SHA-256 по domain tag, версии конкретного алгоритма узла, его effective params/config/rounding, typed unit/period/semantic dimensions, scope и **только фактически потребляемым operand value digests и upstream node fingerprints**. Не включает неиспользуемые поля, ID всей новой редакции или SHA всего FactSet; иначе требование адресного пересчёта A10 невыполнимо.
+- При новом FactSet допускается reuse **вычисленного значения узла**, если его `nodeFingerprint` идентичен, исходный результат целостен, корректен и доступен в том же tenant/scope; новое `calc_result` содержит копию значения + новый binding, точный lineage до новых источников и метки RECOMPUTED/REUSED. Не разрешать cross-tenant reuse даже при совпадении числа. Неквалифицированные исходники не становятся APPROVED от reuse.
+- Отдельно хранить `resultSha256` по новому output snapshot, `executionId` по попытке исполнения; оба отличны от fingerprint. `calc_plan` должен быть уникален по full scope + `executionFingerprint`, чтобы дубль точного события находил первоначальный `plan_id`; иначе unique(result fingerprint) + FK на разные планы даст некорректный lineage.
+- `calc_result` append-only с DB-level UPDATE/DELETE protection, уникальность `(tenant, executionFingerprint)`; Caffeine только для immutable descriptors/graph cache, не authority или revocation.
 
 ### CALC-FR-09. Qualification / publication gate
 - Всякий qualified plan создаётся **только** через `TrustedQualificationGateway`, который подтверждает authority, decision SHA, binding к FactSet/config/artifact, validity и revocation epoch.
-- Перед установкой `current_result` атомарно перепроверить revocation/config epoch, exact pinned input binding, fencing, ожидания current pointer (CAS / row lock). Исполнение и опубликование независимы.
+- Перед установкой `current_result` атомарно перепроверить revocation/config epoch, exact pinned input binding, fencing и expected current pointer (CAS/row lock). Исполнение и опубликование независимы. `calc_current_result` должен иметь полный stable identity: organization/economicEntity/businessScope/project/methodVariant/target period/currency/coverage/basis/dataSpace, а не только (project, method).
+- **R0 local test:** test-only authority/epoch сериализуются с публикацией в одной PostgreSQL DB transaction (общий guard row и lock order; допускается plan row при строго одном тестовом binding). **Production:** если authority находится в другой БД/сервисе, простая проверка по HTTP и последующий COMMIT НЕ атомарны; production publication остаётся HOLD до описания синхронизированного authority epoch, обязательного fail-closed read gate и проверки гонки с отзывом. Не заявлять глобальную атомарность без общей транзакционной границы.
 - После отзыва/смены config старые immutable результаты остаются в истории, но endpoint CURRENT обязан fail-closed или вернуть только другой валидный результат. Запрос без авторизованного tenancy в production запрещён.
 
 ## 5. Минимальная модель хранения (новая схема `fin_calc`)
@@ -110,23 +118,24 @@ R0 придерживается **пяти таблиц**, без отдельн
 
 | Таблица | Минимальные поля и ограничения |
 |---|---|
-| `calc_outbox_event` | `id PK`, `producer`, `producer_event_id`, `event_type`, `aggregate_id`, `revision_id`, `payload_sha256`, `payload_json`, `occurred_at`, `published_at`, `attempts`, UNIQUE(producer, producer_event_id); payload SHA не является дедупликационным ключом жизненного цикла |
-| `calc_plan` | `id PK`, tenant/project/period scope, `factset_id`, `factset_sha256`, `qualification_binding_sha256`, `qualification_epoch`, `method_id/version`, `config_sha256`, `params_sha256`, `artifact_sha256`, `dag_snapshot_json`, `dag_sha256`, `status`, `created_at` |
-| `calc_job` | `id PK`, `plan_id FK`, `node_group_key`, `fingerprint`, `status`, `priority`, `attempt_count`, `available_at`, `lease_owner`, `lease_until`, `fencing_token`, `last_error_code`, timestamps; UNIQUE(plan_id,node_group_key) |
-| `calc_result` | `id PK`, tenant/project scope, `plan_id FK`, `fingerprint`, `result_sha256`, `result_json` (canonical numeric strings/states), `lineage_json`, `computed_at`, `qualification_mode`; unique tenant-scope+fingerprint; UPDATE/DELETE forbidden |
-| `calc_current_result` | tenant/project/method/period stable key, `result_id FK`, `pointer_version`, `approval_epoch`, `activated_at`; FK and CAS gate |
+| `calc_outbox_event` | `id PK`, `producer`, `producer_event_id`, `event_type`, `aggregate_id`, `revision_id`, `payload_sha256`, `payload_json`, `occurred_at`, `processed_at`, `state`, `available_at`, `attempts`, `last_error_code`, UNIQUE(producer, producer_event_id); payload SHA не является дедупликационным ключом. Payload содержит ссылки и digests, не финансовые значения |
+| `calc_plan` | `id PK`, **full** tenant/entity/scope/project/period/currency/basis/coverage/dataSpace key, `execution_fingerprint`, `factset_id`, `factset_sha256`, `qualification_binding_sha256`, `qualification_epoch`, `method_id/version`, `config_sha256`, `params_sha256`, `artifact_sha256`, `dag_snapshot_json`, `dag_sha256`, `status`, `created_at`; UNIQUE(full_scope,execution_fingerprint), immutable binding columns |
+| `calc_job` | `id PK`, `plan_id FK`, `node_group_key`, `execution_fingerprint`, `status`, `priority`, `attempt_count`, `available_at`, `lease_owner`, `lease_until`, `fencing_token`, `last_error_code`, `result_id NULL`, timestamps; UNIQUE(plan_id,node_group_key), partial ready index, conditional fenced state transitions |
+| `calc_result` | `id PK`, full scope, `plan_id FK`, `execution_fingerprint`, `result_sha256`, `result_json` (complete 3-output snapshot incl. value states/nodeFingerprints/reuse flags), `lineage_json` (binding to **this** FactSet), `computed_at`, `qualification_mode`; UNIQUE(tenant,execution_fingerprint), DB-level UPDATE/DELETE forbidden |
+| `calc_current_result` | complete organization/entity/businessScope/project/methodVariant/period/coverage/currency/basis/dataSpace stable key, `result_id FK`, `pointer_version`, `approval_epoch`, `activated_at`; FK, CAS, serialized admission/revocation gate |
 
 Это **логическая SQL-спецификация**, точные миграции и PostgreSQL constraints/indices будут написаны в R0.B. `calc_outbox_event` и результат имеют разные правила жизненного цикла: технические поля доставки outbox изменяемы; финансовые payload и result immutable. У `calc_plan` DAG фиксируется в snapshot JSON + SHA (не хранить отдельную таблицу edges до необходимости). Существующие `fin_lib` / `fin_intake` таблицы не переписывать.
 
 ## 6. Транзакционные границы и concurrency
 
-1. **TX-A**: сохранить `fin_intake` revision + append outbox event; rollback удаляет оба. У исходного `FormDraftService` должны сохраниться no-op/409/idempotency правила.
-2. **TX-B**: dispatcher читает недоставленные события, создаёт план только для доверенного `FACTSET_QUALIFIED` и дедуплицирует. На недоверенном draft событии запрещено создание qualified job.
+1. **TX-A**: сохранить `fin_intake` revision + append outbox event **в том же PostgreSQL и физической транзакции**; rollback удаляет оба. У исходного `FormDraftService` должны сохраниться no-op/409/idempotency правила.
+2. **TX-B**: dispatcher забирает DB-local unprocessed events через `SKIP LOCKED`, дедуплицирует по `producer_event_id`, создаёт план/job только для доверенного `FACTSET_QUALIFIED` и помечает `processed_at` **в том же COMMIT**. Для `DRAFT_REVISION_SAVED` разрешено только локальное read-model действие; на неутверждённом черновике qualified job запрещён.
 3. **TX-C**: claim очереди по `FOR UPDATE SKIP LOCKED`, обновить lease, token, status; COMMIT.
-4. **Compute (вне TX)**: проверить pinned facts, получить typed inputs, выполнить DAG, рассчитать fingerprint и result SHA.
-5. **TX-D**: зафиксировать immutable result только если fencing/plan/binding ещё действительны; CAS publication с проверкой admission в той же логической критической секции; снять lease.
-6. **Recovery**: reaper находит просроченные RUNNING, переоткрывает задачи с увеличением token; повторные callback/same fingerprint не дублируют result.
-7. **Revocation race**: отзыв должен сериализоваться с publication по общей версии/locking authority. Простое `SELECT approved` перед `INSERT` без блокировки — НЕПРИЕМЛЕМО. Чтение current также проверяет действующий admission.
+4. **Compute (вне TX)**: загрузить только точную pinned revision, проверить source schema/binding SHA и typed values; выполнить DAG и per-node dirty/reuse; подготовить output snapshot и SHA без DB UPDATE.
+5. **TX-D (result commit)**: в одной DB транзакции условно по `lease_owner + fencing_token + lease_until + plan state` записать новый immutable result и `SUCCEEDED`/`result_id`; при rollback нет ни результата, ни SUCCEEDED. Если `executionFingerprint` уже закоммичен, возвращать исходный plan/result, не делать cross-plan rebinding.
+6. **TX-E (publication)**: отдельная короткая транзакция, revalidate trusted authority/epoch, exact binding, config/artifact, plan state и CAS pointer, затем отметить план опубликованным. Это делает проверяемым crash **между результатом и публикацией**. Повтор TX-E идемпотентен.
+7. **Recovery**: reaper находит просроченные RUNNING, переоткрывает задачи с увеличением token; retry и crash after TX-D before TX-E не дублируют результат и не создают phantom CURRENT.
+8. **Revocation race**: отзыв должен сериализоваться с publication по общей версии/locking authority **в рамках допускаемого local test trust boundary**. Простое `SELECT approved` перед `INSERT` без блокировки — НЕПРИЕМЛЕМО. Чтение current также проверяет действующий admission; для внешней production authority без общей транзакции остаётся HOLD.
 
 ## 7. REST и локальные UI-контракты
 
@@ -142,7 +151,9 @@ R0 придерживается **пяти таблиц**, без отдельн
 ## 8. Нефункциональные требования и измерения
 
 - Детерминированные BigDecimal операции; no floating-point для финансов; explicit currency/units/rounding, no implicit zero; stable input ordering.
-- Isolation: tenant/project/period/form version и reporting basis обязательны в fingerprint и доступе; нет прямого `fin_intake → fin_fact` writer.
+- Isolation: tenant/project/period/form version и reporting basis обязательны в fingerprint и доступе; нет прямого `fin_intake → fin_fact` writer. Preview в R0 только на loopback с feature flag, bounded payload (3 F02 inputs), без публичного Swagger write API для S2; rate limit и auth обязателен для внешнего размещения.
+- **R0 source reader:** только `fin_intake` pinned `revision_id + form_version_id + exact instance scope` через существующий `FormDraftService`/репозитории; в R0 **не создавать** третью параллельную fact таблицу. Snapshot canonical values валидируются с реальным source SHA и текущими immutable field definitions; не читать `current_revision_id` для уже pinned plan. Отдельный `ReportGridService` (`fin_intake.lib_report_revision_cell`) остаётся вне MVP с явным interface-adapter TODO.
+- **Hardening prerequisite:** existing `fin_intake` исторические revision/row/evidence таблицы не имеют доказанного PostgreSQL UPDATE/DELETE deny trigger. До production qualification обязателен DB-level append-only guard или equivalent access segregation и негативный SQL-тест; наличие Java immutable flow недостаточно.
 - Observability: `eventId`, `planId`, `jobId`, `executionId`, `fingerprint`, `factSetSha`, `methodId`, error code, duration, nodes total/recomputed/skipped, queue lag, retry/fence counters. Не логировать финансовые значения и PII.
 - Целевые **гипотезы для нагрузочной квалификации**, не SLA текущего проекта: p95 preview ≤ 300 ms для 3 полей; p95 от trusted event до результата ≤ 2 s в локальном 1-проектном пилоте; zero unauthorized current publications; zero duplicate results for same scope/fingerprint. Измерять p95/p99 и throughput PostgreSQL/worker; отклонения не скрывать.
 - `ddl-auto=validate`, Liquibase additive changesets; запрет правки исторических checksums/миграций. PostgreSQL 16 Testcontainers обязателен для concurrency; H2 не заменяет его.
@@ -160,15 +171,18 @@ R0 придерживается **пяти таблиц**, без отдельн
 | A07 | Duplicate/out-of-order event | at-least-once safe; no duplicate qualified plan/result |
 | A08 | Draft event without qualified FactSet | no qualified job and no current publication |
 | A09 | Isolated TEST_QUALIFIED binding → DAG → worker | correct typed outputs; result labelled LOCAL_TEST_ONLY |
-| A10 | Modify only operatingExpenses (new bound FactSet) | only operatingResult marked dirty/recomputed; unchanged nodes reused |
-| A11 | Same inputs/config/artifact fingerprint | immutable result reused, no new financial result |
+| A10 | Modify only operatingExpenses (new bound FactSet) | only operatingResult `nodeFingerprint` dirty/recomputed; grossProfit/grossMargin reused; **new complete result snapshot + new exact lineage**, no cross-plan FK alias |
+| A11 | Same exact qualified binding, inputs, config, artifact | identical **executionFingerprint** yields same plan/result; separate qualified binding results in a distinct immutable result even if selected nodeFingerprints are unchanged |
 | A12 | 2–4 concurrent workers claim same job | at most one active fencing owner, no duplicate current |
 | A13 | Worker A lease expires; B reclaims; A finishes late | A cannot update job/result/current |
-| A14 | Revoke admission during compute/publication | fail-closed current; rejected stale advancement; old history retained |
+| A14 | Revoke local trusted-test admission during compute/publication | serialized fail-closed current; rejected stale advancement; old history retained; production authority integration explicitly HOLD |
 | A15 | Activate algorithm/config version with new SHA | changed fingerprint; no stale cache/current reuse |
-| A16 | Crash after claim/after result write/before publish | recovery, idempotent retry, no phantom current |
+| A16 | Crash after TX-C; rollback during TX-D; crash after TX-D before TX-E | recovered claim, one immutable result, idempotent publication, no phantom current |
 | A17 | Missing input/incorrect grain/currency/period | deterministic blocked/error without publishing |
 | A18 | PostgreSQL full migration + React browser regression | CI GREEN **on same exact SHA**, no legacy regression |
+| A19 | New revision changes unrelated input; node vs execution fingerprint | only dependent node hashes change; new plan and result lineage required |
+| A20 | Unauthorized HTTP preview/worker API and cross-scope reads | bounded localhost preview, no public approve, no cross-tenant output or data leak |
+| A21 | Synthetic local revocation/config activation concurrent with TX-E | locked ordering / epoch CAS guarantees no CURRENT advancement after revocation |
 
 ### Проверяемые SQL-постусловия
 - Счётчик `fin_intake.lib_form_revision` соответствует коммитам save; rollback не оставляет `calc_outbox_event`.
@@ -198,9 +212,13 @@ R0 придерживается **пяти таблиц**, без отдельн
 
 ## 12. Definition of Done
 
-**R0.A**: два документа в ветке, точно 166 строк матрицы и все формы включены; формулы/зависимости честно кандидатные, несогласованные поля видны, на код/миграции никаких изменений.  
-**R0.D**: F02 preview + synthetic qualified E2E + DAG + очередь + fencing + immutable result, отрицательные тесты A01–A18, CI GREEN на одном SHA.  
+**R0.A**: ТЗ + две baseline-матрицы в ветке, точно 166 form rows и 794 unique R6 field rows, все формы включены, отсутствующие поля/semantics видны, формулы/зависимости честно кандидатные, без изменений исполняемого кода/миграций.  
+**R0.D**: F02 preview + synthetic qualified E2E + DAG + очередь + fencing + immutable result, отрицательные тесты A01–A21, CI GREEN на одном SHA.  
 **Production**: НЕ READY, пока нет независимого финансового S2, IAM/ABAC и реального approved FactSet admission.
+
+### Review reference
+
+Выполнен технический S1 review: `docs/audits/FIN-CALC-R0-S1-ARCHITECTURE-REVIEW-2026-11-19.md`. Не является независимым финансовым S2.
 
 ### Source references
 - `form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java`
