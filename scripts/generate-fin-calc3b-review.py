@@ -55,7 +55,7 @@ def data():
     for f in numeric:
         code=f["form_code"]
         candidates=[x["output_metric_code"] for x in formulas if x["form_code"]==code]
-        physical=sum(x["form_code"]==code and x["field_code"]!="netProfit"
+        physical=sum(x["form_code"]==code and (x["form_code"],x["field_code"])!=("F02","netProfit")
                      for x in fields)
         # F02.netProfit is the only nonphysical field, not a NULL-valued input.
         required_rows.append([
