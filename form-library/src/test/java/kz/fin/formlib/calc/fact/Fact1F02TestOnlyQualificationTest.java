@@ -2,6 +2,8 @@ package kz.fin.formlib.calc.fact;
 
 import kz.fin.formlib.calc.ingest.FormFactCandidateService;
 import kz.fin.formlib.calc.ingest.FormFactCandidateExtractor;
+import kz.fin.formlib.calc.fact.F02MappingDescriptor;
+import kz.fin.formlib.calc.fact.F02SourceFactAssembler;
 import kz.fin.formlib.calc.partition.FactMonthlyPartitionService;
 import kz.fin.formlib.service.FormDraftService;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,7 @@ class Fact1F02TestOnlyQualificationTest {
   private static final String MAPPING_SHA=sha("F02.TEST_ONLY.V1:netRevenue,cogs,operatingExpenses:MONEY:INTERVAL");
   @Autowired FormDraftService drafts;
   @Autowired FormFactCandidateService candidates;
+  @Autowired F02SourceFactAssembler f02Assembler;
   @Autowired FactMonthlyPartitionService partitions;
   @Autowired JdbcTemplate jdbc;
   @Autowired PlatformTransactionManager txManager;
@@ -241,6 +244,23 @@ class Fact1F02TestOnlyQualificationTest {
     partitions.ensureMonthlyRange(YearMonth.of(2026,11),YearMonth.of(2026,11),false);
     var slot=Slot.fresh();
     var saved=save(slot,null,0,"2100000","f1-first-"+slot.org());
+    // A1 PostgreSQL proof: exact INGEST-2 reverified persisted revision,
+    // including instance identity and independently computed row-order SHA.
+    var exact=candidates.extractExact(saved.revisionId(),slot.org(),slot.project());
+    var pinned=F02MappingDescriptor.testOnlyPilot(exact.formVersionId(),
+        exact.sourceSchemaSha256(),exact.sourceMappingSha256());
+    var unqualified=f02Assembler.assemble(exact,pinned);
+    assertEquals("SOURCE_SHA_REVERIFIED",exact.sourceIntegrityState());
+    assertEquals(saved.revisionId(),unqualified.sources().getFirst().revisionId());
+    assertEquals(saved.instanceId(),unqualified.sources().getFirst().instanceId());
+    assertEquals(exact.sourceSha256Claim(),
+        unqualified.sources().getFirst().canonicalContentSha256());
+    assertEquals(exact.rowOrderSha256(),
+        unqualified.sources().getFirst().rowOrderSha256());
+    assertEquals(3,unqualified.observations().size());
+    assertEquals(List.of("F02.cogs","F02.netRevenue","F02.operatingExpenses"),
+        unqualified.observations().stream().map(o->o.metricCode()).toList());
+    assertEquals("TEST_ONLY_PILOT",pinned.reviewStatus());
     assertEquals(0,jdbc.queryForObject(
         "SELECT count(*) FROM fin_fact.fact_set WHERE organization_id=?",
         Integer.class,slot.org()));
