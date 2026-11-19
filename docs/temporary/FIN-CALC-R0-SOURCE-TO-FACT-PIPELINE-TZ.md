@@ -178,25 +178,25 @@ interface QualifiedFactReader {
 - **Historical backfill:** pre-outbox revisions do not automatically produce an event. Define read-only inventory/discovery of missing source revision IDs, an idempotent staging reprocess path, and an explicit qualification gate. No automatic historic approval. If backfill not implemented in R0, it must be a documented HOLD/TODO, not silently assumed complete.
 - **Supersession:** qualified epoch and scope determine current binding, not processing time, idempotency key or latest draft revision. Older approvals may remain historical but never overwrite newer CURRENT.
 
-## 7. Mandatory PostgreSQL 16 tests (additional F01–F16)
+## 7. Mandatory PostgreSQL 16 tests (additional STF-01–STF-16)
 
 | ID | Scenario | Required postcondition |
 |---|---|---|
-| F01 | Draft commit+outbox; rollback | no orphan outbox or revision |
-| F02 | Draft event without trusted issuer | no factset, fact observation, qualified job |
-| F03 | Test-qualified exact three-field F02 | one factset, exactly 3 typed observations, one qualified outbox |
-| F04 | Duplicate qualification and event replay | same factset/plan/job, no duplicate fact |
-| F05 | Wrong source hash/formVersion/schema/scope | BLOCK before commit |
-| F06 | Unapproved F02.netProfit mapping/fourth source | BLOCK; no implicit output-to-fact promotion |
-| F07 | Missing/non-numeric/overflow/invalid cost convention | BLOCK or explicit domain state, no silent zero |
-| F08 | Different currency/entity/project/basis/dataSpace/period | no cross-scope mixing |
-| F09 | Fact row corrupted or removed | digest verification fails; no result/publication |
-| F10 | Draft correction with no new qualification | old qualified factset unchanged; no qualified job |
-| F11 | New FactSet with only operatingExpenses changed | 1 dirty, 2 reused, new complete result+lineage |
-| F12 | Trusted event arrives out of qualification epoch order | cannot move CURRENT backward |
-| F13 | Revoke during worker/publication/current read | fail closed, historical result retained |
-| F14 | ROWSET/EVIDENCE/ReportGrid offered to F02 assembler | UNSUPPORTED_SOURCE_ADAPTER, never collapsed |
-| F15 | Already-existing draft saved before outbox feature | discovery/backfill status visible; never auto approved |
-| F16 | Full PG migration 001–020 and upgrade from 018 | checksum-compatible, FK, unique and immutability proofs |
+| STF-01 | Draft commit+outbox; rollback | no orphan outbox or revision |
+| STF-02 | Draft event without trusted issuer | no factset, fact observation, qualified job |
+| STF-03 | Test-qualified exact three-field F02 | one factset, exactly 3 typed observations, one qualified outbox |
+| STF-04 | Duplicate qualification and event replay | same factset/plan/job, no duplicate fact |
+| STF-05 | Wrong source hash/formVersion/schema/scope | BLOCK before commit |
+| STF-06 | Unapproved F02.netProfit mapping/fourth source | BLOCK; no implicit output-to-fact promotion |
+| STF-07 | Missing/non-numeric/overflow/invalid cost convention | BLOCK or explicit domain state, no silent zero |
+| STF-08 | Different currency/entity/project/basis/dataSpace/period | no cross-scope mixing |
+| STF-09 | Fact row corrupted or removed | digest verification fails; no result/publication |
+| STF-10 | Draft correction with no new qualification | old qualified factset unchanged; no qualified job |
+| STF-11 | New FactSet with only operatingExpenses changed | 1 dirty, 2 reused, new complete result+lineage |
+| STF-12 | Trusted event arrives out of qualification epoch order | cannot move CURRENT backward |
+| STF-13 | Revoke during worker/publication/current read | fail closed, historical result retained |
+| STF-14 | ROWSET/EVIDENCE/ReportGrid offered to F02 assembler | UNSUPPORTED_SOURCE_ADAPTER, never collapsed |
+| STF-15 | Already-existing draft saved before outbox feature | discovery/backfill status visible; never auto approved |
+| STF-16 | Full PG migration 001–020 and upgrade from 018 | checksum-compatible, FK, unique and immutability proofs |
 
-**DoD:** completion of master A01–A28 is not sufficient without F01–F16. Qualified end-to-end remains BLOCKED until implemented and PostgreSQL GREEN. For small isolated B1 pure Java DAG tests, five-table kernel can proceed independently. The new three tables are **minimum storage for an actual test-only source→fact chain**, not a full HTAP warehouse.
+**DoD:** completion of master A01–A28 is not sufficient without STF-01–STF-16. Qualified end-to-end remains BLOCKED until implemented and PostgreSQL GREEN. For small isolated B1 pure Java DAG tests, five-table kernel can proceed independently. The new three tables are **minimum storage for an actual test-only source→fact chain**, not a full HTAP warehouse.
