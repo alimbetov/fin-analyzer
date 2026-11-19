@@ -49,3 +49,12 @@ jobs:
               sys.exit('FAIL CALC4B: expected 154 per-form dynamic + 4 inventory tests')
 
           PY
+
+      - name: Publish live PostgreSQL 154-form coverage manifest
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-calc154-live-coverage
+          path: form-library/target/fin-calc154/154-form-calc4b-coverage.tsv
+          if-no-files-found: error
+          retention-days: 30
