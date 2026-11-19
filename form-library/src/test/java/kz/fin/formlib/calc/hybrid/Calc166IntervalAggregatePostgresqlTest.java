@@ -291,4 +291,26 @@ class Calc166IntervalAggregatePostgresqlTest {
       Integer.class));
   }
 
+  @Test void concreteOperationCandidatesBindOnlyRealMetricsAndRemainUnqualified(){
+    var rows=jdbc.query("""
+      SELECT b.form_code,b.operation_code,b.numerator_metric_code,
+        b.denominator_metric_code,b.review_state
+      FROM fin_calc.candidate_metric_operation_binding b
+      ORDER BY b.form_code,b.operation_code,b.output_code
+      """,(rs,i)->new String[]{rs.getString(1),rs.getString(2),
+         rs.getString(3),rs.getString(4),rs.getString(5)});
+    assertEquals(5,rows.size());
+    assertTrue(rows.stream().anyMatch(v->"F02".equals(v[0])
+      &&"RATIO_OF_SUMS".equals(v[1])&&"F02.cogs".equals(v[2])
+      &&"F02.netRevenue".equals(v[3])));
+    assertTrue(rows.stream().anyMatch(v->"C07".equals(v[0])
+      &&"RATIO_OF_SUMS".equals(v[1])&&"C07.returns".equals(v[2])
+      &&"C07.grossSales".equals(v[3])));
+    assertTrue(rows.stream().anyMatch(v->"C09".equals(v[0])
+      &&"GROUP_BY".equals(v[1])&&"C09.amount".equals(v[2])));
+    assertTrue(rows.stream().allMatch(v->"CANDIDATE_UNQUALIFIED".equals(v[4])));
+    assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM fin_calc.method_revision",
+      Integer.class),"Candidate mapping must not authorize any executable method");
+  }
+
 }
