@@ -64,7 +64,7 @@ class Calc154CatalogWidePlannerPostgresqlTest {
         "formCode\tformVersionId\tcontentMode\tschemaSha256\t"+
         "directNumericFields\tformulaCandidates\toperations\t"+
         "mandatoryOutputStatus\tfinanciallyApproved\texecutable\t"+
-        "blockers\tmanifestSha256\n".replace("\\\t","\t"));
+        "blockers\tmanifestSha256\n");
       for(var form:inv.forms()){
         String ops=form.candidates().stream()
           .map(Calc154CatalogWidePlanner.FormulaCandidate::operation)
