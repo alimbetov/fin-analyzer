@@ -500,7 +500,7 @@ export default function App(){
       <header className="topbar">
         <div className="top-left"><Tool label={sidebar?'Скрыть меню':'Открыть меню'} onClick={()=>setSidebar(v=>!v)}>{sidebar?<PanelLeftClose size={19}/>:<PanelLeftOpen size={19}/>}</Tool>
         <span className="breadcrumb">Рабочая область <ChevronRight size={14}/> {navigator?'Финансовые решения':dashboard?'Профессиональный обзор':'Библиотека форм'} {!navigator&&<><ChevronRight size={14}/> <b>{formCode}</b></>}</span></div>
-        <div className="top-right"><span className="local-state"><span className="dot"/> LOCAL</span>
+        <div className="top-right"><button type="button" className="mobile-decision-link" onClick={()=>{if(!navigator&&dirty&&!confirmDiscard())return;setNavigator(true);setDashboard(false)}}><GitBranch size={16}/> Финансовые решения</button><span className="local-state"><span className="dot"/> LOCAL</span>
           <select value={language} onChange={e=>setLanguage(e.target.value as Locale)} aria-label="Язык">
             {languages.map(l=><option key={l} value={l}>{l==='ru'?'Русский':l==='kk'?'Қазақша':l==='en'?'English':'中文'}</option>)}
           </select><Tool label="Обновить каталог" onClick={()=>window.location.reload()}><RefreshCw size={18}/></Tool></div>
