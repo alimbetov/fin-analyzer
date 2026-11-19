@@ -41,7 +41,7 @@ def main():
     require(len(pairs) - 1 == 793, "PHYSICAL_FIELD_COUNT")
     for code in codes:
         row = next(f for f in forms if f["form_code"] == code)
-        actual = len([p for p in pairs if p[0] == code and p != ("F02", "netProfit")])
+        actual = len([p for p in pairs if p[0] == code])
         require(actual == int(row["presentation_r6_field_count"]),
                 f"FIELD_COUNT_MISMATCH {code}: {actual} vs {row['presentation_r6_field_count']}")
     sql = SCRIPT.read_text(encoding="utf-8")
