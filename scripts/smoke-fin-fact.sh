@@ -7,6 +7,7 @@ set -Eeuo pipefail
 mode="quick"
 case "${1:---quick}" in
   --quick) mode="quick" ;;
+  --forms) mode="forms" ;;
   --extended) mode="extended" ;;
   --unit) mode="unit" ;;
   -h|--help)
@@ -14,7 +15,8 @@ case "${1:---quick}" in
 FIN smoke (macOS/Linux; run from any directory)
   bash scripts/smoke-fin-fact.sh            # 6 essential PostgreSQL cases
   bash scripts/smoke-fin-fact.sh --quick    # same
-  bash scripts/smoke-fin-fact.sh --extended # 18 PG tests, incl. 166 forms + upgrade 018->021
+  bash scripts/smoke-fin-fact.sh --forms    # 169 PG tests: all 166 forms individually + 3 integrity tests
+  bash scripts/smoke-fin-fact.sh --extended # 183 PG tests incl. every form + 018->021 upgrade
   bash scripts/smoke-fin-fact.sh --unit     # 32 Java unit tests incl. FACT-1.A1; no Docker
 
 Requires JDK 21 and Maven. --quick/--extended need Docker Desktop/Engine.
@@ -71,9 +73,14 @@ case "$mode" in
     expected=6
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
+  forms)
+    selector="Ingest2PostgresqlIntegrityTest"
+    expected=169
+    options=("-Dfin.postgres.uat.enabled=true")
+    ;;
   extended)
     selector="Ingest2PostgresqlIntegrityTest,FactR0PostgresqlPartitionTest,Fact1F02TestOnlyQualificationTest,FactR0PostgresqlUpgradeTest"
-    expected=18
+    expected=183
     options=("-Dfin.postgres.uat.enabled=true")
     ;;
 esac
