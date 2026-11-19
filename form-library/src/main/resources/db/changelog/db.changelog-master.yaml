@@ -63,3 +63,5 @@ databaseChangeLog:
       file: db/changelog/031-fin-calc-candidate-interval-aggregate-postgresql.sql
   - include:
       file: db/changelog/032-fin-calc-candidate-last-asof-postgresql.sql
+  - include:
+      file: db/changelog/033-fin-calc-candidate-group-ratio-postgresql.sql
