@@ -6,10 +6,10 @@
 
 ## 1. Доказательства на точных коммитах
 
-- **Java 21 + PostgreSQL 16: 17/17 PASS** (8 чистых контрольных Java и 9 интеграционных PG16). Код `325dc85f4c8234a0c8fa75e2258dc136339d6c8b`. [Actions run 44696280635](https://github.com/alimbetov/fin-analyzer/actions/runs/44696280635). Без failures/errors/skips.
-- **React + настоящий Spring Boot + PostgreSQL 16 + Chromium: 3/3 PASS**. Код `575000b0698105cb3142067cb37b4d58e2356be5`. [Actions run 44697109010](https://github.com/alimbetov/fin-analyzer/actions/runs/44697109010). Без mocks/failures/errors/skips.
+- **Java 21 + PostgreSQL 16: 18/18 PASS** (8 математических Java и 10 интеграционных PG16, включая сумму больше IEEE-754 safe integer). Код `fe2181cf12dc6294d8b82d4c7ff2da23fd370dbc`. [Actions run 44698073307](https://github.com/alimbetov/fin-analyzer/actions/runs/44698073307). Без failures/errors/skips.
+- **React + настоящий Spring Boot + PostgreSQL 16 + Chromium: 3/3 PASS (до decimal-string hardening)**. Код `575000b0698105cb3142067cb37b4d58e2356be5`. [Actions run 44697109010](https://github.com/alimbetov/fin-analyzer/actions/runs/44697109010). Без mocks/failures/errors/skips.
 - Эти два результата получены на **разных commit SHA**, это не единый HEAD gate. После них добавлена сериализация всех A05 BigDecimal как JSON **decimal string**, чтобы не терять точность в JavaScript. Для данного изменения требуется отдельный последующий зелёный CI. Если он ещё не доступен, не приписывать старым проверкам квалификацию нового HEAD.
-- CI может столкнуться с внешней ошибкой разрешения `maven-clean-plugin`/`maven-jar-plugin` в Maven Central; это отличается от финансового/Java test assertion и требует отдельного re-run.
+- В CI наблюдался HTTP 429 Maven Central при загрузке `maven-clean-plugin`/`maven-jar-plugin`. Для двух профильных A05-R1.1 jobs добавлен CI-only Google Cloud hosted Maven Central mirror, без изменения pom.xml; ошибки загрузки отличать от financial assertions.
 
 ## 2. Реализованные компоненты
 
@@ -21,7 +21,7 @@
 | Миграция `059` | `fin_calc.a05_schedule_revision`, `_line`, `_line_fee`, `_custom_installment`, `_command_receipt` с immutability triggers |
 | Миграция `060` | Исправление затенения встроенного `FOUND` в PostgreSQL проверке SHA/source pin (аддитивно, без переписывания `059`) |
 | `LoanSchedulePanel` | График внутри существующей C05, видимые суммы, датированные строки, исходные SHA, версии результатов, CUSTOM и финансовые diagnostics |
-| Тесты / CI | 8 math + 9 PG16 + 3 Chromium; отдельные workflows и Surefire/Playwright artifacts |
+| Тесты / CI | 8 math + 10 PG16 + 3 Chromium; отдельные workflows и Surefire/Playwright artifacts |
 
 **Нет 167-й формы или отдельного writer кредитных исходных условий.** График является расчётной UAT-проекцией `CALC-A05` с immutable result внутри `fin_calc`; original loan/rate/calendar/fees лежат в `fin_intake` и связываются с конкретной C05-ревизией.
 
