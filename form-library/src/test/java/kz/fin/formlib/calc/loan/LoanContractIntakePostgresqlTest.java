@@ -179,6 +179,33 @@ class LoanContractIntakePostgresqlTest {
     assertEquals(2,drafts.read(first.instanceId(),s.org()).revisionNo());
   }
 
+  @Test void duplicateAgreementRefFromSameCreditorRejectsAnotherBusinessKey() {
+    var s=Scope.random();
+    loan.save(command(draft(s,null,0,UUID.randomUUID(),"2026-11","100000"),fees()),
+      "agreement-first-"+UUID.randomUUID());
+    var t=terms();
+    var second=new LoanContractIntakeService.Terms(
+      "LOAN-002",t.agreementRef(),t.creditorRef(),t.contractDate(),
+      t.disbursementDate(),t.accrualStartDate(),t.maturityDate(),t.principal(),
+      t.jurisdiction(),t.perspective(),t.repaymentMethod(),
+      t.paymentFrequency(),t.dueDay(),t.interestCompounding(),
+      t.dayCountConvention(),t.businessDayAdjustment(),t.roundingScale(),
+      t.roundingMode(),t.finalResidualRule(),t.rateKind(),t.nominalAnnualRatePct());
+    var d=draft(s,null,0,UUID.randomUUID(),"2026-12","100000");
+    assertThrows(DataAccessException.class,()->
+      loan.save(new LoanContractIntakeService.Command(d,second,fees()),
+        "agreement-second-"+UUID.randomUUID()));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_intake.a05_loan_identity
+      WHERE organization_id=? AND project_id=? AND agreement_ref='AGR-2026-01'
+      """,Integer.class,s.org(),s.project()));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_intake.lib_form_instance i
+      JOIN fin_lib.lib_form_definition f ON f.id=i.form_id
+      WHERE organization_id=? AND project_id=? AND f.form_code='C05'
+      """,Integer.class,s.org(),s.project()));
+  }
+
   @Test void duplicatedBusinessKeyInSecondC05SlotRejectsEntireTransaction() {
     var s=Scope.random();
     loan.save(command(draft(s,null,0,UUID.randomUUID(),"2026-11","100000"),fees()),
