@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "docs/FIN-CALC154-FORM-STATUS.tsv"
 REG = ROOT / "docs/FIN-CALC154-WAVE02-METHODOLOGY-DECISION-REGISTRY.tsv"
 WORK = ROOT / "docs/FIN-CALC154-WAVE02-ALL154-EVIDENCE-WORKLIST.tsv"
+FIELDS = ROOT / "docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv"
+FIELD_GAPS = ROOT / "docs/FIN-CALC154-WAVE02-20-FORM-FIELD-GAP-ANALYSIS.tsv"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -89,10 +91,28 @@ def main() -> None:
             scoped_count += 1
     if scoped_count != 20:
         fail(f"scoped wave02 coverage changed: {scoped_count}")
+    raw_fields = load(FIELDS)
+    gaps = load(FIELD_GAPS)
+    if len(gaps) != 20 or len({r["formCode"] for r in gaps}) != 20:
+        fail("exactly 20 distinct wave02 form-field gap entries required")
+    for row in gaps:
+        form = row["formCode"]
+        if form not in index or not any(
+                k not in cross_ids for k in expected[form]):
+            fail(f"field gap must reference scoped wave02 form: {form}")
+        actual = ";".join(
+            field["field_code"] + ":" + field["field_type_r6_candidate"]
+            for field in raw_fields if field["form_code"] == form
+        )
+        if row["actualPhysicalFields"] != actual:
+            fail(f"catalog field inventory changed for {form}")
+        if (not row["missingEvidenceOrInputs"] or
+                row["financialS2"] != "NOT_S2_APPROVED"):
+            fail(f"unsupported methodology approval or missing gap for {form}")
     print("FIN_CALC154_WAVE02_WORKLIST_OK",
           f"forms={len(work)}", f"decisions={len(registry)}",
           f"scoped={scoped_count}", f"unscoped={len(work)-scoped_count}",
-          f"cross_cutting={len(cross_ids)}", "financial_s2=HOLD")
+          f"cross_cutting={len(cross_ids)}", "field_gaps=20", "financial_s2=HOLD")
 
 
 if __name__ == "__main__":
