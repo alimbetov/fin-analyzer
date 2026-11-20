@@ -82,7 +82,7 @@ class CalcApplicationContractPostgresqlTest {
     assertThrows(DataAccessException.class,()->jdbc.update("""
       INSERT INTO fin_calc.calc_application_contract_revision(
         id,app_code,revision_number,source_form_codes_jsonb,
-        required_inputs_jsonb,proposed_outputs_jsonb,proposed_variants_jsonb,
+        candidate_input_fields_jsonb,proposed_outputs_jsonb,proposed_variants_jsonb,
         blocker_description,contract_sha256)
       VALUES(?,'CALC-A01',2,'["C01"]'::jsonb,
         '["obligationBusinessKey:TEXT"]'::jsonb,
@@ -92,7 +92,7 @@ class CalcApplicationContractPostgresqlTest {
     assertThrows(DataAccessException.class,()->jdbc.update("""
       INSERT INTO fin_calc.calc_application_contract_revision(
         id,app_code,revision_number,source_form_codes_jsonb,
-        required_inputs_jsonb,proposed_outputs_jsonb,proposed_variants_jsonb,
+        candidate_input_fields_jsonb,proposed_outputs_jsonb,proposed_variants_jsonb,
         blocker_description,contract_sha256)
       VALUES(?,'CALC-A03',2,'["C03"]'::jsonb,
         '["unitCost:USER_SQL"]'::jsonb,
