@@ -69,7 +69,8 @@ class Calc4DFormulaRegistrarPostgresqlTest {
     assertEquals("SUBTRACT",graph.orderedNodes().getFirst().operation());
     assertEquals(2,graph.physicalInputs().size());
     assertFalse(graph.executable());
-    assertEquals(1,catalog.inventory().require("C08").candidates().size());
+    assertTrue(catalog.inventory().require("C08").candidates().stream()
+      .anyMatch(c->c.id().equals(r.revisionId())));
     assertNotExecutable();
   }
 
