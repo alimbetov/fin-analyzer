@@ -78,7 +78,8 @@ public final class MethodologyPolicyDecisionRegistry {
       if(!r.code().equals("P1_3") &&
           !r.status().equals("EDITORIAL_ACCEPTED_WITH_GATES"))
         throw new IllegalStateException("METHOD_POLICY_REVIEW_STATE_CHANGED");
-      var forms=parse(r.formsJson()), evidence=parse(r.evidenceJson());
+      var forms=parse(r.formsJson());
+      var evidence=parse(r.evidenceJson());
       if(forms.isEmpty()||evidence.isEmpty()||forms.size()!=Set.copyOf(forms).size())
         throw new IllegalStateException("METHOD_POLICY_EVIDENCE_OR_FORMS_INVALID");
       decisions.add(new Decision(r.code(),r.revision(),r.scope(),r.ruleCode(),
