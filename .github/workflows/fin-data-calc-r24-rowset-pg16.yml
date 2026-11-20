@@ -1,0 +1,61 @@
+name: FIN DATA-CALC-R2.4 — C01 C02 Exact ROWSET PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/**'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/hybrid/CalcAsOfDebtKernel.java'
+      - 'form-library/src/main/java/kz/fin/formlib/api/UatCalculationPreviewController.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/ingest/C01C02IntakeUatPreviewPostgresqlTest.java'
+      - '.github/workflows/fin-data-calc-r24-rowset-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-asof-rowset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Exact saved fin_intake C01 C02 and unified F02 PG16
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=C01C02IntakeUatPreviewPostgresqlTest,F02IntakeUatPreviewPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require 14 tests (9 C01 C02 + 5 F02) with no errors or skips
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          totals={'tests':0,'failures':0,'errors':0,'skipped':0}
+          for stem,expected in [('C01C02IntakeUatPreviewPostgresqlTest',9),
+                                ('F02IntakeUatPreviewPostgresqlTest',5)]:
+              paths=glob.glob('form-library/target/surefire-reports/TEST-*'+stem+'.xml')
+              if len(paths)!=1:sys.exit('DC_R24_REPORT_MISSING:'+stem)
+              root=ET.parse(paths[0]).getroot()
+              if int(root.attrib.get('tests',0))!=expected:
+                  sys.exit('DC_R24_TEST_COUNT_INVALID:'+stem)
+              for k in totals:totals[k]+=int(root.attrib.get(k,0))
+          print(totals)
+          if totals!={'tests':14,'failures':0,'errors':0,'skipped':0}:
+              sys.exit('DC_R24_UAT_PG16_NOT_GREEN')
+          PY
+      - name: Preserve PostgreSQL E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-dc-r24-rowset-pg16
+          path: |
+            form-library/target/surefire-reports/TEST-*C01C02IntakeUatPreviewPostgresqlTest.xml
+            form-library/target/surefire-reports/TEST-*F02IntakeUatPreviewPostgresqlTest.xml
+          if-no-files-found: warn
