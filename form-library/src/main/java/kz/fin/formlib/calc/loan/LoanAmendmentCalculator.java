@@ -181,6 +181,9 @@ public final class LoanAmendmentCalculator {
     RoundingMode round=LoanPaymentScheduleCalculator.rounding(t.roundingMode());
     BigDecimal opening=baseline.funding().openingLiability();
     BigDecimal balance=opening,regularPayment=ZERO;
+    // EQUAL_PRINCIPAL regular principal is a pinned per-amortization-block
+    // amount. Repeated division of remaining balance changes HALF_EVEN ties.
+    BigDecimal equalPrincipal=baseline.lines().getFirst().principalDue();
     BigDecimal duePrincipal=ZERO,extraPrincipal=ZERO,capitalized=ZERO;
     BigDecimal cashInterest=ZERO,feesCash=ZERO,cashTotal=ZERO;
     List<Line> lines=new ArrayList<>();
@@ -238,11 +241,15 @@ public final class LoanAmendmentCalculator {
             ||("RATE_STEP".equals(event.kind())&&i==changedAt);
           if("ANNUITY".equals(t.repaymentMethod())&&recalcNow&&!reduceTerm)
             regularPayment=annuity(balance,dates,i,previous,t,event,scale,round);
+          if("EQUAL_PRINCIPAL".equals(t.repaymentMethod())
+              &&recalcNow&&!reduceTerm) {
+            equalPrincipal=money(balance.divide(
+              BigDecimal.valueOf(dates.size()-i),MC),scale,round);
+          }
           if("ANNUITY".equals(t.repaymentMethod())){
             scheduled=regularPayment.subtract(interest);
           }else{
-            scheduled=money(balance.divide(
-              BigDecimal.valueOf(dates.size()-i),MC),scale,round);
+            scheduled=equalPrincipal;
           }
           recalcNeeded=false;
         }
