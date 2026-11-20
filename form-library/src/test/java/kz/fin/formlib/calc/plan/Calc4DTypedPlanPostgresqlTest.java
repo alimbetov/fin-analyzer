@@ -591,6 +591,10 @@ class Calc4DTypedPlanPostgresqlTest {
     assertEquals(3,result.outputRows());
     assertFalse(result.financiallyApproved());
     assertEquals("SUCCEEDED",queue.requireJob(f.organization(),staged.id()).state());
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result
+      WHERE id=? AND worker_job_id=? AND worker_fencing_token=?
+      """,Integer.class,result.resultId(),claimed.jobId(),claimed.fencingToken()));
     assertTrue(queue.claimNext(f.organization(),"calc4d-worker-2",120).isEmpty());
     assertEquals(3,jdbc.queryForObject("""
       SELECT count(*) FROM fin_calc.calc4d_uat_job_receipt
@@ -788,6 +792,33 @@ class Calc4DTypedPlanPostgresqlTest {
       SELECT count(*) FROM fin_calc.calc4d_uat_job_receipt
       WHERE job_id=? AND fencing_token=? AND event_code='RENEWED'
       """,Integer.class,claimed.jobId(),claimed.fencingToken()));
+    noExecution();
+  }
+
+  @Test void unqueuedUatPreviewHasNullWorkerLineageAndCannotForgeOne()
+      throws Exception {
+    var f=source("210.00","210.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    var preview=batch.executeExact(f.organization(),staged.id());
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result
+      WHERE id=? AND worker_job_id IS NULL AND worker_fencing_token IS NULL
+      """,Integer.class,preview.resultId()));
+    var second=source("230.00","230.00",null,false);
+    var secondPlan=planStore.stage(second.organization(),f02(),
+      List.of(second.factset()));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+      INSERT INTO fin_calc.calc4d_uat_result(
+        id,plan_id,organization_id,execution_fingerprint,
+        input_observations_sha256,output_values_sha256,result_sha256,
+        output_jsonb,worker_job_id,worker_fencing_token)
+      VALUES(?,?,?,?,?,?,?,'[]'::jsonb,?,1)
+      """,UUID.randomUUID(),secondPlan.id(),second.organization(),
+      secondPlan.fingerprint(),"a".repeat(64),"b".repeat(64),
+      "c".repeat(64),UUID.randomUUID()));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result WHERE plan_id=?
+      """,Integer.class,secondPlan.id()));
     noExecution();
   }
 
