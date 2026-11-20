@@ -298,6 +298,30 @@ class LoanSchedulePostgresqlTest {
     noPostedFinancialFacts();
   }
 
+  @Test void jsonMoneyNeverLosesPrecisionBeyondIeee754Mantissa() throws Exception {
+    String principal="9007199254740993.01";
+    var saved=save("EQUAL_PRINCIPAL",principal,"0",
+      "2027-01-01","2027-03-01","ACT_360",List.of());
+    var response=mvc.perform(post("/api/v1/uat/a05/schedules")
+        .header("Idempotency-Key","exact-money-"+UUID.randomUUID())
+        .contentType(MediaType.APPLICATION_JSON)
+        .content(mapper.writeValueAsBytes(req(saved,List.of()))))
+      .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+    var json=mapper.readTree(response);
+    assertTrue(json.at("/result/totalPrincipal").isTextual(),
+      "Large BigDecimal must not become IEEE-754 JSON number");
+    assertEquals(principal,json.at("/result/totalPrincipal").asText());
+    assertEquals("4503599627370496.50",
+      json.at("/result/lines/0/principalDue").asText());
+    assertEquals("4503599627370496.51",
+      json.at("/result/lines/1/principalDue").asText());
+    assertEquals("0.00",json.at("/result/finalBalance").asText());
+    var retrieved=schedules.readExact(saved.scope.org,saved.scope.project,
+      UUID.fromString(json.path("scheduleRevisionId").asText()));
+    assertEquals(0,retrieved.result().totalPrincipal().compareTo(n(principal)));
+    noPostedFinancialFacts();
+  }
+
   @Test void oldSourceRevisionScheduleReplaysEvenAfterFeeOnlyNewC05Revision(){
     var saved=save("ANNUITY","1000.00","12",
       "2027-01-01","2027-03-01","ACT_365_FIXED",List.of());
