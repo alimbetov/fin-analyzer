@@ -292,6 +292,11 @@ public final class LoanAmendmentCalculator {
       balance=close;
       previous=due;
       if(balance.signum()==0) {
+        // AT_MATURITY fee on accelerated closure needs an EXPLICIT
+        // contractual rule. Do not silently waive or accelerate it.
+        if(i<dates.size()-1&&fees.stream().anyMatch(
+            f->"AT_MATURITY".equals(f.feeSettlement())))
+          check(false,"A05_R12_EARLY_MATURITY_FEE_POLICY_REQUIRED");
         // Early closure is legal only for prepayment reducing term. Other
         // variants retain the contractual maturity unless paid on last due.
         check(i==dates.size()-1||"PREPAYMENT".equals(event.kind()),
