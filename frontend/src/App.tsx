@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import type {ClipboardEvent,KeyboardEvent,ReactNode} from 'react';
 import {Activity,AlertTriangle,ArrowLeft,Check,CheckCircle2,ChevronDown,ChevronRight,Download,FilePlus2,FileSpreadsheet,FileUp,FolderTree,Eye,GitBranch,LayoutDashboard,LoaderCircle,PanelLeftClose,PanelLeftOpen,RefreshCw,Save,Search,Settings2} from 'lucide-react';
-import type {CategoryTree,Currency,Draft,F02UatPreview,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
+import type {CategoryTree,Currency,Draft,Field,FormDetail,Locale,Navigation,PeriodType,PreviewTicket,Profile,Receipt,Row,Style} from './api';
 import {downloadEvidence,exportXlsx,get,isDefiniteRejection,multipart,post} from './api';
 import {parseExcelPaste,parseRowsetExcelPaste} from './clipboard';
 import {canEditForm,fileSha256,matchesPreview,verifySavedDraft} from './editorPolicy';
@@ -11,6 +11,7 @@ import RevisionDrawer from './RevisionDrawer';
 import {formVisual,sectionTitle} from './formVisuals';
 import type {SavedReport} from './SavedReports';
 import FinancialGoalsNavigator from './FinancialGoalsNavigator';
+import UatCalculationPanel from './UatCalculationPanel';
 import type {DecisionContext} from './decisionTree';
 import './styles.css';
 
@@ -29,7 +30,7 @@ type Scope={organizationId:string;economicEntityId:string;businessScopeId:string
 const newScope=():Scope=>({organizationId:crypto.randomUUID(),economicEntityId:crypto.randomUUID(),businessScopeId:crypto.randomUUID(),projectId:crypto.randomUUID()});
 const storageKey='fin-local-scope';
 // Local UAT only. Production builds never show this control by default.
-const f02UatEnabled=import.meta.env.VITE_FIN_INTAKE_UAT==='true';
+const calculationUatEnabled=import.meta.env.VITE_FIN_INTAKE_UAT==='true';
 function storedScope():Scope{
   try{
     const v=JSON.parse(localStorage.getItem(storageKey)||'null') as Scope|null;
@@ -77,7 +78,6 @@ export default function App(){
   const [rowEntries,setRowEntries]=useState<Row[]>([]);
   const [profileId,setProfileId]=useState('');
   const [preview,setPreview]=useState<PreviewTicket|null>(null);
-  const [f02Result,setF02Result]=useState<F02UatPreview|null>(null);
   const [file,setFile]=useState<File|null>(null);
   const [documentFile,setDocumentFile]=useState<File|null>(null);
   const [previous,setPrevious]=useState<Draft|null>(null);
@@ -188,7 +188,7 @@ export default function App(){
   function setValue(code:string,value:string){
     setValues(old=>({...old,[code]:value}));
     setDirty(true);
-    setPreview(null);setF02Result(null);
+    setPreview(null);
   }
   function pasteRange(e:ClipboardEvent<HTMLInputElement>,index:number){
     const plain=e.clipboardData.getData('text/plain');
@@ -205,7 +205,7 @@ export default function App(){
         return next;
       });
       setDirty(true);
-      setPreview(null);setF02Result(null);
+      setPreview(null);
       setError('');
       setMessage('Проверено и вставлено '+pasted.length+' значений; для сохранения создайте ревизию');
     }catch(error){
@@ -246,7 +246,7 @@ export default function App(){
       setFormCode(code);
     }
     setDraft(null);setInstanceId('');setValues({});setRowEntries([]);
-    setProfileId('');setPrevious(null);setPreview(null);setF02Result(null);setFile(null);setDocumentFile(null);
+    setProfileId('');setPrevious(null);setPreview(null);setFile(null);setDocumentFile(null);
     setNavigator(false);setDashboard(false);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
     setDecisionContext(null);
@@ -345,32 +345,10 @@ export default function App(){
       }else if(draft?.attachment?.sha256!==snapshot.attachment.sha256)
         throw new Error('Сохранённая редакция потеряла закреплённое вложение.');
     }
-    setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setRowEntries(snapshot.rows);setPreview(null);setF02Result(null);setDocumentFile(null);
+    setDraft(snapshot);setInstanceId(snapshot.instanceId);setValues(snapshot.values);setRowEntries(snapshot.rows);setPreview(null);setDocumentFile(null);
     saveKeyRef.current=null;setSaveUncertain(false);
     setDirty(false);setCommitUncertain(false);setAttemptedSave(false);
     setMessage('Сохранено: ревизия '+snapshot.revisionNo+' · SHA '+snapshot.sha256.slice(0,12));
-  });
-  const calculateF02=()=>execute(async()=>{
-    if(!f02UatEnabled||formCode!=='F02'||!draft?.revisionId)
-      throw new Error('UAT-расчёт доступен только для сохранённой ревизии F02.');
-    if(dirty||saveUncertain||commitUncertain)
-      throw new Error('Сохраните и перепроверьте исходную ревизию до расчёта.');
-    const result=await post<F02UatPreview>('/uat/calculations/f02/preview',{
-      organizationId:draft.organizationId,
-      projectId:draft.projectId,
-      exactRevisionId:draft.revisionId
-    });
-    if(result.sourceRevisionId!==draft.revisionId
-        ||result.sourceContentSha256!==draft.sha256
-        ||result.instanceId!==draft.instanceId
-        ||result.executionState!=='FIN_INTAKE_UAT_PREVIEW_UNQUALIFIED'
-        ||result.financiallyApproved||result.productionAdmitted
-        ||!['grossProfit','grossMargin','operatingResult']
-          .every(code=>Boolean(result.outputs[code])))
-      throw new Error('Результат расчёта не соответствует сохранённой исходной ревизии.');
-    setF02Result(result);
-    setMessage('F02 рассчитана из ревизии '+draft.revisionNo+
-      ' · SHA '+result.previewSha256.slice(0,12)+' · без записи финансового FactSet');
   });
   const openDraft=(id:string)=>execute(async()=>{
     if(!confirmDiscard())return;
@@ -383,7 +361,7 @@ export default function App(){
     setCurrency(snapshot.currency);setScope({
       organizationId:snapshot.organizationId,economicEntityId:snapshot.economicEntityId,
       businessScopeId:snapshot.businessScopeId,projectId:snapshot.projectId
-    });setPreview(null);setF02Result(null);setDirty(false);
+    });setPreview(null);setDirty(false);
     setCommitUncertain(false);setSaveUncertain(false);saveKeyRef.current=null;
     setInstanceId(snapshot.instanceId);setShowReports(false);
     setMessage('Открыта ревизия '+snapshot.revisionNo);
@@ -456,7 +434,7 @@ export default function App(){
     // Commit is a mutating request. Once it returns, avoid blind retries if
     // read-back fails: the database may already contain the new revision.
     setCommitUncertain(true);
-    setPreview(null);setF02Result(null);
+    setPreview(null);
     let receipt:Receipt;
     try{
       receipt=await multipart<Receipt>('/import-profiles/previews/'+preview.previewId+'/commit',body,true);
@@ -473,14 +451,14 @@ export default function App(){
     if(mismatch.length||current.sha256!==receipt.contentSha256||
       current.revisionNo!==previous.revisionNo+1)
       throw new Error('Commit выполнен, но сверка не прошла. Обновите экземпляр; не повторяйте Commit вслепую.');
-    setF02Result(null);setDraft(current);setValues(current.values);setRowEntries(current.rows);setFile(null);
+    setDraft(current);setValues(current.values);setRowEntries(current.rows);setFile(null);
     setDirty(false);setCommitUncertain(false);
     setMessage('Commit '+current.revisionNo+' · SHA '+current.sha256.slice(0,12)+' · проверено '+Object.keys(preview.values).length+' полей');
   });
   const resetEditor=()=>{
     setAttemptedSave(false);setHistoryOpen(false);
     setDraft(null);setInstanceId('');setValues({});setRowEntries([]);setProfileId('');
-    setPreview(null);setF02Result(null);setFile(null);setDocumentFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
+    setPreview(null);setFile(null);setDocumentFile(null);setPrevious(null);setDirty(false);setCommitUncertain(false);
     setSaveUncertain(false);saveKeyRef.current=null;setMessage('Новый черновик');
   };
   const reset=()=>{if(confirmDiscard())resetEditor();};
@@ -489,16 +467,16 @@ export default function App(){
     if(rowEntries.length>=200)return;
     const rowPosition=rowEntries.length?Math.max(...rowEntries.map(r=>r.rowPosition))+10:10;
     setRowEntries(old=>[...old,{rowId:crypto.randomUUID(),rowPosition,values:{}}]);
-    setDirty(true);setPreview(null);setF02Result(null);
+    setDirty(true);setPreview(null);
   }
   function editGridCell(rowId:string,code:string,value:string){
     setRowEntries(old=>old.map(r=>r.rowId===rowId?
       {...r,values:{...r.values,[code]:value}}:r));
-    setDirty(true);setPreview(null);setF02Result(null);
+    setDirty(true);setPreview(null);
   }
   function removeGridRow(rowId:string){
     setRowEntries(old=>old.filter(r=>r.rowId!==rowId));
-    setDirty(true);setPreview(null);setF02Result(null);
+    setDirty(true);setPreview(null);
   }
   function pasteGrid(e:ClipboardEvent<HTMLInputElement>,rowIndex:number,columnIndex:number){
     const plain=e.clipboardData.getData('text/plain');
@@ -516,7 +494,7 @@ export default function App(){
           const field=fields[columnIndex+j];
           updated[rowIndex+i].values[field.fieldCode]=normalize(matrix[i][j],field.fieldType);
         }
-      setRowEntries(updated);setDirty(true);setPreview(null);setF02Result(null);setError('');
+      setRowEntries(updated);setDirty(true);setPreview(null);setError('');
       setMessage('Вставлен диапазон '+matrix.length+' × '+matrix[0].length+
         ' в табличную форму. Для записи в PostgreSQL нажмите «Сохранить ревизию».');
     }catch(error){setError(error instanceof Error?error.message:String(error));}
@@ -653,49 +631,16 @@ export default function App(){
               </div></div>
             <div className="editor-body">
               <div className="completion-box" aria-label="Прогресс заполнения"><div className="completion-heading"><strong>Заполнение отчёта</strong><span>{filled} из {fieldCapacity} полей · {completion}%</span></div><progress value={filled} max={Math.max(fieldCapacity,1)} aria-label="Заполненные поля"/><small>Прогресс показывает заполненность, а не финансовую корректность данных.</small></div>
-              {f02UatEnabled&&formCode==='F02'&&
-                <section className="f02-uat-calculation" aria-label="UAT-расчёт F02">
-                  <div className="f02-uat-calculation-head">
-                    <div><h3>Расчёт F02 из сохранённой ревизии</h3>
-                      <small>Только локальный UAT · без финансового S2 и записи в fin_fact</small>
-                    </div>
-                    <button type="button" onClick={calculateF02}
-                      disabled={busy||dirty||saveUncertain||commitUncertain||!draft?.revisionId}>
-                      Рассчитать F02
-                    </button>
-                  </div>
-                  {!draft?.revisionId&&<p>Сначала сохраните исходные значения F02.</p>}
-                  {dirty&&<p>Есть несохранённые изменения. Для расчёта создайте новую ревизию.</p>}
-                  {f02Result&&draft?.revisionId===f02Result.sourceRevisionId
-                    &&draft.sha256===f02Result.sourceContentSha256&&!dirty&&
-                    <div className="f02-uat-results">
-                      {([
-                        ['grossProfit','Валовая прибыль','netRevenue − cogs'],
-                        ['grossMargin','Валовая рентабельность','grossProfit / netRevenue'],
-                        ['operatingResult','Операционный результат','grossProfit − operatingExpenses']
-                      ] as const).map(([code,title,formula])=>{
-                        const item=f02Result.outputs[code];
-                        return <div key={code} className="f02-uat-result">
-                          <strong>{title}</strong>
-                          <span>{item.state==='PRESENT'
-                            ?item.value+' '+(item.unit==='RATIO'?'(доля)':item.unit)
-                            :'Не определено: '+(item.errorCode??'INVALID')}</span>
-                          <small>{formula}</small>
-                        </div>;
-                      })}
-                      <details><summary>Как получено · исходная ревизия и контроль SHA</summary>
-                        <dl>
-                          <dt>Ревизия</dt><dd>{f02Result.sourceRevisionId}</dd>
-                          <dt>Исходный SHA</dt><dd>{f02Result.sourceContentSha256}</dd>
-                          <dt>Период и учётная база</dt>
-                          <dd>{f02Result.periodCode} · {f02Result.reportingBasis} · {f02Result.currency}</dd>
-                          <dt>Кандидатный FactSet SHA</dt><dd>{f02Result.candidateFactsetSha256}</dd>
-                          <dt>Методика F02</dt><dd>{f02Result.mappingDescriptorSha256}</dd>
-                          <dt>Результат SHA</dt><dd>{f02Result.previewSha256}</dd>
-                        </dl>
-                      </details>
-                    </div>}
-                </section>}
+              {calculationUatEnabled&&
+                (formCode==='F02'||formCode==='C01'||formCode==='C02')&&
+                <UatCalculationPanel
+                  key={formCode}
+                  formCode={formCode}
+                  draft={draft}
+                  dirty={dirty}
+                  busy={busy}
+                  saveUncertain={saveUncertain}
+                  commitUncertain={commitUncertain}/>}
               <div className="filters">
                 <label>Тип периода<select value={periodType} disabled={isLocked} onChange={e=>{setPeriodType(e.target.value);setPeriodCode(periodExamples[e.target.value]||'')}}>
                   {periodOptions.map(p=><option key={p.code} value={p.code}>{p.title} ({p.code})</option>)}</select></label>
@@ -715,7 +660,7 @@ export default function App(){
                 <button onClick={()=>{
                   if(!confirmDiscard())return;
                   setScope(newScope());setDraft(null);setInstanceId('');
-                  setValues({});setRowEntries([]);setProfileId('');setPreview(null);setF02Result(null);setPrevious(null);
+                  setValues({});setRowEntries([]);setProfileId('');setPreview(null);setPrevious(null);
                   setFile(null);setDocumentFile(null);setDirty(false);setSaveUncertain(false);
                   setCommitUncertain(false);saveKeyRef.current=null;
                   setMessage('Новая локальная организация UAT');
@@ -792,7 +737,7 @@ export default function App(){
                 </div>}
               {!evidence&&<details className="import-details"><summary><FileUp size={16}/> Импорт данных из Excel (дополнительно)</summary><div className="import-box">
                 <div><b>Excel Round-trip</b><p>Выберите XLSX → Preview без записи → Commit новой ревизии</p></div>
-                <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null);setF02Result(null)}}/>
+                <input type="file" id="xlsx-upload" accept=".xlsx" onChange={e=>{setFile(e.target.files?.[0]??null);setPreview(null);}}/>
                 <div className="import-tools">
                   <Tool label="Предпросмотр XLSX без записи" disabled={!file||!draft||busy||saveUncertain||commitUncertain||dirty} onClick={doPreview}><Eye size={18}/></Tool>
                   <Tool label="Подтвердить импорт новой ревизии" disabled={!preview||busy||commitUncertain||saveUncertain} onClick={doCommit}><Check size={18}/></Tool>
