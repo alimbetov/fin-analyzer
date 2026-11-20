@@ -39,7 +39,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=Calc4DTypedPlanPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require twenty-four actual PostgreSQL tests, zero skipped/failures/errors
+      - name: Require twenty-five actual PostgreSQL tests, zero skipped/failures/errors
         if: always()
         run: |
           python3 - <<'PY'
@@ -49,6 +49,6 @@ jobs:
           root=ET.parse(files[0]).getroot()
           a={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
           print(a)
-          if a!={'tests':24,'errors':0,'failures':0,'skipped':0}:
+          if a!={'tests':25,'errors':0,'failures':0,'skipped':0}:
             sys.exit('CALC4D PG16 twenty-four tests mandatory')
           PY
