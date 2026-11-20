@@ -31,10 +31,15 @@ public final class FinancialMethodologyMath {
       BigDecimal writeDown) {}
   public static InventoryNrv itemNrv(BigDecimal cost,BigDecimal sellingPrice,
       BigDecimal completionCost,BigDecimal sellingCost) {
+    if(cost==null||sellingPrice==null||completionCost==null||sellingCost==null)
+      throw new IllegalArgumentException("NRV_ITEM_NONNEGATIVE_INPUT_REQUIRED");
     for(var v:List.of(cost,sellingPrice,completionCost,sellingCost))
-      if(v==null||v.signum()<0)
+      if(v.signum()<0)
         throw new IllegalArgumentException("NRV_ITEM_NONNEGATIVE_INPUT_REQUIRED");
-    BigDecimal nrv=sellingPrice.subtract(completionCost).subtract(sellingCost);
+    // Inventory assets do not become negative: any separate onerous-contract
+    // liability needs a different accounting recognition contract.
+    BigDecimal nrv=sellingPrice.subtract(completionCost).subtract(sellingCost)
+      .max(BigDecimal.ZERO);
     BigDecimal recognized=cost.min(nrv);
     return new InventoryNrv(nrv,recognized,cost.subtract(recognized));
   }
