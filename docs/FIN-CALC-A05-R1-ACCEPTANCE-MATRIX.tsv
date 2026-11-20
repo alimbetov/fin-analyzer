@@ -1,0 +1,39 @@
+test_id	milestone	owner	acceptance	runner	state	evidence_run_url	financial_s2
+A05-T001	R1.0	C05	Existing C05 ROWSET business key linked to exact LoanContractRevision; no duplicate top-level form	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T002	R1.0	fin_intake	Atomic C05+loan terms save, same revision/receipt, restart readback and source SHA	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T003	R1.0	fin_intake	Two fees: one upfront and one recurring; independent typed rule IDs/amount/bases	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T004	R1.0	fin_intake	Missing rate/fee basis and duplicate agreementRef fail closed	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T005	R1.0	fin_intake	Wrong organization/project cannot read or preview contract	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T006	R1.0	policy	Repayment mode, rate basis, day-count and rounding rule have separate revision pins	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T007	R1.1	A05	Zero-rate 1000.00 three principal payments 333.33 333.33 333.34 closing 0	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T008	R1.1	A05	Annuity two equal periods at 1 percent per period; independently verified cashflow/roll-forward	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T009	R1.1	A05	Equal principal schedule uses dated accrual convention, not false nominal/12 fallback	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T010	R1.1	A05	Custom payments validated against principal and contractual due dates; residual rejection	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T011	R1.1	A05	No extra fee counted in principal unless explicitly financed; withheld reduces net proceeds only	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T012	R1.1	A05	Zero denominator/unavailable calendar or incompatible period day-count rejected	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T013	R1.1	A05	Per-period totals agree across raw and rounded values with final residual policy	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T014	R1.2	A05	Prepayment REDUCE_TERM creates new revision while original result SHA unchanged	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T015	R1.2	A05	Prepayment REDUCE_INSTALLMENT creates distinct output; fee consequences versioned	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T016	R1.2	A05	Grace principal-only vs full-deferred and capitalization produce different schedules	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T017	R1.2	A05	Floating rate reset mid-accrual interval splits interest; missing index fails closed	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T018	R1.2	A05	Modification effective date, lineage and schedule replay enforce no retroactive overwrite	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T019	R1.3	IFRS9_EIR	Annual 980/80/80/80/80/1080 scenario approximates 8.5076328113 percent	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T020	R1.3	IFRS9_EIR	Date-aware EIR root PV residual within approved explicit tolerance, no double fees	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T021	R1.3	IFRS9_EIR	Service fee classified separately from integral EIR fees and transaction costs	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T022	R1.3	IFRS9_EIR	Multiple roots/no root/nonconvergence emit named diagnostics, not fabricated rate	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T023	R1.3	IFRS9_EIR	Accounting EIR expense differs from cash interest; separate roll-forward reconciles	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T024	R1.3	KZ_GESV	Without eligible regulatory revision KZ_GESV must remain NOT_IMPLEMENTED	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T025	R1.4	A01	Plan 100 due and 60 actual allocated once, remaining 40 after due cutoff	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T026	R1.4	C05/P04	Per-period principal rollforward matches schedule and P04 generated projection	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T027	R1.4	P09	Analytical DSCR cannot certify covenant threshold without agreement and CFADS	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T028	R1.4	F03/P03	Planned 100 is not posted as actual F03 cash before confirmed event	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T029	R1.4	F01/F02	IFRS liability carrying value and expense source not substituted with nominal cash	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T030	R1.4	C01/C02	No double counting trade debt and loan obligation; source role validated	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T031	R1.4	A05	All nine A05-REC checks produce PASS/DIFFERENCE/MISSING_SOURCE/NOT_COMPARABLE statuses	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T032	R1.5	React	C05 terms and fees save/reopen with exact revisions; unsaved calc disabled	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T033	R1.5	React	Annuity/equal principal/custom variants return separate backend results	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T034	R1.5	React	Schedule, fee breakdown, and SHA Explain panel rendered from backend only	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T035	R1.5	React	Old and amended schedules comparable without rewriting old revision	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T036	R1.5	fin_calc	UAT immutable result idempotency, race and replay gates on PG16	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T037	R1.5	UAT	No financiallyApproved or productionAdmitted without independent S2	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T038	R1.5	CI	Exact HEAD, Java21, PG16, Chromium green; mandatory tests none skipped	GitHub Actions	NOT_IMPLEMENTED		NOT_QUALIFIED
