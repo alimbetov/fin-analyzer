@@ -226,7 +226,7 @@ public class MetricGraphUatExecutionService {
       // Existing F02 kernel requires all three pilot inputs. The DAG may
       // require only two for grossProfit; never relax kernel requirements.
       var raw=f02Preview.preview(r.organizationId(),r.projectId(),
-        r.exactSourceRevisionId());
+        r.exactSourceRevisionId(),"F02");
       check(raw.formVersionId().equals(p.formVersionId())
           &&raw.sourceContentSha256().equals(sourceSha)
           &&raw.sourceSchemaSha256().equals(schemaSha)
