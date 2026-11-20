@@ -53,7 +53,7 @@ public class Calc4DUatPlanStore {
     this.enabled=enabled;
   }
 
-  @Transactional(isolation=Isolation.REPEATABLE_READ)
+  @Transactional(isolation=Isolation.REPEATABLE_READ,rollbackFor=Exception.class)
   public Stored stage(UUID org,List<UUID> exactFormulaIds,List<UUID> exactFactsetIds)
       throws Exception {
     requireEnabled();
