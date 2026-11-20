@@ -1,0 +1,57 @@
+name: FIN CALC-A05-R1.0 — Atomic C05 Loan PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/loan/**'
+      - 'form-library/src/main/java/kz/fin/formlib/api/LoanContractUatController.java'
+      - 'form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java'
+      - 'form-library/src/main/resources/db/changelog/056-fin-calc-a05-r10-loan-intake-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/loan/**'
+      - '.github/workflows/fin-a05-r10-loan-intake-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  a05-atomic-intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Exact C05 and A05 typed companion atomic PostgreSQL 16 tests
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=LoanContractIntakePostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Fail unless all nine A05-R1.0 PG16 gates were run
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          paths=glob.glob('form-library/target/surefire-reports/TEST-*LoanContractIntakePostgresqlTest.xml')
+          if len(paths)!=1:sys.exit('A05_R10_PG16_REPORT_MISSING')
+          root=ET.parse(paths[0]).getroot()
+          metrics={x:int(root.attrib.get(x,0)) for x in
+                   ('tests','errors','failures','skipped')}
+          print(metrics)
+          if metrics!={'tests':9,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('A05_R10_PG16_NOT_GREEN')
+          PY
+      - name: Preserve PostgreSQL test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-a05-r10-pg16
+          path: form-library/target/surefire-reports/TEST-*LoanContractIntakePostgresqlTest.xml
+          if-no-files-found: warn
