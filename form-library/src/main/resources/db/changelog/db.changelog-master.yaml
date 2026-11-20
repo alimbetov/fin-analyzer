@@ -93,3 +93,5 @@ databaseChangeLog:
       file: db/changelog/046-fin-calc154-synthetic-mathematical-controls-postgresql.sql
   - include:
       file: db/changelog/047-fin-calc154-methodology-completion-readiness-postgresql.sql
+  - include:
+      file: db/changelog/048-fin-calc4d5-result-fencing-lineage-postgresql.sql
