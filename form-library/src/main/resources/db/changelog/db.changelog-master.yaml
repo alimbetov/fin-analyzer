@@ -95,3 +95,5 @@ databaseChangeLog:
       file: db/changelog/047-fin-calc154-methodology-completion-readiness-postgresql.sql
   - include:
       file: db/changelog/048-fin-calc4d5-result-fencing-lineage-postgresql.sql
+  - include:
+      file: db/changelog/049-fin-autoqual1-receipt-postgresql.sql
