@@ -87,3 +87,5 @@ databaseChangeLog:
       file: db/changelog/043-fin-calc4d-uat-execution-sandbox-postgresql.sql
   - include:
       file: db/changelog/044-fin-calc4d-methodology-workqueue-postgresql.sql
+  - include:
+      file: db/changelog/045-fin-calc4d5-uat-fenced-queue-postgresql.sql
