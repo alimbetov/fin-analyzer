@@ -590,3 +590,15 @@
 .a05-amendment .a05-schedule-actions{align-items:end}
 .a05-amendment .a05-result{border-top:1px solid #e4e9f2;padding-top:12px}
 .a05-amendment .a05-lineage dd{overflow-wrap:anywhere}
+
+/* FIN MG-R0.4 — exact metric-first plan and reproducible output in F02. */
+.mg-r04-panel{display:grid;gap:12px;min-width:0;border:1px solid #cbd5e1;border-radius:12px;padding:15px;margin:16px 0;background:#fff}
+.mg-r04-panel header h3{font-size:16px;margin:0 0 4px}
+.mg-r04-panel .a05-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.mg-r04-deps{display:flex;gap:6px;flex-wrap:wrap}
+.mg-r04-deps span{font:12px ui-monospace,monospace;color:#42526b;border:1px solid #d4dfef;padding:5px 8px;border-radius:7px;background:#f5f8fc}
+.mg-r04-panel .a05-schedule-actions input{min-width:245px;max-width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:9px;font:12px ui-monospace,monospace}
+.mg-r04-output{display:grid;gap:8px;border-top:1px solid #e2e8f0;padding-top:10px}
+.mg-r04-output strong{font-size:16px;font-variant-numeric:tabular-nums}
+.mg-r04-output small{color:#58677c}
+@media(max-width:580px){.mg-r04-panel{padding:10px}.mg-r04-panel .a05-schedule-actions input{min-width:0;width:100%}}
