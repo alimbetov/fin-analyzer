@@ -8,7 +8,8 @@ CREATE TABLE fin_calc.methodology_research_candidate (
  -- Candidate research is rejoined and validated against the populated catalog
  -- at read/qualification time, not via a premature bootstrap-time FK.
  owner_form_code varchar(128) NOT NULL
-   CHECK(owner_form_code ~ '^[A-Z0-9_-]{2,128} related_form_codes_jsonb jsonb NOT NULL CHECK(jsonb_typeof(related_form_codes_jsonb)='array'),
+   CHECK(owner_form_code SIMILAR TO '[A-Z0-9_-]{2,128}'),
+ related_form_codes_jsonb jsonb NOT NULL CHECK(jsonb_typeof(related_form_codes_jsonb)='array'),
  source_section smallint NOT NULL CHECK(source_section BETWEEN 1 AND 12),
  operation_family varchar(40) NOT NULL,
  formula_text text NOT NULL CHECK(length(trim(formula_text))>0),
