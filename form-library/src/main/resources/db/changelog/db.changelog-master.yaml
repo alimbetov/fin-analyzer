@@ -115,3 +115,5 @@ databaseChangeLog:
       file: db/changelog/057-fin-mg-r02-explicit-indicator-bindings-postgresql.sql
   - include:
       file: db/changelog/058-fin-calc-a05-r10-agreement-key-postgresql.sql
+  - include:
+      file: db/changelog/059-fin-calc-a05-r11-schedules-postgresql.sql
