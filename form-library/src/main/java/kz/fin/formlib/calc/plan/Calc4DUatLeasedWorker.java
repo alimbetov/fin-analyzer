@@ -71,6 +71,19 @@ public class Calc4DUatLeasedWorker {
         ||!"UAT_SYNTHETIC_ONLY".equals(result.status()))
       throw new IllegalStateException("CALC4D_UAT_UNEXPECTED_BATCH_RESULT");
 
+    // The PostgreSQL BEFORE INSERT trigger must have embedded the exact
+    // job and fencing epoch into the immutable result itself.
+    Integer lineage=jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result
+      WHERE id=? AND plan_id=? AND organization_id=?
+        AND worker_job_id=? AND worker_fencing_token=?
+        AND result_sha256=?
+      """,Integer.class,result.resultId(),claim.planId(),
+      claim.organizationId(),claim.jobId(),claim.fencingToken(),
+      result.resultSha256());
+    if(lineage==null||lineage!=1)
+      throw new IllegalStateException("CALC4D_UAT_RESULT_FENCE_LINEAGE_MISSING");
+
     int n=jdbc.update("""
       UPDATE fin_calc.calc4d_uat_job j
       SET state='SUCCEEDED',lease_owner=NULL,lease_until=NULL,
