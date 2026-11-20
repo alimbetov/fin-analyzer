@@ -70,4 +70,33 @@ class CalcAsOfDebtKernelTest {
     assertThrows(IllegalArgumentException.class,()->CalcAsOfDebtKernel.calculate(
         CalcAsOfDebtKernel.Form.C02,List.of(c("SINGLE","outstanding","10"))));
   }
+  @Test void c01ExcessAllowanceIsReviewNotAutomaticWriteOffOrClipping() {
+    var ex=assertThrows(IllegalStateException.class,
+      ()->CalcAsOfDebtKernel.calculate(CalcAsOfDebtKernel.Form.C01,List.of(
+        c(row1,"gross","100.00"),c(row1,"allowance","120.00"),
+        c(row1,"overdue","20.00"))));
+    assertEquals("ASOF_ALLOWANCE_EXCEEDS_GROSS_REVIEW_REQUIRED",ex.getMessage());
+  }
+  @Test void c02CreditBalanceRequiresSeparateClassificationAndNoSilentAbs() {
+    var ex=assertThrows(IllegalStateException.class,
+      ()->CalcAsOfDebtKernel.calculate(CalcAsOfDebtKernel.Form.C02,List.of(
+        c(row1,"outstanding","-25.00"),c(row1,"overdue","0.00"))));
+    assertEquals("ASOF_CREDIT_BALANCE_CLASSIFICATION_REVIEW_REQUIRED",ex.getMessage());
+  }
+  @Test void c02OverdueCannotBeAddedOrExceedOpenBalanceInPilot() {
+    var ex=assertThrows(IllegalStateException.class,
+      ()->CalcAsOfDebtKernel.calculate(CalcAsOfDebtKernel.Form.C02,List.of(
+        c(row1,"outstanding","70.00"),c(row1,"overdue","90.00"))));
+    assertEquals("ASOF_OVERDUE_EXCEEDS_OPEN_BALANCE_REVIEW_REQUIRED",ex.getMessage());
+  }
+  @Test void partialPaymentMustAlreadyBeReflectedInAsOfSourceBalance() {
+    // The kernel accepts the posted open balance of 70, not original invoice
+    // face value 100 and does not apply the 30 payment a second time.
+    var result=CalcAsOfDebtKernel.calculate(CalcAsOfDebtKernel.Form.C01,List.of(
+      c(row1,"gross","70.00"),c(row1,"allowance","7.00"),
+      c(row1,"overdue","25.00")));
+    assertEquals(0,result.primaryAmount().compareTo(new BigDecimal("63.00")));
+    assertEquals(0,result.overdueAmount().compareTo(new BigDecimal("25.00")));
+  }
+
 }
