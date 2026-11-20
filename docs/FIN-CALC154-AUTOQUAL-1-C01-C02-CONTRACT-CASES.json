@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "fin.autoqual.fixture.v1",
+  "status": "SPECIFICATION_FIXTURES_NOT_EXECUTED",
+  "financialS2": "NOT_APPROVED",
+  "environment": "UAT_ONLY",
+  "forms": [
+    {
+      "formCode": "C01",
+      "editorialDecision": "ED-2026-11-20",
+      "inputs": ["C01.gross", "C01.allowance", "C01.overdue"],
+      "outputs": [
+        {
+          "code": "C01.netReceivablesProposed",
+          "operator": "SUM_AS_OF(gross)-SUM_AS_OF(allowance)",
+          "requiredFields": ["C01.gross", "C01.allowance"],
+          "tests": [
+            {"id":"c01-net-basic","rows":[{"gross":"100.00","allowance":"10.00"}],"expected":"90.00"},
+            {"id":"c01-net-zero","rows":[{"gross":"0.00","allowance":"0.00"}],"expected":"0.00"},
+            {"id":"c01-net-missing","rows":[{"gross":"100.00","allowance":null}],"expectedError":"REQUIRED_VALUE_MISSING"},
+            {"id":"c01-net-negative-allowance","rows":[{"gross":"100.00","allowance":"-10.00"}],"expectedError":"INVALID_ALLOWANCE_SIGN"}
+          ]
+        },
+        {
+          "code": "C01.overdueGrossShareProposed",
+          "operator": "RATIO_OF_SUMS(overdue,gross)@AS_OF",
+          "requiredFields": ["C01.overdue", "C01.gross"],
+          "tests": [
+            {"id":"c01-ratio-basic","rows":[{"gross":"100.00","overdue":"20.00"}],"expected":"0.2"},
+            {"id":"c01-ratio-denominator-zero","rows":[{"gross":"0.00","overdue":"0.00"}],"expectedError":"UNDEFINED_ZERO_DENOMINATOR"},
+            {"id":"c01-ratio-overdue-out-of-range","rows":[{"gross":"100.00","overdue":"110.00"}],"expectedError":"POLICY_INCOMPLETE"}
+          ]
+        }
+      ],
+      "qualificationBlockers": ["OBLIGATION_IDENTITY_POLICY","SIGNED_BALANCES_POLICY","PARTIAL_SETTLEMENT_POLICY","FX_POLICY","PRECISION_ROUNDING_POLICY"]
+    },
+    {
+      "formCode": "C02",
+      "editorialDecision": "AWAITING_EXPLICIT_DOMAIN_REVIEW",
+      "inputs": ["C02.counterparty", "C02.outstanding", "C02.overdue", "C02.dueAt", "C02.debtCategory"],
+      "outputs": [
+        {
+          "code": "C02.totalOutstandingProposed",
+          "operator": "SUM_AS_OF(outstanding)",
+          "requiredFields": ["C02.outstanding"],
+          "tests": [
+            {"id":"c02-total-basic","rows":[{"outstanding":"60.00"},{"outstanding":"40.00"}],"expected":"100.00"},
+            {"id":"c02-total-missing","rows":[{"outstanding":null}],"expectedError":"REQUIRED_VALUE_MISSING"},
+            {"id":"c02-total-mixed-currency","rows":[{"outstanding":"60.00","contextCurrency":"KZT"},{"outstanding":"40.00","contextCurrency":"USD"}],"expectedError":"CURRENCY_MISMATCH"}
+          ]
+        },
+        {
+          "code": "C02.overdueOutstandingShareProposed",
+          "operator": "RATIO_OF_SUMS(overdue,outstanding)@AS_OF",
+          "requiredFields": ["C02.overdue", "C02.outstanding"],
+          "tests": [
+            {"id":"c02-ratio-basic","rows":[{"outstanding":"100.00","overdue":"20.00"}],"expected":"0.2"},
+            {"id":"c02-ratio-zero","rows":[{"outstanding":"0.00","overdue":"0.00"}],"expectedError":"UNDEFINED_ZERO_DENOMINATOR"},
+            {"id":"c02-ratio-unconfirmed-overdue","rows":[{"outstanding":"100.00","overdue":"110.00"}],"expectedError":"POLICY_INCOMPLETE"}
+          ]
+        }
+      ],
+      "qualificationBlockers": ["OUTSTANDING_DEFINITION","OVERDUE_SCOPE","PARTIAL_SETTLEMENT_POLICY","PAYABLE_OBLIGATION_IDENTITY","FX_POLICY","PRECISION_ROUNDING_POLICY"]
+    }
+  ],
+  "globalNegativeControls": [
+    {"id":"asof-different-factsets","expectedError":"FACTSET_SNAPSHOT_MISMATCH"},
+    {"id":"duplicate-obligation","expectedError":"OBLIGATION_IDENTITY_VIOLATION"},
+    {"id":"missing-methodology-hash","expectedError":"EVIDENCE_INCOMPLETE"},
+    {"id":"revoked-financial-s2","expectedProductionAdmission":"DENIED"},
+    {"id":"stale-lease-fencing","expectedError":"STALE_WORKER_FENCE"}
+  ],
+  "interpretation": "Expected results are contract examples, not evidence that SQL, Java, PostgreSQL or production gates have been implemented or passed."
+}
