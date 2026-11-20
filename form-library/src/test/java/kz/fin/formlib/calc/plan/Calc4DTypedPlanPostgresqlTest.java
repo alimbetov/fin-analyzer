@@ -435,4 +435,141 @@ class Calc4DTypedPlanPostgresqlTest {
     noExecution();
   }
 
+  private Fixture actualRowsetC07Source(){
+    var month=YearMonth.of(2026,11);
+    LocalDate start=month.atDay(1),end=month.plusMonths(1).atDay(1);
+    partitions.ensureMonthlyRange(month,month,false);
+    UUID org=UUID.randomUUID(),entity=UUID.randomUUID(),
+      business=UUID.randomUUID(),project=UUID.randomUUID(),factset=UUID.randomUUID(),
+      rowA=UUID.randomUUID(),rowB=UUID.randomUUID();
+    var rows=List.of(
+      new FormDraftService.RowInput(rowA,1,Map.of(
+        "month","2026-11","clientRef","CLIENT-A","direction","SALE",
+        "grossSales","125.00","returns","5.00","currency","KZT")),
+      new FormDraftService.RowInput(rowB,2,Map.of(
+        "month","2026-11","clientRef","CLIENT-B","direction","SALE",
+        "grossSales","75.00","returns","10.00","currency","KZT")));
+    var saved=drafts.save(new FormDraftService.DraftRequest(
+      null,org,entity,business,project,"C07","M","2026-11","KZT",
+      "PERIOD_ONLY","MANAGEMENT","SYNTHETIC",0,
+      Map.of(),rows,"calc4d-rowset-uat",
+      "Synthetic real C07 ROWSET revision, not a financial methodology"),
+      "calc4d-rowset-"+UUID.randomUUID());
+    UUID version=jdbc.queryForObject("""
+      SELECT form_version_id FROM fin_intake.lib_form_revision WHERE id=?
+      """,UUID.class,saved.revisionId());
+    String schema=jdbc.queryForObject("""
+      SELECT schema_sha256 FROM fin_lib.lib_form_version WHERE id=?
+      """,String.class,version);
+    String membership;
+    try{
+      membership=mapper.writeValueAsString(List.of(Map.of(
+        "revisionId",saved.revisionId().toString(),"formVersionId",version.toString(),
+        "formCode","C07","canonicalContentSha256",saved.contentSha256(),
+        "schemaSha256",schema)));
+    }catch(Exception e){throw new IllegalStateException(e);}
+    var bind=new MapSqlParameterSource()
+      .addValue("id",factset).addValue("org",org).addValue("entity",entity)
+      .addValue("business",business).addValue("project",project)
+      .addValue("scope",Calc4DTypedDagCompiler.sha("C07-SCOPE|"+org))
+      .addValue("source",saved.revisionId()).addValue("version",version)
+      .addValue("start",start).addValue("end",end)
+      .addValue("sourceSha",saved.contentSha256())
+      .addValue("sourceJson",membership)
+      .addValue("factSha",Calc4DTypedDagCompiler.sha("C07-FACT|"+factset))
+      .addValue("mapSha",Calc4DTypedDagCompiler.sha("C07-MAP|"+factset))
+      .addValue("qualSha",Calc4DTypedDagCompiler.sha("C07-QUAL|"+factset));
+    var named=new NamedParameterJdbcTemplate(jdbc);
+    named.update("""
+      INSERT INTO fin_fact.fact_set(
+        id,organization_id,economic_entity_id,business_scope_id,project_id,
+        dataset_code,scope_key,data_space,coverage,reporting_basis,currency_code,
+        target_period_type,target_period_code,target_period_start,
+        target_period_end_exclusive,source_revisions_jsonb,source_set_sha256,
+        mapping_bundle_sha256,canonicalization_version,observation_count,
+        factset_sha256,qualification_binding_sha256,qualification_epoch,
+        qualification_mode,issuer)
+      VALUES(:id,:org,:entity,:business,:project,'CALC4D_C07_ROWSET_TEST',
+        :scope,'SYNTHETIC','PERIOD_ONLY','MANAGEMENT','KZT',
+        'M','2026-11',:start,:end,CAST(:sourceJson AS jsonb),
+        :sourceSha,:mapSha,1,4,:factSha,:qualSha,1,
+        'TEST_QUALIFIED','CALC4D_ROWSET_UAT')
+      """,bind);
+    jdbc.update("""
+      INSERT INTO fin_fact.factset_control(
+        id,stable_scope_key,organization_id,active_factset_id,
+        qualification_epoch,revoked,row_version)
+      VALUES (?,?,?,?,1,false,0)
+      """,UUID.randomUUID(),bind.getValue("scope"),org,factset);
+    for(int index=0;index<2;index++){
+      UUID sourceRow=index==0?rowA:rowB;
+      String segment=index==0?"A":"B";
+      String dimensions="{\"segment\":\""+segment+"\"}";
+      String dimension=Calc4DTypedDagCompiler.sha("C07-UAT-SEGMENT|"+segment);
+      String sales=index==0?"125.00":"75.00";
+      String returns=index==0?"5.00":"10.00";
+      for(var entry:Map.of("grossSales",sales,"returns",returns).entrySet()){
+        String field=entry.getKey();
+        var input=new MapSqlParameterSource().addValues(bind.getValues())
+          .addValue("observation",UUID.randomUUID())
+          .addValue("rowKey",sourceRow.toString())
+          .addValue("field",field)
+          .addValue("metric","C07."+field)
+          .addValue("dimension",dimension)
+          .addValue("dimensions",dimensions)
+          .addValue("value",new BigDecimal(entry.getValue()))
+          .addValue("keySha",Calc4DTypedDagCompiler.sha(
+            "C07-UAT-OBSERVATION|"+factset+"|"+sourceRow+"|"+field))
+          .addValue("valueSha",Calc4DTypedDagCompiler.sha(
+            "C07-UAT-VALUE|"+factset+"|"+sourceRow+"|"+field+"|"+entry.getValue()));
+        named.update("""
+          INSERT INTO fin_fact.fact_observation(
+            period_start,observation_id,factset_id,source_revision_id,
+            source_form_code,source_form_version_id,source_row_key,source_field_code,
+            source_content_sha256,mapping_sha256,metric_code,metric_contract_version,
+            period_type,period_end_exclusive,period_semantics,dimension_digest,
+            dimensions_jsonb,observation_key_sha256,value_kind,value_state,
+            numeric_value,unit_code,currency_code,canonical_value_sha256)
+          VALUES(:start,:observation,:id,:source,'C07',:version,:rowKey,
+            :field,:sourceSha,:mapSha,:metric,'TEST_ONLY_V1','M',:end,'INTERVAL',
+            :dimension,CAST(:dimensions AS jsonb),:keySha,
+            'NUMERIC','PRESENT',:value,'KZT','KZT',:valueSha)
+          """,input);
+      }
+    }
+    return new Fixture(org,factset,saved.revisionId(),version,project);
+  }
+
+  @Test void rowsetC07GroupByAndRatioOfSumsExecuteThroughSameUatBatch()
+      throws Exception{
+    var source=actualRowsetC07Source();
+    var exact=resolver.resolve(source.organization(),source.factset());
+    assertEquals(4,exact.observations().size());
+    var plan=planStore.stage(source.organization(),List.of(
+      formula("C07.grossSalesGroupedCandidate"),
+      formula("C07.returnsGroupedCandidate"),
+      formula("C07.returnsShareCandidate")),List.of(source.factset()));
+    var executed=batch.executeExact(source.organization(),plan.id());
+    assertEquals(6,executed.outputRows(),
+      "two dimension groups for three candidate formulas");
+    var results=mapper.readTree(jdbc.queryForObject("""
+      SELECT output_jsonb::text FROM fin_calc.calc4d_uat_result WHERE id=?
+      """,String.class,executed.resultId()));
+    var ratios=new java.util.HashMap<String,BigDecimal>();
+    for(var item:results){
+      if("C07.returnsShareCandidate".equals(item.path("outputMetricCode").asText())){
+        assertEquals("PRESENT",item.path("valueState").asText());
+        ratios.put(item.path("dimensionsJson").asText(),
+          new BigDecimal(item.path("numericValue").asText()));
+      }
+    }
+    assertEquals(2,ratios.size());
+    assertEquals(0,new BigDecimal("0.04").compareTo(
+      ratios.get("{\"segment\": \"A\"}")));
+    assertEquals(0,new BigDecimal("0.133333333333").compareTo(
+      ratios.get("{\"segment\": \"B\"}")));
+    assertFalse(executed.financiallyApproved());
+    noExecution();
+  }
+
 }
