@@ -1,0 +1,53 @@
+name: FIN CALC-154 — P0 P1 Financial Policy Gate
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/resources/db/changelog/055-fin-calc154-p0-p1-editorial-policy-decisions.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/methodology/MethodologyPolicyDecisionRegistry.java'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/methodology/FinancialPolicyGuardrails.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/methodology/MethodologyPolicyDecisionPostgresqlTest.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/methodology/FinancialPolicyGuardrailsTest.java'
+      - '.github/workflows/fin-calc154-p0-p1-financial-policy-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy-decision-pg16:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Verify P0-P1 decisions and finance guardrails
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=MethodologyPolicyDecisionPostgresqlTest,FinancialPolicyGuardrailsTest \
+            -DfailIfNoTests=true
+      - name: Require eight tests with no failures or skips
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          reports=[]
+          for name in ('MethodologyPolicyDecisionPostgresqlTest','FinancialPolicyGuardrailsTest'):
+            files=glob.glob('form-library/target/surefire-reports/TEST-*'+name+'.xml')
+            if len(files)!=1:sys.exit('FIN_POLICY_TEST_REPORT_MISSING:'+name)
+            root=ET.parse(files[0]).getroot()
+            reports.append({k:int(root.attrib.get(k,0)) for k in
+              ('tests','errors','failures','skipped')})
+          print(reports)
+          if (sum(x['tests'] for x in reports)!=8 or
+            any(x[k] for x in reports for k in ('errors','failures','skipped'))):
+            sys.exit('FIN_POLICY_8_TESTS_NOT_GREEN')
+          PY
