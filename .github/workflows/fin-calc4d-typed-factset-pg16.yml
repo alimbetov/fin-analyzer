@@ -1,4 +1,4 @@
-name: FIN CALC-4D — Typed DAG & Exact FactSet PG16
+name: FIN CALC-4D — DAG FactSet UAT Batch PG16
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
       - feat/fin-form-library-standalone
     paths:
       - 'form-library/src/main/java/kz/fin/formlib/calc/plan/Calc4D*.java'
+      - 'form-library/src/main/resources/db/changelog/043-fin-calc4d-uat-execution-sandbox-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/main/resources/application.yml'
       - 'form-library/src/test/java/kz/fin/formlib/calc/plan/Calc4DTypedPlanPostgresqlTest.java'
       - 'form-library/pom.xml'
       - '.github/workflows/fin-calc4d-typed-factset-pg16.yml'
@@ -32,7 +35,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=Calc4DTypedPlanPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require eight actual PostgreSQL tests, zero skipped/failures/errors
+      - name: Require fourteen actual PostgreSQL tests, zero skipped/failures/errors
         if: always()
         run: |
           python3 - <<'PY'
@@ -42,6 +45,6 @@ jobs:
           root=ET.parse(files[0]).getroot()
           a={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
           print(a)
-          if a!={'tests':8,'errors':0,'failures':0,'skipped':0}:
-            sys.exit('CALC4D PG16 eight tests mandatory')
+          if a!={'tests':14,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('CALC4D PG16 fourteen tests mandatory')
           PY
