@@ -37,6 +37,14 @@ R1 верно определяет продуктовый результат: `R
 
 Evidence: https://github.com/alimbetov/fin-analyzer/actions/runs/44673857477 ; https://github.com/alimbetov/fin-analyzer/actions/runs/44673857383 ; https://github.com/alimbetov/fin-analyzer/actions/runs/44673857464 .
 
+### CI rerun after two compiler fixes
+
+На повторном GitHub Actions run `44675049757` (Java/H2) основная компиляция и компиляция тестов стали проходить, но Spring Context отказался запускаться: `Cannot subclass final class ... CalcC01C02AsOfJdbcService`. Исправлены **пять** service-классов с `@Transactional`: `CalcC01C02AsOfJdbcService`, `MethodologySelectionService`, `MethodologyResearchReadService`, `CalcApplicationContractRegistry`, `MethodologyPolicyDecisionRegistry`; удалён `final` у классов, не затронуты финансовые алгоритмы. Последний из пяти исправлений — `07c2f7fafed5b5765d5e9a736ba6a11e8ecd5925`.
+
+В PostgreSQL runs `44675049635` и `44675049759` Liquibase выявил `ValidationFailedException: 2 changesets had duplicate identifiers` в migration `052`, с `052b/052c` по нескольку раз. GitHub source inspection подтвердил 315 строк повреждённого файла, четыре повторения секций. Commit `0d3f8f562ee2d1eaebab13a41e3b36796a67b5ab` восстановил один комплект `052a/052b/052c`, **44 source candidates**, 86 строк. Это исправление повреждённой UAT-миграции требует реальной проверки; для окружений, где иная предыдущая редакция changeset уже применялась, отдельно сверить Liquibase DATABASECHANGELOG checksum и миграционный путь, не применять `clearCheckSums` для скрытия дрейфа.
+
+До получения successful post-fix CI **проект остаётся RED / НЕ ПРИНЯТ**. Прогоны до исправлений — evidence прошлых блокеров, не новое GREEN.
+
 ## 4. Findings и приоритеты
 | ID | Критичность | Подтверждение / риск | Требуемая работа |
 |---|---|---|---|
