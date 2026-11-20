@@ -175,4 +175,52 @@ class Calc154MathematicalControlPostgresqlTest {
       FROM fin_calc.calc154_synthetic_control_case LIMIT 1
       """));
   }
+  @Test void all154MethodologyRowsShowActualInputsAndFinancialBlockers(){
+    assertEquals(154,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc154_methodology_completion_v1
+      """,Integer.class));
+    assertEquals(145,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc154_methodology_completion_v1
+      WHERE direct_numeric_field_count>0
+      """,Integer.class));
+    assertEquals(9,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc154_methodology_completion_v1
+      WHERE reference_only
+      """,Integer.class));
+    assertEquals(10,jdbc.queryForObject("""
+      SELECT sum(formula_candidate_count)
+      FROM fin_calc.calc154_methodology_completion_v1
+      """,Integer.class));
+    assertEquals(12,jdbc.queryForObject("""
+      SELECT sum(mathematical_control_cases)
+      FROM fin_calc.calc154_methodology_completion_v1
+      """,Integer.class));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT sum(formula_candidates_missing_math_control)
+      FROM fin_calc.calc154_methodology_completion_v1
+      """,Integer.class));
+    assertEquals(2,jdbc.queryForObject("""
+      SELECT sum(zero_division_negative_cases)
+      FROM fin_calc.calc154_methodology_completion_v1
+      """,Integer.class));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT sum(unbound_derived_metrics)
+      FROM fin_calc.calc154_methodology_completion_v1
+      """,Integer.class));
+    assertEquals(3,jdbc.queryForObject("""
+      SELECT legacy_f02_control_examples
+      FROM fin_calc.calc154_methodology_completion_v1 WHERE form_code='F02'
+      """,Integer.class));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc154_methodology_completion_v1
+      WHERE qualified_for_production OR financial_approval_state<>'NOT_S2_APPROVED'
+         OR policy_review_state<>'PERIOD_CURRENCY_DIMENSION_ROUNDING_NOT_REVIEWED'
+      """,Integer.class));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc154_methodology_completion_v1
+      WHERE required_numeric_input_fields+optional_numeric_input_fields
+          <> direct_numeric_field_count
+      """,Integer.class));
+  }
+
 }
