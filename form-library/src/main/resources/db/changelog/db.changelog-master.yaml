@@ -117,3 +117,5 @@ databaseChangeLog:
       file: db/changelog/058-fin-calc-a05-r10-agreement-key-postgresql.sql
   - include:
       file: db/changelog/059-fin-calc-a05-r11-schedules-postgresql.sql
+  - include:
+      file: db/changelog/060-fin-calc-a05-r11-pin-trigger-fix-postgresql.sql
