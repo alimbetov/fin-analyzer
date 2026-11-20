@@ -208,7 +208,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 --changeset fin-calc:051c dbms:postgresql splitStatements:true
 CREATE TRIGGER trg_methodology_selection_check
