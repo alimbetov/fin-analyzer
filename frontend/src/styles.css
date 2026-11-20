@@ -544,3 +544,18 @@
 .f02-uat-results dt{color:var(--muted,#596677)}
 .f02-uat-results dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 @media(max-width:700px){.f02-uat-results{grid-template-columns:1fr}.f02-uat-results dl{grid-template-columns:1fr}.f02-uat-results dd{margin-bottom:8px}}
+
+/* FIN CALC-A05-R1.0: bounded C05 loan contract / commission studio. */
+.a05-studio{border:1px solid #ced7ea;border-radius:12px;padding:16px;margin:14px 0;background:#fff;display:grid;gap:12px;min-width:0}
+.a05-title h3{font-size:16px;margin:0 0 4px}
+.a05-title small{color:#58677c}
+.a05-fields{border:1px solid #dce3ef;border-radius:10px;padding:12px;margin:0;min-width:0}
+.a05-fields legend{font-weight:700;padding:0 6px}
+.a05-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:11px}
+.a05-field,.a05-fee label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;min-width:0}
+.a05-field input,.a05-field select,.a05-fee input,.a05-fee select{border:1px solid #cbd5e1;border-radius:6px;padding:8px;min-width:0;width:100%;background:white}
+.a05-fee{display:grid;grid-template-columns:repeat(4,minmax(115px,1fr)) auto;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid #e7ebf1}
+.a05-fee button{min-height:36px}
+.a05-studio .primary-save{justify-self:start}
+@media(max-width:1000px){.a05-fee{grid-template-columns:repeat(2,minmax(125px,1fr))}}
+@media(max-width:520px){.a05-grid,.a05-fee{grid-template-columns:minmax(0,1fr)}.a05-studio{padding:10px}}
