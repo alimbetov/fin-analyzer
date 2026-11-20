@@ -22,7 +22,7 @@ import java.util.UUID;
  * In particular FCFF+Ke and FCFE+WACC cannot be chosen.
  */
 @Service
-public final class MethodologySelectionService {
+public class MethodologySelectionService {
   public static final String DCF_FAMILY = "DCF_VALUATION";
   public record Variant(UUID id,String code,String inputBasis,String rateBasis,
       String resultBasis,String contractSha256,boolean financiallyApproved) {}
