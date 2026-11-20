@@ -157,6 +157,17 @@ class MethodologySelectionPostgresqlTest {
       "SELECT count(*) FROM fin_calc.calc154_methodology_research_readiness_v1",
       Integer.class);
     assertEquals(154,forms);
+    Long totalResearch=sql.queryForObject("""
+      SELECT coalesce(sum(source_research_candidate_count),0)
+      FROM fin_calc.calc154_methodology_research_readiness_v1
+      """,Long.class);
+    assertEquals(44L,totalResearch);
+    Integer orphans=sql.queryForObject("""
+      SELECT count(*) FROM fin_calc.methodology_research_candidate c
+      LEFT JOIN fin_lib.lib_form_definition f ON f.form_code=c.owner_form_code
+      WHERE f.form_code IS NULL
+      """,Integer.class);
+    assertEquals(0,orphans,"ALL_USER_RESEARCH_FORM_CODES_MATCH_JAVA_BOOTSTRAP");
     var p07=research.requireForm("P07");
     assertTrue(p07.researchCandidateCount()>=7);
     assertEquals(p07.researchCandidateCount(),p07.candidates().size());
