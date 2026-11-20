@@ -2,7 +2,6 @@ package kz.fin.formlib.bootstrap;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import kz.fin.formlib.calc.plan.Calc4DTypedDagCompiler;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
@@ -126,7 +125,7 @@ public class Calc154MathematicalControlBootstrap implements ApplicationRunner {
               ||actual.compareTo(new BigDecimal(vector.expectedValue()))!=0)))
         throw new IllegalStateException(
           "CALC154_CONTROL_ORACLE_MISMATCH:"+vector.caseCode());
-      String binding=Calc4DTypedDagCompiler.sha("FIN-CALC154-MATH-CONTROL-BIND-V1|"+
+      String binding=sha("FIN-CALC154-MATH-CONTROL-BIND-V1|"+
         f.id()+"|"+f.formVersion()+"|"+f.schema()+"|"+f.binding()+
         "|"+vector.definitionSha());
       UUID id=UUID.randomUUID();
@@ -186,7 +185,7 @@ public class Calc154MathematicalControlBootstrap implements ApplicationRunner {
         forms.add(fields[1]);
         values.add(new Vector(fields[0],fields[1],fields[2],fields[3],
           fields[4],fields[5],fields[6],fields[7],
-          Calc4DTypedDagCompiler.sha("CALC154-CONTROL-CASE-V1|"+row)));
+          sha("CALC154-CONTROL-CASE-V1|"+row)));
       }
     }
     if(values.size()!=12||forms.size()!=10)
@@ -234,5 +233,14 @@ public class Calc154MathematicalControlBootstrap implements ApplicationRunner {
   }
   private static void require(boolean valid,String operation){
     if(!valid)throw new IllegalStateException("CALC154_CONTROL_ARITY:"+operation);
+  }
+  private static String sha(String input) {
+    try {
+      return java.util.HexFormat.of().formatHex(
+        java.security.MessageDigest.getInstance("SHA-256")
+          .digest(input.getBytes(StandardCharsets.UTF_8)));
+    } catch(Exception e){
+      throw new IllegalStateException("CALC154_CONTROL_SHA_ERROR",e);
+    }
   }
 }
