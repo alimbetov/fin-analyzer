@@ -11,6 +11,7 @@ on:
       - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
       - 'form-library/src/test/java/kz/fin/formlib/calc/loan/LoanPaymentScheduleCalculatorTest.java'
       - 'form-library/src/test/java/kz/fin/formlib/calc/loan/LoanSchedulePostgresqlTest.java'
+      - '.github/maven-central-gcs-uat-settings.xml'
       - '.github/workflows/fin-a05-r11-dated-schedule-pg16.yml'
   workflow_dispatch:
 
@@ -31,7 +32,7 @@ jobs:
           cache-dependency-path: form-library/pom.xml
       - name: Real PostgreSQL 16 + Java BigDecimal independent golden controls
         run: |
-          mvn -B -ntp -f form-library/pom.xml test \
+          mvn -s .github/maven-central-gcs-uat-settings.xml -B -ntp -f form-library/pom.xml test \
             -Dfin.postgres.uat.enabled=true \
             -Dtest=LoanPaymentScheduleCalculatorTest,LoanSchedulePostgresqlTest \
             -DfailIfNoTests=true
