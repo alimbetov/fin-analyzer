@@ -525,3 +525,22 @@
 /* Fullscreen editor retains a visible route back to financial decisions. */
 .editor-focus .mobile-decision-link{display:inline-flex}
 @media(max-width:460px){.editor-focus .mobile-decision-link{max-width:164px}}
+
+/* FIN DC-R2.3 — local UAT only: explainable F02 result from pinned intake revision. */
+.f02-uat-calculation{margin:14px 0;padding:16px;border:1px solid var(--border,#d5dce4);border-radius:12px;background:var(--panel,#fff)}
+.f02-uat-calculation-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.f02-uat-calculation-head h3{font-size:1rem;margin:0 0 4px}
+.f02-uat-calculation-head small{display:block;color:var(--muted,#596677)}
+.f02-uat-calculation-head button{border:1px solid var(--border,#d5dce4);border-radius:8px;padding:9px 14px;cursor:pointer}
+.f02-uat-calculation-head button:disabled{opacity:.5;cursor:not-allowed}
+.f02-uat-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.f02-uat-result{border:1px solid var(--border,#d5dce4);border-radius:8px;padding:12px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.f02-uat-result strong{font-size:.87rem}
+.f02-uat-result span{font-size:1.15rem;font-weight:650;overflow-wrap:anywhere}
+.f02-uat-result small{color:var(--muted,#596677)}
+.f02-uat-results details{grid-column:1/-1;margin-top:4px}
+.f02-uat-results summary{cursor:pointer}
+.f02-uat-results dl{display:grid;grid-template-columns:minmax(125px,1fr) minmax(0,2fr);gap:6px 12px;font-size:.81rem}
+.f02-uat-results dt{color:var(--muted,#596677)}
+.f02-uat-results dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+@media(max-width:700px){.f02-uat-results{grid-template-columns:1fr}.f02-uat-results dl{grid-template-columns:1fr}.f02-uat-results dd{margin-bottom:8px}}
