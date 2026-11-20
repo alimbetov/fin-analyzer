@@ -9,6 +9,7 @@ on:
       - 'form-library/src/main/java/kz/fin/formlib/api/LoanContractUatController.java'
       - 'form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java'
       - 'form-library/src/main/resources/db/changelog/056-fin-calc-a05-r10-loan-intake-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/058-fin-calc-a05-r10-agreement-key-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
       - 'form-library/src/test/java/kz/fin/formlib/calc/loan/**'
       - '.github/workflows/fin-a05-r10-loan-intake-pg16.yml'
@@ -35,7 +36,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=LoanContractIntakePostgresqlTest \
             -DfailIfNoTests=true
-      - name: Fail unless all nine A05-R1.0 PG16 gates were run
+      - name: Fail unless all ten A05-R1.0 PG16 gates were run
         run: |
           python3 - <<'PY'
           import glob,sys,xml.etree.ElementTree as ET
@@ -45,7 +46,7 @@ jobs:
           metrics={x:int(root.attrib.get(x,0)) for x in
                    ('tests','errors','failures','skipped')}
           print(metrics)
-          if metrics!={'tests':9,'errors':0,'failures':0,'skipped':0}:
+          if metrics!={'tests':10,'errors':0,'failures':0,'skipped':0}:
             sys.exit('A05_R10_PG16_NOT_GREEN')
           PY
       - name: Preserve PostgreSQL test evidence
