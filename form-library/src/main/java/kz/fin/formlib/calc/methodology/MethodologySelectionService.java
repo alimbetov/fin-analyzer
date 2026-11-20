@@ -86,8 +86,8 @@ public final class MethodologySelectionService {
       SELECT id,variant_code,input_basis,rate_basis,result_basis,
         variant_contract_sha256,financial_s2_approved
       FROM fin_calc.methodology_variant_revision
-      WHERE family_code=? AND variant_code=? AND registry_state='DESIGN_ONLY'
-      ORDER BY revision_number DESC LIMIT 1
+      WHERE family_code=? AND variant_code=? AND revision_number=1 AND registry_state='DESIGN_ONLY'
+      LIMIT 1
       """,(r,i)->new Variant(r.getObject(1,UUID.class),r.getString(2),r.getString(3),
         r.getString(4),r.getString(5),r.getString(6).trim(),r.getBoolean(7)),
       DCF_FAMILY,variantCode);
