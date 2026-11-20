@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <!-- CI only. Google Cloud hosted Maven Central mirror as documented at:
+       https://docs.cloud.google.com/docs/buildpacks/java
+       Used by bounded A05 UAT jobs when repo.maven.apache.org rate limits
+       bursty multi-workflow builds with HTTP 429. Not an app dependency. -->
+  <mirrors>
+    <mirror>
+      <id>gcs-maven-central-uat</id>
+      <name>Google Cloud hosted Maven Central mirror (A05 UAT)</name>
+      <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>
