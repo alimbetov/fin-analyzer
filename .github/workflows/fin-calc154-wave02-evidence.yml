@@ -1,0 +1,25 @@
+name: FIN CALC-154 — Wave02 Financial Evidence Worklist
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'docs/FIN-CALC154-FORM-STATUS.tsv'
+      - 'docs/FIN-CALC154-WAVE02-METHODOLOGY-DECISION-REGISTRY.tsv'
+      - 'docs/FIN-CALC154-WAVE02-ALL154-EVIDENCE-WORKLIST.tsv'
+      - 'scripts/verify-fin-calc154-wave02-methodology.py'
+      - '.github/workflows/fin-calc154-wave02-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-editorial-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce complete 154-form classification and no false S2
+        run: python3 scripts/verify-fin-calc154-wave02-methodology.py
