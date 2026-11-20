@@ -559,3 +559,26 @@
 .a05-studio .primary-save{justify-self:start}
 @media(max-width:1000px){.a05-fee{grid-template-columns:repeat(2,minmax(125px,1fr))}}
 @media(max-width:520px){.a05-grid,.a05-fee{grid-template-columns:minmax(0,1fr)}.a05-studio{padding:10px}}
+
+/* A05-R1.1 immutable contractual cash schedule and source lineage */
+.a05-schedule{margin-top:14px;padding:14px 0 2px;border-top:2px solid #d6dfec;display:grid;gap:11px;min-width:0}
+.a05-schedule header h3{font-size:15px;margin:0 0 4px}
+.a05-schedule-actions{display:flex;align-items:end;gap:16px;flex-wrap:wrap}
+.a05-schedule-actions label,.a05-custom{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}
+.a05-schedule-actions select{min-width:225px;max-width:100%;border:1px solid #cbd5e1;padding:9px;border-radius:6px;background:white}
+.a05-custom textarea{font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical;border:1px solid #cbd5e1;padding:9px;border-radius:6px;max-width:640px;min-height:90px}
+.a05-custom small{font-weight:400;color:#5a6477;max-width:680px}
+.a05-result{display:grid;gap:14px;min-width:0}
+.a05-totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.a05-totals span{padding:10px;border:1px solid #e0e6f0;border-radius:9px;background:#f8fafc;font-size:12px;display:flex;flex-direction:column;gap:5px}
+.a05-totals b{font-size:14px}
+.a05-table-scroll{overflow-x:auto;width:100%}
+.a05-table-scroll table{width:100%;border-collapse:collapse;white-space:nowrap;font-variant-numeric:tabular-nums}
+.a05-table-scroll th,.a05-table-scroll td{padding:9px 10px;border-bottom:1px solid #e0e6f0;text-align:right;font-size:12px}
+.a05-table-scroll th:nth-child(-n+3),.a05-table-scroll td:nth-child(-n+3){text-align:left}
+.a05-table-scroll th{background:#f2f5fa;position:sticky;top:0}
+.a05-lineage{border:1px solid #dce3ef;border-radius:8px;padding:12px}
+.a05-lineage summary{cursor:pointer;font-weight:600}
+.a05-lineage dl{display:grid;grid-template-columns:minmax(160px,1fr) minmax(0,2fr);gap:7px 14px;word-break:break-all}
+.a05-lineage dt{color:#64748b}.a05-lineage dd{margin:0;font-family:ui-monospace,monospace}
+@media(max-width:520px){.a05-schedule-actions{flex-direction:column;align-items:stretch}.a05-lineage dl{grid-template-columns:1fr}}
