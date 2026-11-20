@@ -559,15 +559,16 @@ class Calc4DTypedPlanPostgresqlTest {
     for(var item:results){
       if("C07.returnsShareCandidate".equals(item.path("outputMetricCode").asText())){
         assertEquals("PRESENT",item.path("valueState").asText());
-        ratios.put(item.path("dimensionsJson").asText(),
+        ratios.put(mapper.readTree(item.path("dimensionsJson").asText())
+          .path("segment").asText(),
           new BigDecimal(item.path("numericValue").asText()));
       }
     }
     assertEquals(2,ratios.size());
     assertEquals(0,new BigDecimal("0.04").compareTo(
-      ratios.get("{\"segment\": \"A\"}")));
+      ratios.get("A")));
     assertEquals(0,new BigDecimal("0.133333333333").compareTo(
-      ratios.get("{\"segment\": \"B\"}")));
+      ratios.get("B")));
     assertFalse(executed.financiallyApproved());
     noExecution();
   }
