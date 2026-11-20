@@ -10,6 +10,7 @@ on:
       - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/UatCalculationPreviewService.java'
       - 'form-library/src/main/java/kz/fin/formlib/calc/loan/**'
       - 'form-library/src/main/resources/db/changelog/062-fin-mg-r04-immutable-uat-plans-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/063-fin-mg-r04-database-pins-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
       - 'form-library/src/test/java/kz/fin/formlib/calc/graph/MetricGraphUatExecutionPostgresqlTest.java'
       - '.github/maven-central-gcs-uat-settings.xml'
@@ -38,7 +39,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=MetricGraphUatExecutionPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require 11 non-skipped MG-R0.4 acceptance scenarios
+      - name: Require 13 non-skipped MG-R0.4 acceptance scenarios
         run: |
           python3 - <<'PY'
           import glob,sys,xml.etree.ElementTree as ET
@@ -48,7 +49,7 @@ jobs:
           values={k:int(root.attrib.get(k,0)) for k in
                   ('tests','errors','failures','skipped')}
           print(values)
-          if values!={'tests':11,'errors':0,'failures':0,'skipped':0}:
+          if values!={'tests':13,'errors':0,'failures':0,'skipped':0}:
             sys.exit('MG_R04_PG16_EXECUTION_GATE_NOT_GREEN')
           PY
       - name: Preserve exact-source and financial math test evidence
