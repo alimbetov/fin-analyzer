@@ -2,8 +2,9 @@ import {expect,test,type Page,type Locator} from '@playwright/test';
 
 /** Real React + Spring Boot + PostgreSQL16, no fake loan schedule fixtures. */
 async function createLoan(page:Page,
-  method:'ANNUITY'|'CUSTOM',rate:string,
-  start:string,maturity:string):Promise<{panel:Locator;sourceId:string}>{
+  method:'ANNUITY'|'EQUAL_PRINCIPAL'|'CUSTOM',rate:string,
+  start:string,maturity:string,withFinancingFees=false
+):Promise<{panel:Locator;sourceId:string}>{
   await page.goto('/');
   await page.getByPlaceholder('Код или название...').fill('C05');
   await page.locator('.form-list-item').filter({
@@ -40,6 +41,25 @@ async function createLoan(page:Page,
   await panel.getByLabel('Округление').selectOption('HALF_EVEN');
   await panel.getByLabel('День платежа').fill('1');
   await panel.getByLabel('Номинальная ставка, % годовых').fill(rate);
+  if(withFinancingFees){
+    const add=panel.getByRole('button',{name:'Добавить комиссию'});
+    await add.click();
+    await panel.getByLabel('Комиссия 1 · код').fill('FIN');
+    await panel.getByLabel('Комиссия 1 · величина').fill('50');
+    await panel.getByLabel('Комиссия 1 · списание').selectOption('FINANCED');
+    await add.click();
+    await panel.getByLabel('Комиссия 2 · код').fill('HOLD');
+    await panel.getByLabel('Комиссия 2 · величина').fill('20');
+    await panel.getByLabel('Комиссия 2 · списание').selectOption('WITHHELD');
+    await add.click();
+    await panel.getByLabel('Комиссия 3 · код').fill('RUN');
+    await panel.getByLabel('Комиссия 3 · тип').selectOption('RECURRING_FIXED');
+    await panel.getByLabel('Комиссия 3 · величина').fill('5');
+    await add.click();
+    await panel.getByLabel('Комиссия 4 · код').fill('END');
+    await panel.getByLabel('Комиссия 4 · величина').fill('30');
+    await panel.getByLabel('Комиссия 4 · списание').selectOption('AT_MATURITY');
+  }
   await panel.getByRole('button',{name:'Сохранить договор и C05 атомарно'}).click();
   await expect(page.locator('.editor-head')).toContainText('Редакция 1');
 
@@ -140,4 +160,53 @@ test('A05-R1.1 | CUSTOM explicit dates, two immutable variants and archived repl
   const histories=await response.json() as {scheduleRevisionId:string}[];
   expect(histories).toHaveLength(2);
   expect(histories.map(x=>x.scheduleRevisionId).sort()).toEqual([firstId,secondId].sort());
+});
+
+
+test('A05-R1.1 | EQUAL_PRINCIPAL financed, withheld and dated recurring fees',
+  async({page})=>{
+  test.skip(process.env.VITE_FIN_A05_UAT!=='true','A05 isolated UAT only');
+  const {panel,sourceId}=await createLoan(page,'EQUAL_PRINCIPAL','0',
+    '2027-01-01','2027-03-01',true);
+  await panel.getByRole('button',{name:'Рассчитать и сохранить график'}).click();
+  await expect(panel.getByText(/График сохранён · 2 платежей/)).toBeVisible();
+  const table=panel.getByRole('table',{name:'Датированный график кредитных платежей'});
+  const rows=table.locator('tbody tr');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText('2027-02-01');
+  await expect(rows.first()).toContainText('525');
+  await expect(rows.first()).toContainText('530');
+  await expect(rows.last()).toContainText('2027-03-01');
+  await expect(rows.last()).toContainText('560');
+  await expect(panel).toContainText('1 050 KZT');
+  await expect(panel).toContainText('1 090 KZT');
+  await panel.getByText('Как рассчитано · источник, начисления, комиссии и SHA').click();
+  await expect(panel).toContainText('980 KZT');
+  await expect(panel).toContainText(sourceId);
+
+  const scope=await page.evaluate(()=>
+    JSON.parse(localStorage.getItem('fin-local-scope')!) as {
+      organizationId:string;projectId:string
+    });
+  const history=await page.request.get('/api/v1/uat/a05/schedules?'+new URLSearchParams({
+    ...scope,exactSourceRevisionId:sourceId
+  }));
+  expect(history.status(),await history.text()).toBe(200);
+  const variants=await history.json() as {scheduleRevisionId:string}[];
+  expect(variants).toHaveLength(1);
+  const response=await page.request.get('/api/v1/uat/a05/schedules/'+
+    variants[0].scheduleRevisionId+'?'+new URLSearchParams(scope));
+  expect(response.status(),await response.text()).toBe(200);
+  const saved=await response.json() as {
+    result:{funding:{openingLiability:number;netCashProceeds:number};
+      totalScheduledFees:number;totalScheduledCash:number;lines:{
+        feeBreakdown:Record<string,number>;principalDue:number
+      }[]};
+  };
+  expect(saved.result.funding.openingLiability).toBe(1050);
+  expect(saved.result.funding.netCashProceeds).toBe(980);
+  expect(saved.result.totalScheduledFees).toBe(40);
+  expect(saved.result.totalScheduledCash).toBe(1090);
+  expect(saved.result.lines[0].feeBreakdown).toEqual({RUN:5});
+  expect(saved.result.lines[1].feeBreakdown).toEqual({END:30,RUN:5});
 });
