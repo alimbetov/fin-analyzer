@@ -2,7 +2,6 @@ package kz.fin.formlib.calc.hybrid;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.calc.partition.FactMonthlyPartitionService;
-import kz.fin.formlib.calc.plan.Calc4DTypedDagCompiler;
 import kz.fin.formlib.service.FormDraftService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -48,6 +47,15 @@ class CalcC01C02AsOfPostgresqlTest {
   @Autowired ObjectMapper json;
   @Autowired CalcC01C02AsOfJdbcService service;
 
+  private static String sha(String text) {
+    try {
+      return java.util.HexFormat.of().formatHex(
+        java.security.MessageDigest.getInstance("SHA-256")
+          .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException ex) {
+      throw new IllegalStateException("ASOF_TEST_SHA256_UNAVAILABLE",ex);
+    }
+  }
   private record Fixture(UUID org, UUID factset) {}
   private Fixture fixture(String form) throws Exception {
     var month=YearMonth.of(2026,11);
@@ -90,9 +98,9 @@ class CalcC01C02AsOfPostgresqlTest {
       "formCode",form,
       "canonicalContentSha256",saved.contentSha256(),
       "schemaSha256",schema)));
-    String scope=Calc4DTypedDagCompiler.sha("ASOF_SCOPE|"+factset);
-    String factSha=Calc4DTypedDagCompiler.sha("ASOF_FACT|"+factset);
-    String mapSha=Calc4DTypedDagCompiler.sha("ASOF_MAP|"+factset);
+    String scope=sha("ASOF_SCOPE|"+factset);
+    String factSha=sha("ASOF_FACT|"+factset);
+    String mapSha=sha("ASOF_MAP|"+factset);
     var named=new NamedParameterJdbcTemplate(jdbc);
     var args=new MapSqlParameterSource()
         .addValue("id",factset).addValue("org",org)
@@ -103,7 +111,7 @@ class CalcC01C02AsOfPostgresqlTest {
         .addValue("sourceSha",saved.contentSha256())
         .addValue("manifest",sourceJson)
         .addValue("mapSha",mapSha).addValue("factSha",factSha)
-        .addValue("qualification",Calc4DTypedDagCompiler.sha("ASOF_QUAL|"+factset))
+        .addValue("qualification",sha("ASOF_QUAL|"+factset))
         .addValue("count",form.equals("C01")?6:4);
     named.update("""
       INSERT INTO fin_fact.fact_set(
@@ -132,11 +140,11 @@ class CalcC01C02AsOfPostgresqlTest {
           .addValue("form",form).addValue("row",row.rowId().toString())
           .addValue("field",f).addValue("metric",form+"."+f)
           .addValue("observation",UUID.randomUUID())
-          .addValue("dim",Calc4DTypedDagCompiler.sha("ASOF_DIM|"+factset))
-          .addValue("keySha",Calc4DTypedDagCompiler.sha(
+          .addValue("dim",sha("ASOF_DIM|"+factset))
+          .addValue("keySha",sha(
               "ASOF_KEY|"+factset+"|"+row.rowId()+"|"+f))
           .addValue("val",new BigDecimal(value))
-          .addValue("valSha",Calc4DTypedDagCompiler.sha(
+          .addValue("valSha",sha(
               "ASOF_VAL|"+row.rowId()+"|"+f+"|"+value));
         named.update("""
           INSERT INTO fin_fact.fact_observation(
