@@ -3,7 +3,7 @@
 
 **Дата:** 2026-11-20  
 **Ветка:** `feat/fin-form-library-standalone`  
-**Статус:** `ARCHITECTURE_BASELINE_ACCEPTED`; A05-R1.0 typed loan intake и A05-R1.1 dated contractual cash UAT реализованы и технически приняты; A05-R1.2–R1.5, IFRS EIR, KZ GESV, A01 actual allocation и финансовая S2 остаются незавершёнными. Этот документ остаётся полным ТЗ.  
+**Статус:** `ARCHITECTURE_BASELINE_ACCEPTED`; A05-R1.0 typed loan intake и A05-R1.1 dated contractual cash UAT реализованы и технически приняты; A05-R1.2 сценарные изменения UAT реализованы, но юридическое изменение активной C05, индексная плавающая ставка и полная комиссия за досрочное закрытие ещё частичны; A05-R1.3–R1.5, IFRS EIR, KZ GESV, A01 allocation и финансовая S2 незавершены. Этот документ остаётся полным ТЗ.  
 **Приоритет:** после фактической приёмки `DC-R2.4` и `DC-R2.5`; финансовое S2/production admission остаются закрыты  
 **Версия:** `A05-R1-TZ-V1`  
 **Владелец предметной области:** C05, связь с A01, P04, P09 и F01/F02/F03  
@@ -12,6 +12,8 @@
 > **Состояние на 2026-11-20:** A05-R1.0 typed C05 + loan/rate/calendar/fee registration реализованы в backend и встроенном React UAT. Доказательство PostgreSQL 16 **10/10**: [run 44687823013](https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013); Chromium **1/1**: [run 44687393695](https://github.com/alimbetov/fin-analyzer/actions/runs/44687393695). Подробности: [QA A05-R1.0](./qa/FIN-CALC-A05-R10-LOAN-CONTRACT-INPUT-ACCEPTANCE.md). Реестр [38 критериев](./FIN-CALC-A05-R1-ACCEPTANCE-MATRIX.tsv): **3 PASS_UAT / 6 PARTIAL / 29 NOT_IMPLEMENTED**; это не означает закрытие всего ТЗ, включая графики, EIR, ГЭСВ и DSCR. MG-R0.2 versioned goal/metric source binding также реализован: [PG16 5/5](https://github.com/alimbetov/fin-analyzer/actions/runs/44687267435).
 
 > **A05-R1.1 verified implementation:** Java 21/BigDecimal + PG16 **18/18 PASS** ([run 44698245223](https://github.com/alimbetov/fin-analyzer/actions/runs/44698245223)); real React/Chromium + PG16 **3/3 PASS** ([run 44698253076](https://github.com/alimbetov/fin-analyzer/actions/runs/44698253076)), включая ANNUITY / EQUAL_PRINCIPAL / CUSTOM, комиссии, immutable SHA и replay старой версии. Денежные API значения сериализуются строками без IEEE-754 precision loss. [QA A05-R1.1](./qa/FIN-CALC-A05-R11-DATED-LOAN-SCHEDULE-ACCEPTANCE.md). Матрица 38 проверок: **9 PASS_UAT / 11 PARTIAL / 18 NOT_IMPLEMENTED**; T008 с ровно 1% за период и полный concurrency/S2 gate остаются открытыми. Сохранены source-pin и app-contract revision, но общий CalcPlan + Metric Graph execution для A05 ещё не квалифицирован.
+
+> **R1.2 + MG-R0.3 implementation update, 2026-11-20.** A05-R1.2 immutable amendment scenario (REDUCE_TERM/REDUCE_INSTALLMENT, PRINCIPAL_ONLY/FULL_CAPITALIZE grace, dated fixed RATE_STEP): **14/14 Java/PG16 PASS** ([run 44729611238](https://github.com/alimbetov/fin-analyzer/actions/runs/44729611238)); real browser **2/2 PASS** ([run 44730051035](https://github.com/alimbetov/fin-analyzer/actions/runs/44730051035)). [QA](./qa/FIN-CALC-A05-R12-AMENDMENT-UAT-ACCEPTANCE.md). MG-R0.3 read-only exact-source and A05 base/amended lineage nodes: **5/5 PG16 PASS** ([run 44730441137](https://github.com/alimbetov/fin-analyzer/actions/runs/44730441137)); [MG-R0.3 contracts](./FIN-MG-R03-SOURCE-AVAILABILITY-AND-A05-GRAPH-NODES.md). A05 acceptance matrix now **12 PASS_UAT / 13 PARTIAL / 13 NOT_IMPLEMENTED**. Neither scenario mutation nor graph-read equates to legal C05 amendment, approval of indexed FLOATING, all 154 graph execution, or S2.
 
 ### 0. Решение и границы
 
