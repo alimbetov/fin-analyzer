@@ -26,7 +26,7 @@ import java.util.UUID;
  * Results are append-only UAT receipts, never financial S2 or production CalcPlan.
  */
 @Service
-public final class CalcC01C02AsOfJdbcService {
+public class CalcC01C02AsOfJdbcService {
   public static final String POLICY = "ASOF_DEBT_POSITIVE_STOCK_UAT_V1";
   public record Preview(UUID resultId, UUID factsetId, String factsetSha256,
       String observationSha256, String formCode, UUID formVersionId,
