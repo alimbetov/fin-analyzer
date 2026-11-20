@@ -41,6 +41,8 @@ Each FactSet contains exact sourceRevisionId, organizationId, factSetId, source 
 
 The reader reconstructs the exact F02 candidate from INGEST-2 source data; verifies factset header + immutable qualification receipt + active control, complete source-revision pin, source SHA, mapping SHA and every physical PostgreSQL observation against independently reconstructed hashes. Inconsistent counts or values FAIL CLOSED.
 
+**Verified 2026-11-20:** [9/9 real PostgreSQL 16 PASS](https://github.com/alimbetov/fin-analyzer/actions/runs/44747141500), no errors/failures/skipped. [Java 21 H2 regression BUILD SUCCESS](https://github.com/alimbetov/fin-analyzer/actions/runs/44747141435) (1211 tests discovered, 290 PG-only skips expected in H2). Acceptance covers source reconstruction, exact user/project, JWT role/audience, revocation, keyset, forged observation and strict immutable read. This is bounded TEST_ONLY UAT, not production/S2.
+
 ## Real PG16 acceptance
 
 The dedicated FinFactCalculationDataReaderPostgresqlTest covers:
