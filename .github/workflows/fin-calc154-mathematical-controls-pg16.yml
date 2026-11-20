@@ -1,0 +1,51 @@
+name: FIN CALC-154 — Mathematical Controls & Completion PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/resources/catalog/calc154-mathematical-control-v1.tsv'
+      - 'form-library/src/main/java/kz/fin/formlib/bootstrap/Calc154MathematicalControlBootstrap.java'
+      - 'form-library/src/main/resources/db/changelog/046-fin-calc154-synthetic-mathematical-controls-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/047-fin-calc154-methodology-completion-readiness-postgresql.sql'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/hybrid/Calc154MathematicalControlPostgresqlTest.java'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/pom.xml'
+      - '.github/workflows/fin-calc154-mathematical-controls-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  all-10-formulas-math-control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Seven real PostgreSQL 16 mathematical evidence & 154-readiness checks
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc154MathematicalControlPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require seven real successful PostgreSQL tests and zero skips
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          files=glob.glob('form-library/target/surefire-reports/TEST-*Calc154MathematicalControlPostgresqlTest.xml')
+          if len(files)!=1:sys.exit('CALC154 mathematical PG16 report missing')
+          root=ET.parse(files[0]).getroot()
+          a={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
+          print(a)
+          if a!={'tests':7,'errors':0,'failures':0,'skipped':0}:
+              sys.exit('CALC154 math-control PG16 7/7 mandatory')
+          PY
