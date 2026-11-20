@@ -97,3 +97,5 @@ databaseChangeLog:
       file: db/changelog/048-fin-calc4d5-result-fencing-lineage-postgresql.sql
   - include:
       file: db/changelog/049-fin-autoqual1-receipt-postgresql.sql
+  - include:
+      file: db/changelog/050-fin-calc154-asof-c01-c02-uat-postgresql.sql
