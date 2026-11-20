@@ -1,0 +1,57 @@
+name: FIN DATA-CALC-R2 — Pinned Intake F02 PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/FinIntakeUatSourceAdapter.java'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/F02IntakeUatPreviewService.java'
+      - 'form-library/src/main/java/kz/fin/formlib/api/F02IntakeUatPreviewController.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/ingest/F02IntakeUatPreviewPostgresqlTest.java'
+      - 'form-library/src/main/resources/db/changelog/**'
+      - '.github/workflows/fin-data-calc-r2-intake-f02-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-f02-uat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Verify real PostgreSQL16 FIN intake F02 preview and source lineage
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=F02IntakeUatPreviewPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require all five actual PostgreSQL tests
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          paths=glob.glob(
+            'form-library/target/surefire-reports/TEST-*F02IntakeUatPreviewPostgresqlTest.xml')
+          if len(paths)!=1:sys.exit('FIN_DC_R2_PG16_REPORT_MISSING')
+          root=ET.parse(paths[0]).getroot()
+          counts={key:int(root.attrib.get(key,0))
+            for key in ('tests','failures','errors','skipped')}
+          print(counts)
+          if counts!={'tests':5,'failures':0,'errors':0,'skipped':0}:
+            sys.exit('FIN_DC_R2_F02_PINNED_INPUT_E2E_NOT_GREEN')
+          PY
+      - name: Preserve run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-dc-r2-f02-pg16-surefire
+          path: form-library/target/surefire-reports/TEST-*F02IntakeUatPreviewPostgresqlTest.xml
+          if-no-files-found: warn
