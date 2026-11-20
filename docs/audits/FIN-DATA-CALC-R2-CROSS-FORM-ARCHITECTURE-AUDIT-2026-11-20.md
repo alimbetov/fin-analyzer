@@ -33,6 +33,8 @@ R1 верно определяет продуктовый результат: `R
 
 Исправление компиляционной ошибки внесено в `79c6e851f900a8eb91c05cc93600f1589f4327e8`: две Java local declarations разнесены на две строки. Любой новый запуск требует повторного просмотра Maven, Liquibase, PG16 и Playwright результатов; статус GREEN для HEAD не подразумевается.
 
+**Следующий подтверждённый блокер после исправления main compilation:** в workflow `44674476290`/ `44674476402`/`44674476356` Maven уже прошёл основную компиляцию, но упал в `testCompile`: `CalcC01C02AsOfPostgresqlTest.java` незаконно вызывает package-private `Calc4DTypedDagCompiler.sha(String)` из другого пакета (7 usages). Fix `6143fda61bdfae60226c8d438e927f96ecba6220` заменил вызовы локальным SHA256-helper внутри теста, **не** расширяя production API. Новое CI с этим коммитом ещё требует подтверждения. Evidence: https://github.com/alimbetov/fin-analyzer/actions/runs/44674476290 .
+
 Evidence: https://github.com/alimbetov/fin-analyzer/actions/runs/44673857477 ; https://github.com/alimbetov/fin-analyzer/actions/runs/44673857383 ; https://github.com/alimbetov/fin-analyzer/actions/runs/44673857464 .
 
 ## 4. Findings и приоритеты
