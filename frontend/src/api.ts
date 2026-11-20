@@ -49,6 +49,22 @@ export type F02UatNode = {
   state:'PRESENT'|'INVALID';unit:string;value:string|null;
   errorCode:string|null;valueSha256:string
 };
+export type CalcUatNode = {
+  state:'PRESENT'|'MISSING'|'UNDEFINED'|'INVALID';
+  unit:string;value:string|null;errorCode:string|null
+};
+export type CalcUatPreview = {
+  formCode:'F02'|'C01'|'C02';
+  instanceId:string;sourceRevisionId:string;formVersionId:string;
+  sourceContentSha256:string;sourceRowOrderSha256:string;
+  pinnedSourceSha256:string;sourceSchemaSha256:string;
+  calculationMethodSha256:string;methodCode:string;
+  periodType:string;periodCode:string;asOfDate:string|null;
+  currency:string;reportingBasis:string;dataSpace:string;
+  sourceRowCount:number;outputs:Record<string,CalcUatNode>;
+  diagnostics:string[];resultValuesSha256:string;previewSha256:string;
+  executionState:string;financiallyApproved:boolean;productionAdmitted:boolean
+};
 export type F02UatPreview = {
   instanceId:string;sourceRevisionId:string;formVersionId:string;
   sourceContentSha256:string;sourceRowOrderSha256:string;
