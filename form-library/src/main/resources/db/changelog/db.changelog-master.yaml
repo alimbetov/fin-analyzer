@@ -123,3 +123,5 @@ databaseChangeLog:
       file: db/changelog/061-fin-calc-a05-r12-amendments-postgresql.sql
   - include:
       file: db/changelog/062-fin-mg-r04-immutable-uat-plans-postgresql.sql
+  - include:
+      file: db/changelog/063-fin-mg-r04-database-pins-postgresql.sql
