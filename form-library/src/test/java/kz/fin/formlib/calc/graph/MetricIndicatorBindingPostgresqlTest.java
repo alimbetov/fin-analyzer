@@ -57,17 +57,15 @@ class MetricIndicatorBindingPostgresqlTest {
     assertEquals(1,choices.size());
     var binding=choices.getFirst();
     assertEquals("F02.netProfit",binding.targetMetricCode());
-    assertEquals("SOURCE_FIELD",binding.bindingKind());
+    assertEquals("DERIVED_CANDIDATE",binding.bindingKind());
     assertNull(binding.formulaRevisionId());
     assertEquals(64,binding.bindingSha256().length());
     var resolved=bindings.requireExact(binding.id());
-    assertEquals("DIRECT_SOURCE_CANDIDATE_NOT_CALCULATED",resolved.state());
-    assertEquals("PHYSICAL_SOURCE_ONLY",resolved.metricGraph().state());
-    assertEquals(1,resolved.metricGraph().requiredPhysicalInputs().size());
-    var input=resolved.metricGraph().requiredPhysicalInputs().getFirst();
-    assertEquals("F02",input.formCode());
-    assertEquals("netProfit",input.fieldCode());
-    assertEquals("MONEY",input.fieldType());
+    assertEquals("DERIVED_METHOD_NOT_AUTHORED",resolved.state());
+    assertEquals("CATALOG_ONLY",resolved.metricGraph().state());
+    assertTrue(resolved.metricGraph().requiredPhysicalInputs().isEmpty());
+    assertTrue(resolved.metricGraph().orderedNodes().isEmpty());
+    assertNull(resolved.metricGraph().graphSha256());
     assertFalse(binding.financiallyApproved());
     assertFalse(binding.productionAdmitted());
     assertFalse(resolved.financiallyQualified());
@@ -104,8 +102,9 @@ class MetricIndicatorBindingPostgresqlTest {
     mvc.perform(get("/api/v1/metric-graph/indicator-bindings/"+id))
       .andExpect(status().isOk())
       .andExpect(jsonPath("$.binding.targetMetricCode").value("F02.netProfit"))
-      .andExpect(jsonPath("$.metricGraph.requiredPhysicalInputs[0].fieldCode")
-        .value("netProfit"));
+      .andExpect(jsonPath("$.state").value("DERIVED_METHOD_NOT_AUTHORED"))
+      .andExpect(jsonPath("$.metricGraph.state").value("CATALOG_ONLY"))
+      .andExpect(jsonPath("$.metricGraph.requiredPhysicalInputs.length()").value(0));
     mvc.perform(get("/api/v1/metric-graph/indicator-bindings")
         .param("goalCode","INVESTMENT_APPRAISAL")
         .param("indicatorCode","NET_PROFIT"))
