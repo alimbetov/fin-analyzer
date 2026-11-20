@@ -67,8 +67,16 @@ public class Calc4DImmutablePlanCompiler {
         throw new IllegalStateException("CALC4D_INTERFORM_SCOPE_PERIOD_CURRENCY_MISMATCH");
     }
     var indexed=new HashMap<String,List<Calc4DExactFactSetInputResolver.Observation>>();
+    var sourceOwners=new HashMap<String,UUID>();
     for(var s:snapshots)for(var o:s.observations()){
       String key=o.formVersionId()+"|"+o.metricCode();
+      // Even two independently active FactSets must not be merged silently
+      // for the same metric. A source-merging financial policy is not yet
+      // authored, and ambiguous duplication could double the cash flows.
+      UUID previousOwner=sourceOwners.putIfAbsent(key,s.factsetId());
+      if(previousOwner!=null&&!previousOwner.equals(s.factsetId()))
+        throw new IllegalStateException(
+          "CALC4D_MULTIPLE_FACTSETS_FOR_INPUT_REQUIRES_MERGE_CONTRACT");
       indexed.computeIfAbsent(key,k->new ArrayList<>()).add(o);
     }
     var missing=new ArrayList<String>();
