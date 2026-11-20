@@ -178,10 +178,10 @@ test('A05-R1.1 | EQUAL_PRINCIPAL financed, withheld and dated recurring fees',
   await expect(rows.first()).toContainText('530');
   await expect(rows.last()).toContainText('2027-03-01');
   await expect(rows.last()).toContainText('560');
-  await expect(panel).toContainText('1 050 KZT');
-  await expect(panel).toContainText('1 090 KZT');
+  await expect(panel).toContainText('1 050,00 KZT');
+  await expect(panel).toContainText('1 090,00 KZT');
   await panel.getByText('Как рассчитано · источник, начисления, комиссии и SHA').click();
-  await expect(panel).toContainText('980 KZT');
+  await expect(panel).toContainText('980,00 KZT');
   await expect(panel).toContainText(sourceId);
 
   const scope=await page.evaluate(()=>
