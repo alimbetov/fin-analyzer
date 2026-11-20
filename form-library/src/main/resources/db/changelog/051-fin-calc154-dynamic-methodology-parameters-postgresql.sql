@@ -188,9 +188,24 @@ BEGIN
       END IF;
     END IF;
   END IF;
+  -- PostgreSQL 16 owns SHA verification: callers cannot forge approval evidence.
+  IF NEW.params_sha256 IS DISTINCT FROM
+      encode(sha256(convert_to(
+        'FIN-METHOD-PARAMS-V1|'||NEW.parameter_values_jsonb::text,'UTF8')),'hex') THEN
+    RAISE EXCEPTION 'METHOD_SELECTION_PARAMS_SHA_DRIFT' USING ERRCODE='23514';
+  END IF;
+  IF NEW.selection_sha256 IS DISTINCT FROM
+      encode(sha256(convert_to(
+        'FIN-METHOD-SELECTION-V1|'||
+        NEW.organization_id::text||'|'||NEW.project_id::text||'|'||
+        NEW.scenario_id::text||'|'||NEW.family_code||'|'||
+        NEW.variant_revision_id::text||'|'||selected_variant.variant_contract_sha256||
+        '|'||NEW.params_sha256,'UTF8')),'hex') THEN
+    RAISE EXCEPTION 'METHOD_SELECTION_SHA_DRIFT' USING ERRCODE='23514';
+  END IF;
   RETURN NEW;
 END;
-$$;
+$;
 
 --changeset fin-calc:051c dbms:postgresql splitStatements:true
 CREATE TRIGGER trg_methodology_selection_check
@@ -251,3 +266,26 @@ INSERT INTO fin_calc.methodology_parameter_definition(
  ('DCF_VALUATION','exitMultiple','DECIMAL',false,NULL,0,'MULTIPLE'),
  ('DCF_VALUATION','rateSourceRevisionId','UUID',true,NULL,NULL,'REVISION'),
  ('DCF_VALUATION','equityBridgeRevisionId','UUID',false,NULL,NULL,'REVISION');
+
+--changeset fin-calc:051e dbms:postgresql splitStatements:false
+-- Rehash the immutable variant identity during each read and admission.
+-- No invented contract SHA may make the DCF combination executable.
+CREATE FUNCTION fin_calc.verify_method_variant_revision()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.variant_contract_sha256 IS DISTINCT FROM
+      encode(sha256(convert_to('FIN-METHOD-VARIANT-V1|'||
+        NEW.family_code||'|'||NEW.variant_code||'|'||
+        NEW.revision_number::text||'|'||NEW.input_basis||'|'||
+        NEW.rate_basis||'|'||NEW.result_basis,'UTF8')),'hex')
+  THEN
+    RAISE EXCEPTION 'METHOD_VARIANT_SHA_DRIFT' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+--changeset fin-calc:051f dbms:postgresql splitStatements:true
+CREATE TRIGGER trg_method_variant_rehash BEFORE INSERT
+ ON fin_calc.methodology_variant_revision FOR EACH ROW
+ EXECUTE FUNCTION fin_calc.verify_method_variant_revision();
