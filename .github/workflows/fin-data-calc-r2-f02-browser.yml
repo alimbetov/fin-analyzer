@@ -1,4 +1,4 @@
-name: FIN DATA-CALC-R2 — F02 Browser Intake E2E
+name: FIN DATA-CALC-R2.5 — F02 C01 C02 Unified Browser E2E
 
 on:
   push:
@@ -6,10 +6,12 @@ on:
       - feat/fin-form-library-standalone
     paths:
       - 'frontend/src/App.tsx'
+      - 'frontend/src/UatCalculationPanel.tsx'
       - 'frontend/src/api.ts'
       - 'frontend/src/vite-env.d.ts'
       - 'frontend/src/styles.css'
       - 'frontend/e2e/f02-calculation-uat.spec.ts'
+      - 'frontend/e2e/c01-c02-calculation-uat.spec.ts'
       - 'form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java'
       - 'form-library/src/main/java/kz/fin/formlib/api/F02IntakeUatPreviewController.java'
       - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/**'
@@ -20,7 +22,7 @@ permissions:
   contents: read
 
 jobs:
-  f02-browser-e2e:
+  unified-browser-e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     services:
@@ -78,14 +80,14 @@ jobs:
           tail -n 120 /tmp/fin-dc-r2-f02-backend.log
           exit 1
 
-      - name: Real Chromium F02 save and calculation via non-mocked backend
+      - name: Real Chromium F02 C01 C02 save, calculate and compare
         shell: bash
         run: |
           docker run --rm --network host --ipc host \
             -e CI=true -e HOME=/tmp -e VITE_FIN_INTAKE_UAT=true \
             -v "$GITHUB_WORKSPACE/frontend:/work" -w /work \
             mcr.microsoft.com/playwright:v1.56.1-noble \
-            bash -lc 'npm install --no-audit --no-fund && npm run test:e2e -- e2e/f02-calculation-uat.spec.ts'
+            bash -lc 'npm install --no-audit --no-fund && npm run test:e2e -- e2e/f02-calculation-uat.spec.ts e2e/c01-c02-calculation-uat.spec.ts'
 
       - name: Require browser E2E without failure or skip
         run: |
@@ -98,14 +100,14 @@ jobs:
           failed=sum(int(x.attrib.get('failures',0)) for x in suites)
           skipped=sum(int(x.attrib.get('skipped',0)) for x in suites)
           print({'tests':n,'errors':errors,'failures':failed,'skipped':skipped})
-          if n!=1 or errors or failed or skipped:raise SystemExit('FIN_F02_BROWSER_E2E_NOT_GREEN')
+          if n!=3 or errors or failed or skipped:raise SystemExit('FIN_R25_UNIFIED_BROWSER_E2E_NOT_GREEN')
           PY
 
       - name: Preserve browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fin-dc-r2-f02-browser
+          name: fin-dc-r25-unified-browser
           path: |
             frontend/test-results/
             frontend/playwright-report/
