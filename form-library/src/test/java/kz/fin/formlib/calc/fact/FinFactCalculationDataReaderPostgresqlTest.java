@@ -81,7 +81,7 @@ class FinFactCalculationDataReaderPostgresqlTest {
   private RequestPostProcessor bearer(UUID subject,boolean role,boolean audience){
     return jwt().jwt(b->b.issuer("https://iam.fin-uat.example")
       .subject(subject.toString())
-      .audience(audience?"fin-fact-calculation-data/v1":"other-audience")
+      .audience(List.of(audience?"fin-fact-calculation-data/v1":"other-audience"))
       .expiresAt(Instant.now().plusSeconds(300))
       .claim("realm_access",Map.of("roles",
         role?List.of("FIN_FACT_READ"):List.of("FIN_NO_FACT_PERMISSION"))));
