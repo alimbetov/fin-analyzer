@@ -56,7 +56,7 @@ test('A05-R1.0 | C05 row + rate/calendar + two fees -> atomic revision -> fee-on
   const save=panel.getByRole('button',{name:'Сохранить договор и C05 атомарно'});
   await expect(save).toBeEnabled();
   await save.click();
-  await expect(panel.getByText(/Сохранено: C05 редакция 1/)).toBeVisible();
+  await expect(page.locator('.editor-head')).toContainText('Редакция 1');
   const scope=await page.evaluate(()=>
     JSON.parse(localStorage.getItem('fin-local-scope')!) as {
       organizationId:string;projectId:string;economicEntityId:string;businessScopeId:string
@@ -98,7 +98,7 @@ test('A05-R1.0 | C05 row + rate/calendar + two fees -> atomic revision -> fee-on
   await panel.getByLabel('Комиссия 1 · величина').fill('1100');
   await expect(save).toBeEnabled();
   await save.click();
-  await expect(panel.getByText(/Сохранено: C05 редакция 2/)).toBeVisible();
+  await expect(page.locator('.editor-head')).toContainText('Редакция 2');
   const second=await slot();
   expect(second.revisionNo).toBe(2);
   expect(second.revisionId).not.toBe(first.revisionId);
