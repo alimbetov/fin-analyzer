@@ -29,6 +29,10 @@ public class Calc4DFormulaCandidateRegistrar {
   }
   public record Receipt(UUID revisionId,String definitionSha256,
       String bindingSha256,boolean replayed,boolean financiallyApproved) {}
+  public record BatchReceipt(List<Receipt> receipts,String batchSha256,
+      boolean financiallyApproved) {
+    public BatchReceipt{receipts=List.copyOf(receipts);}
+  }
   private record Form(String code,UUID version,String schema,String mode) {}
   private record Resolved(String metric,String kind,UUID formVersion,
       String schema,String field,String type,UUID derivedId,String period,
@@ -44,6 +48,43 @@ public class Calc4DFormulaCandidateRegistrar {
   public Calc4DFormulaCandidateRegistrar(JdbcTemplate jdbc,ObjectMapper json){
     this.jdbc=Objects.requireNonNull(jdbc);
     this.json=Objects.requireNonNull(json);
+  }
+
+  /**
+   * Transactional authoring batch for up to 154 different per-form formulas.
+   * All-or-nothing: one invalid formula rolls back every new registration.
+   * Dependencies on formulas submitted in this same batch must be resolved by
+   * a preceding explicit registration (the binding requires an exact UUID).
+   */
+  @Transactional
+  public BatchReceipt registerBatch(List<Definition> definitions) throws Exception {
+    if(definitions==null||definitions.isEmpty()||definitions.size()>154
+        ||definitions.stream().anyMatch(Objects::isNull))
+      throw new IllegalArgumentException("CALC4D_FORMULA_BATCH_SIZE_INVALID");
+    var ordered=definitions.stream()
+      .sorted(Comparator.comparing(Definition::targetFormCode,
+            Comparator.nullsFirst(Comparator.naturalOrder()))
+        .thenComparing(Definition::outputMetricCode,
+            Comparator.nullsFirst(Comparator.naturalOrder()))
+        .thenComparing(Definition::formulaVersion,
+            Comparator.nullsFirst(Comparator.naturalOrder())))
+      .toList();
+    var keys=new HashSet<String>();
+    var receipts=new ArrayList<Receipt>();
+    StringBuilder signature=new StringBuilder("FIN-CALC4D-METHODOLOGY-BATCH-V1");
+    for(var definition:ordered){
+      String key=definition.exactTargetFormVersionId()+"|"+
+        definition.outputMetricCode()+"|"+definition.formulaVersion();
+      if(!keys.add(key))
+        throw new IllegalArgumentException("CALC4D_FORMULA_BATCH_DUPLICATE_KEY");
+      var receipt=register(definition);
+      receipts.add(receipt);
+      signature.append('|').append(receipt.revisionId()).append(':')
+        .append(receipt.definitionSha256()).append(':')
+        .append(receipt.bindingSha256());
+    }
+    return new BatchReceipt(receipts,
+      Calc4DTypedDagCompiler.sha(signature.toString()),false);
   }
 
   @Transactional
