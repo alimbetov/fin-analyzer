@@ -1,0 +1,56 @@
+name: FIN DATA-R0.1 — Authenticated User+Project Fact Read PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/fact/FinFactCalculationDataReader.java'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/security/FinFactDataSecurityConfiguration.java'
+      - 'form-library/src/main/java/kz/fin/formlib/api/FinFactCalculationDataController.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/fact/FinFactCalculationDataReaderPostgresqlTest.java'
+      - '.github/maven-central-gcs-uat-settings.xml'
+      - '.github/workflows/fin-data-r01-user-project-fact-reader-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-fact-query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Verify auth / source SHA / project scope / revocation using PostgreSQL 16
+        run: |
+          mvn -s .github/maven-central-gcs-uat-settings.xml -B -ntp \
+            -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=FinFactCalculationDataReaderPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require all nine real PostgreSQL security and fact tests
+        run: |
+          python3 - <<'PY'
+          import sys,glob,xml.etree.ElementTree as ET
+          files=glob.glob('form-library/target/surefire-reports/TEST-*FinFactCalculationDataReaderPostgresqlTest.xml')
+          if len(files)!=1:sys.exit('DATA_R01_PG16_TEST_REPORT_MISSING')
+          root=ET.parse(files[0]).getroot()
+          expected={'tests':9,'failures':0,'errors':0,'skipped':0}
+          values={key:int(root.attrib.get(key,0)) for key in expected}
+          print(values)
+          if values!=expected:sys.exit('DATA_R01_USER_PROJECT_FACT_READ_NOT_GREEN')
+          PY
+      - name: Preserve exact user-project FactSet evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-data-r01-user-project-pg16
+          path: form-library/target/surefire-reports/TEST-*FinFactCalculationDataReaderPostgresqlTest.xml
+          if-no-files-found: warn
