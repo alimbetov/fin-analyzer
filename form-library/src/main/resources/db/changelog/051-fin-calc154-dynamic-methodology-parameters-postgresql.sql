@@ -162,6 +162,9 @@ BEGIN
         RAISE EXCEPTION 'METHOD_SELECTION_DATE_INVALID:%',p.parameter_code
           USING ERRCODE='23514';
       END IF;
+      -- A YYYY-MM-DD regex alone accepts impossible dates (e.g. 2026-02-30).
+      -- A PostgreSQL date cast rejects impossible calendar dates.
+      PERFORM (NEW.parameter_values_jsonb->>p.parameter_code)::date;
     END IF;
   END LOOP;
   IF NEW.family_code='DCF_VALUATION' THEN
