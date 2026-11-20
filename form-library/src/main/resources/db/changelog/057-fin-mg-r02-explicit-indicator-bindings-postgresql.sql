@@ -11,7 +11,7 @@ CREATE TABLE fin_calc.metric_indicator_binding_revision (
   revision_number integer NOT NULL CHECK(revision_number>0),
   target_metric_code varchar(160) NOT NULL CHECK(length(trim(target_metric_code))>0),
   binding_kind varchar(32) NOT NULL
-    CHECK(binding_kind IN ('SOURCE_FIELD','FORMULA_REVISION')),
+    CHECK(binding_kind IN ('SOURCE_FIELD','DERIVED_CANDIDATE','FORMULA_REVISION')),
   formula_revision_id uuid,
   evidence_ref varchar(160) NOT NULL CHECK(length(trim(evidence_ref))>0),
   binding_sha256 char(64) NOT NULL CHECK(binding_sha256 ~ '^[0-9a-f]{64}$'),
@@ -21,7 +21,7 @@ CREATE TABLE fin_calc.metric_indicator_binding_revision (
   production_admitted boolean NOT NULL DEFAULT false CHECK(NOT production_admitted),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   UNIQUE(goal_code,indicator_code,revision_number),
-  CHECK((binding_kind='SOURCE_FIELD' AND formula_revision_id IS NULL)
+  CHECK((binding_kind IN ('SOURCE_FIELD','DERIVED_CANDIDATE') AND formula_revision_id IS NULL)
     OR (binding_kind='FORMULA_REVISION' AND formula_revision_id IS NOT NULL))
 );
 CREATE INDEX idx_mg_indicator_candidates
@@ -59,14 +59,16 @@ CREATE TRIGGER trg_mg_binding_no_truncate
 --changeset fin-mg:057d dbms:postgresql splitStatements:true
 -- The fin_lib form catalog is bootstrapped by Java AFTER Liquibase;
 -- these explicit symbolic links are validated on read against live catalog.
--- NET_PROFIT is sourced from F02.netProfit, NOT gross/operating profit.
--- CASH_END is sourced from F03.closingCash, NOT an assumed calculation.
+-- F02.netProfit is an UNBOUND FORM_DERIVED_CANDIDATE (not a physical field).
+-- NET_PROFIT explicitly points to that candidate but MUST remain blocked
+-- until an appropriate reviewed methodology is registered.
+-- CASH_END has a real F03.closingCash physical source; NOT a forecast.
 WITH seed(id,goal_code,indicator_code,revision_number,target_metric_code,
           binding_kind,evidence_ref) AS (
  VALUES
  ('7e5480ab-9d2d-467d-a1b7-d4f388661001'::uuid,
   'BANK_FINANCING','NET_PROFIT',1,'F02.netProfit',
-  'SOURCE_FIELD','CFO-01_F02_SOURCE_FIELD_CANDIDATE'),
+  'DERIVED_CANDIDATE','CFO-01_F02_DERIVED_METHOD_REQUIRED'),
  ('7e5480ab-9d2d-467d-a1b7-d4f388661002'::uuid,
   'BANK_FINANCING','CASH_END',1,'F03.closingCash',
   'SOURCE_FIELD','CFO-01_F03_SOURCE_FIELD_CANDIDATE')
