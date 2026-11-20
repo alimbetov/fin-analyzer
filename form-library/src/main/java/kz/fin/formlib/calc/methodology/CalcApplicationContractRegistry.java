@@ -22,7 +22,7 @@ import java.util.Set;
  * Does not execute formula text or mint qualified CalcPlans. No write interface.
  */
 @Service
-public final class CalcApplicationContractRegistry {
+public class CalcApplicationContractRegistry {
   public record Contract(
       String code, String titleRu, String domain, int version,
       List<String> sourceForms, List<String> typedInputs,
