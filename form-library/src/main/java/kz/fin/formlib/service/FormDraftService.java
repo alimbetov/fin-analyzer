@@ -42,7 +42,7 @@ public class FormDraftService {
   public record DraftReceipt(UUID instanceId, UUID revisionId, int revisionNo,
                              String contentSha256, String result) {}
   public record RowView(UUID rowId, int rowPosition, Map<String,String> values) {}
-  public record DraftView(UUID instanceId, UUID organizationId, int revisionNo,
+  public record DraftView(UUID instanceId, UUID revisionId, UUID organizationId, int revisionNo,
                           String formCode, String formVersion, String contentMode,
                           Map<String,String> values, List<RowView> rows, String sha256,
                           String periodType, String periodCode, java.time.LocalDate periodStart,
@@ -446,7 +446,7 @@ public class FormDraftService {
       throw new ResponseStatusException(HttpStatus.CONFLICT,"REVISION_FORM_CONTRACT_INTEGRITY");
     List<RowView> lineItems=rows.findByRevisionIdOrderByRowPositionAscRowIdAsc(rev.getId())
        .stream().map(r->new RowView(r.getRowId(),r.getRowPosition(),parseValues(r.getValuesJson()))).toList();
-    return new DraftView(inst.getId(),inst.getOrganizationId(),rev.getRevisionNo(),
+    return new DraftView(inst.getId(),rev.getId(),inst.getOrganizationId(),rev.getRevisionNo(),
         form.getFormCode(),version.getVersionLabel(),version.getContentMode(),
         parseValues(rev.getValuesJson()),lineItems,rev.getCanonicalContentSha256(),
         inst.getPeriodType(),inst.getPeriodCode(),inst.getPeriodStart(),
