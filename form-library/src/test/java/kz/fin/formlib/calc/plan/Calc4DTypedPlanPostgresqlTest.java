@@ -395,4 +395,44 @@ class Calc4DTypedPlanPostgresqlTest {
       """,Integer.class,f.organization()));
   }
 
+  @Test void methodologyWorkqueueCoversAll154WithoutInventingRequiredCalculations() {
+    assertEquals(154,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_methodology_workqueue_v1
+      """,Integer.class));
+    assertEquals(145,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_methodology_workqueue_v1
+      WHERE direct_numeric_field_count>0
+      """,Integer.class));
+    assertEquals(9,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_methodology_workqueue_v1
+      WHERE reference_only
+      """,Integer.class));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_methodology_workqueue_v1
+      WHERE executable OR financial_approval_state<>'FINANCIAL_METHOD_S2_NOT_APPROVED'
+      """,Integer.class));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_methodology_workqueue_v1
+      WHERE jsonb_array_length(typed_numeric_sources_jsonb)<>direct_numeric_field_count
+      """,Integer.class));
+    assertEquals(10,jdbc.queryForObject("""
+      SELECT sum(jsonb_array_length(formula_candidates_jsonb))
+      FROM fin_calc.calc4d_methodology_workqueue_v1
+      """,Integer.class));
+    assertEquals(3,jdbc.queryForObject("""
+      SELECT jsonb_array_length(formula_candidates_jsonb)
+      FROM fin_calc.calc4d_methodology_workqueue_v1 WHERE form_code='C07'
+      """,Integer.class));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT jsonb_array_length(formula_candidates_jsonb)
+      FROM fin_calc.calc4d_methodology_workqueue_v1 WHERE form_code='C09'
+      """,Integer.class));
+    assertEquals(154,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_methodology_workqueue_v1
+      WHERE mandatory_output_work_state='MANDATORY_OUTPUTS_NOT_AUTHORED'
+        AND calculation_policy_state='PERIOD_CURRENCY_DIMENSION_ROUNDING_NOT_APPROVED'
+      """,Integer.class));
+    noExecution();
+  }
+
 }
