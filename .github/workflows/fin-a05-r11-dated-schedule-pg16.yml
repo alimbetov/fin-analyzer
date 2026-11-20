@@ -35,7 +35,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=LoanPaymentScheduleCalculatorTest,LoanSchedulePostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require 17 non-skipped cash schedule checks
+      - name: Require 18 non-skipped cash schedule and exact-decimal JSON checks
         run: |
           python3 - <<'PY'
           import sys,glob,xml.etree.ElementTree as ET
@@ -47,7 +47,7 @@ jobs:
             root=ET.parse(files[0]).getroot()
             for key in total:total[key]+=int(root.attrib.get(key,0))
           print(total)
-          if total!={'tests':17,'errors':0,'failures':0,'skipped':0}:
+          if total!={'tests':18,'errors':0,'failures':0,'skipped':0}:
             sys.exit('A05_R11_DATED_FINANCIAL_GOLDEN_NOT_GREEN')
           PY
       - name: Preserve financial control evidence
