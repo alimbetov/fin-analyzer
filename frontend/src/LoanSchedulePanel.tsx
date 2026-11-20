@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {get,isDefiniteRejection,post} from './api';
+import LoanAmendmentPanel from './LoanAmendmentPanel';
 
 type Money=string|number;
 type Installment={dueDate:string;principalDue:string};
@@ -229,6 +230,20 @@ export default function LoanSchedulePanel({
       </details>
       <small>Результат UAT_UNQUALIFIED. Плановые платежи не отражены как фактические
         денежные операции в F03. Финансовое S2 и production admission закрыты.</small>
+      {result.result.repaymentMethod!=='CUSTOM'&&
+        <LoanAmendmentPanel
+          key={result.scheduleRevisionId}
+          organizationId={organizationId}
+          projectId={projectId}
+          parentScheduleRevisionId={result.scheduleRevisionId}
+          exactSourceRevisionId={result.exactSourceRevisionId}
+          parentResultSha256={result.resultSha256}
+          baseLines={result.result.lines}
+          baseCash={String(result.result.totalScheduledCash)}
+          baseInterest={String(result.result.totalContractualInterest)}
+          baseMaturity={result.result.lines.at(-1)?.dueAt??''}
+          disabled={blocked}/>}
+
     </div>}
   </section>;
 }
