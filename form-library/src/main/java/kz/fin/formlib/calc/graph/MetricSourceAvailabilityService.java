@@ -3,6 +3,7 @@ package kz.fin.formlib.calc.graph;
 import kz.fin.formlib.calc.ingest.FinIntakeUatSourceAdapter;
 import kz.fin.formlib.calc.ingest.FormFactCandidateExtractor;
 import kz.fin.formlib.calc.loan.LoanScheduleService;
+import kz.fin.formlib.calc.loan.LoanAmendmentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -52,11 +53,14 @@ public class MetricSourceAvailabilityService {
   private final MetricIndicatorBindingService links;
   private final FinIntakeUatSourceAdapter intake;
   private final LoanScheduleService schedules;
+  private final LoanAmendmentService amendments;
   public MetricSourceAvailabilityService(MetricIndicatorBindingService links,
-      FinIntakeUatSourceAdapter intake,LoanScheduleService schedules){
+      FinIntakeUatSourceAdapter intake,LoanScheduleService schedules,
+      LoanAmendmentService amendments){
     this.links=Objects.requireNonNull(links);
     this.intake=Objects.requireNonNull(intake);
     this.schedules=Objects.requireNonNull(schedules);
+    this.amendments=Objects.requireNonNull(amendments);
   }
   private static void check(boolean ok,String message){
     if(!ok)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,message);
@@ -137,6 +141,33 @@ public class MetricSourceAvailabilityService {
     }
     return new Availability(binding.binding().id(),binding.binding().targetMetricCode(),
       binding.state(),graph.state(),resolved,overall,false,false);
+  }
+
+  /** Exact amendment remains a child graph result, never a cash fact. */
+  public record A05AmendmentNode(String nodeKind,String metricCode,
+      UUID amendmentRevisionId,UUID parentScheduleRevisionId,
+      UUID sourceRevisionId,String sourceSha256,
+      String parentResultSha256,String resultSha256,String state,
+      List<String> dependencies,boolean executable,
+      boolean financiallyQualified){
+    public A05AmendmentNode{dependencies=List.copyOf(dependencies);}
+  }
+
+  @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+  public A05AmendmentNode a05AmendmentExact(UUID organizationId,UUID projectId,
+      UUID amendmentRevisionId){
+    check(organizationId!=null&&projectId!=null&&amendmentRevisionId!=null,
+      "MG_R03_A05_AMENDMENT_REVISION_REQUIRED");
+    var result=amendments.readExact(organizationId,projectId,amendmentRevisionId);
+    return new A05AmendmentNode("SPECIALIZED_CALC_RESULT",
+      "CALC-A05.AMENDED_CONTRACT_CASH",result.amendmentRevisionId(),
+      result.parentScheduleRevisionId(),result.exactSourceRevisionId(),
+      result.sourceSha256(),result.parentResultSha256(),result.resultSha256(),
+      "UAT_REPLAY_VERIFIED_GRAPH_NODE_NOT_QUALIFIED",
+      List.of("C05:"+result.exactSourceRevisionId(),
+        "CALC-A05:SCHEDULE:"+result.parentScheduleRevisionId(),
+        "CALC-A05:AMENDMENT-EVENT:"+result.eventSha256()),
+      false,false);
   }
 
   /** A05 cash result is a specialized graph node; not a new metric registry. */
