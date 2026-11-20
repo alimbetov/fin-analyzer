@@ -12,6 +12,7 @@ import {formVisual,sectionTitle} from './formVisuals';
 import type {SavedReport} from './SavedReports';
 import FinancialGoalsNavigator from './FinancialGoalsNavigator';
 import UatCalculationPanel from './UatCalculationPanel';
+import LoanContractStudio from './LoanContractStudio';
 import type {DecisionContext} from './decisionTree';
 import './styles.css';
 
@@ -31,6 +32,7 @@ const newScope=():Scope=>({organizationId:crypto.randomUUID(),economicEntityId:c
 const storageKey='fin-local-scope';
 // Local UAT only. Production builds never show this control by default.
 const calculationUatEnabled=import.meta.env.VITE_FIN_INTAKE_UAT==='true';
+const loanUatEnabled=import.meta.env.VITE_FIN_A05_UAT==='true';
 function storedScope():Scope{
   try{
     const v=JSON.parse(localStorage.getItem(storageKey)||'null') as Scope|null;
@@ -184,6 +186,7 @@ export default function App(){
   },[fields,form,values]);
   const selectedCurrency=currencyOptions.find(c=>c.code===currency);
   const isLocked=Boolean(draft)||dirty||saveUncertain||commitUncertain;
+  const loanStudio=loanUatEnabled&&formCode==='C05';
 
   function setValue(code:string,value:string){
     setValues(old=>({...old,[code]:value}));
@@ -260,6 +263,7 @@ export default function App(){
     if(switchForm(code))setDecisionContext(context);
   }
   const save=()=>execute(async()=>{
+    if(loanStudio)throw new Error('Для C05 с CALC-A05 используйте атомарное сохранение в кредитной вкладке.');
     // A lost response is not a failed write. Replaying a frozen command
     // with the same Idempotency-Key is safe; never create a new key here.
     setAttemptedSave(true);
@@ -623,7 +627,7 @@ export default function App(){
                 }}><FolderTree size={18}/></Tool>
                 <Tool label="Новый документ" disabled={busy} onClick={reset}><FilePlus2 size={18}/></Tool>
                 {draft&&<button className="history-trigger" type="button" disabled={busy} onClick={()=>setHistoryOpen(true)}><GitBranch size={16}/> История · {draft.revisionNo}</button>}
-                <button className="primary-save" type="button" disabled={busy||!editable||(!dirty&&!saveUncertain)||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} {saveUncertain?'Повторить сохранение':'Сохранить'}</button>
+                <button className="primary-save" type="button" disabled={loanStudio||busy||!editable||(!dirty&&!saveUncertain)||commitUncertain} onClick={save}>{busy?<LoaderCircle className="spin" size={17}/>:<Save size={17}/>} {saveUncertain?'Повторить сохранение':'Сохранить'}</button>
 
                 {!evidence&&<Tool label="Скачать XLSX" disabled={busy||!draft} onClick={download}><Download size={18}/></Tool>}
                 {!evidence&&<Tool label="Загрузить XLSX" disabled={busy||!draft||dirty||commitUncertain||saveUncertain} onClick={()=>document.getElementById('xlsx-upload')?.click()}><FileUp size={18}/></Tool>}
@@ -631,6 +635,28 @@ export default function App(){
               </div></div>
             <div className="editor-body">
               <div className="completion-box" aria-label="Прогресс заполнения"><div className="completion-heading"><strong>Заполнение отчёта</strong><span>{filled} из {fieldCapacity} полей · {completion}%</span></div><progress value={filled} max={Math.max(fieldCapacity,1)} aria-label="Заполненные поля"/><small>Прогресс показывает заполненность, а не финансовую корректность данных.</small></div>
+              {loanStudio&&<LoanContractStudio
+                key={draft?.instanceId??'new-c05'}
+                draft={draft}
+                rowEntries={rowEntries}
+                fields={fields}
+                scope={scope}
+                periodType={periodType}
+                periodCode={periodCode}
+                currency={currency}
+                dirty={dirty}
+                busy={busy}
+                saveUncertain={saveUncertain}
+                commitUncertain={commitUncertain}
+                onDirty={()=>{setDirty(true);setPreview(null);setError('');}}
+                onSaved={(snapshot,receipt)=>{
+                  setDraft(snapshot);setInstanceId(snapshot.instanceId);
+                  setValues(snapshot.values);setRowEntries(snapshot.rows);
+                  setPreview(null);setDirty(false);setCommitUncertain(false);
+                  setSaveUncertain(false);setAttemptedSave(false);
+                  setMessage('C05 + A05 · редакция '+receipt.revisionNo+
+                    ' · типизированный SHA '+receipt.termsSha256.slice(0,12));
+                }}/>}
               {calculationUatEnabled&&
                 (formCode==='F02'||formCode==='C01'||formCode==='C02')&&
                 <UatCalculationPanel
@@ -755,7 +781,7 @@ export default function App(){
               </div></details>}
             </div>
             <div className="editor-footer"><span className="dot"/> {message}<span className="footer-sha">{draft?'SHA256 '+draft.sha256.slice(0,16):'Unsaved'}</span></div>
-            <div className="editor-sticky-actions"><span className={saveUncertain||dirty?"unsaved-indicator":"saved-indicator"}>{saveUncertain?"Результат записи неизвестен":dirty?"Не сохранено":draft?"Сохранено · редакция "+draft.revisionNo:"Новый отчёт"}</span><span className="sticky-progress">{completion}% заполнено</span><button type="button" className="primary-save" disabled={busy||!editable||(!dirty&&!saveUncertain)||commitUncertain} onClick={save}><Save size={16}/> {saveUncertain?'Повторить сохранение':'Сохранить изменения'}</button></div>
+            <div className="editor-sticky-actions"><span className={saveUncertain||dirty?"unsaved-indicator":"saved-indicator"}>{saveUncertain?"Результат записи неизвестен":dirty?"Не сохранено":draft?"Сохранено · редакция "+draft.revisionNo:"Новый отчёт"}</span><span className="sticky-progress">{completion}% заполнено</span><button type="button" className="primary-save" disabled={loanStudio||busy||!editable||(!dirty&&!saveUncertain)||commitUncertain} onClick={save}><Save size={16}/> {saveUncertain?'Повторить сохранение':'Сохранить изменения'}</button></div>
           </section>}
         </div>
         </>}
