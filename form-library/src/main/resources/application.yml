@@ -49,3 +49,8 @@ fin:
     issuer: ${FIN_FINANCIAL_REVIEW_ISSUER:}
     jwk-set-uri: ${FIN_FINANCIAL_REVIEW_JWKS_URI:}
     audience: ${FIN_FINANCIAL_REVIEW_AUDIENCE:fin-form-library/financial-methodology-review/v1}
+
+  # Explicitly opt-in, test-only SQL/JDBC staging. This NEVER admits HYB jobs
+  # or financially approves an output and creates no production calc_result.
+  calc4d:
+    uat-execution-enabled: ${FIN_CALC4D_UAT_EXECUTION_ENABLED:false}
