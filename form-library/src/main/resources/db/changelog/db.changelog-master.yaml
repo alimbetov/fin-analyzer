@@ -107,3 +107,5 @@ databaseChangeLog:
       file: db/changelog/053-fin-calc154-methodology-research-readiness-view.sql
   - include:
       file: db/changelog/054-fin-calc154-six-application-contracts-postgresql.sql
+  - include:
+      file: db/changelog/055-fin-calc154-p0-p1-editorial-policy-decisions.sql
