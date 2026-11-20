@@ -14,7 +14,7 @@
 4. `MethodologySelectionService`: internal backend service to list DCF variants and typed parameter definitions, create idempotent immutable UAT selection and verify exact PostgreSQL-canonical params/selection SHA. Only `FCFF_WACC` and `FCFE_KE` revision 1 are admitted to this selector.
 5. `MethodologyResearchReadService`: read-only backend for one form's research and blockers; no arbitrary SQL execution or public API.
 6. `FinancialMethodologyMath`: narrowly scoped arithmetic UAT controls for NRV, past-due days, deterministic equal-year EIR example, FCFF/WACC vs FCFE/Ke compatibility, contractual-cash DSCR.
-7. `FinancialMethodologyMathTest` and `MethodologySelectionPostgresqlTest`: proposed 12-test qualification gate; CI run must establish GREEN before any reliability claim.
+7. `FinancialMethodologyMathTest` and `MethodologySelectionPostgresqlTest`: proposed 13-test qualification gate; CI run must establish GREEN before any reliability claim.
 
 ## Corrections and required manual review of user source
 
