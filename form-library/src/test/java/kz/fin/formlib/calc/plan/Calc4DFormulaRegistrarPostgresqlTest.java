@@ -88,6 +88,7 @@ class Calc4DFormulaRegistrarPostgresqlTest {
     assertEquals(1,sql.queryForObject("""
       SELECT count(*) FROM fin_calc.formula_contract_revision
       WHERE output_metric_code='C08.syntheticUnqualifiedDifference'
+        AND formula_version='CALC4D_C08_V2'
       """,Integer.class));
   }
 
