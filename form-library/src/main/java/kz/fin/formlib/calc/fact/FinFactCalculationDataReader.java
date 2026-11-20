@@ -242,7 +242,7 @@ public final class FinFactCalculationDataReader {
         &&h.scopeKey().equals(h.receiptScope())
         &&h.factSha().equals(h.receiptFactSha())
         &&h.sourceSetSha().equals(h.receiptSourceSha())
-        &&h.bindingSha().equals(h.receiptBindingSha())
+        &&h.bindingSha().equals(h.receiptBinding())
         &&"F02_TEST_ONLY".equals(h.dataset())
         &&"FIN_TEST_ONLY_ISSUER".equals(h.issuer())
         &&h.count()==3&&h.canonicalVersion()==1,
