@@ -16,6 +16,7 @@ on:
       - 'form-library/src/main/resources/db/changelog/059-fin-calc-a05-r11-schedules-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/060-fin-calc-a05-r11-pin-trigger-fix-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - '.github/maven-central-gcs-uat-settings.xml'
       - '.github/workflows/fin-a05-r11-dated-schedule-browser.yml'
   workflow_dispatch:
 
@@ -58,7 +59,7 @@ jobs:
           cache-dependency-path: form-library/pom.xml
 
       - name: Build dated A05 loan schedule engine
-        run: mvn -B -ntp -f form-library/pom.xml -DskipTests package
+        run: mvn -s .github/maven-central-gcs-uat-settings.xml -B -ntp -f form-library/pom.xml -DskipTests package
 
       - name: Start isolated real PostgreSQL backend
         shell: bash
