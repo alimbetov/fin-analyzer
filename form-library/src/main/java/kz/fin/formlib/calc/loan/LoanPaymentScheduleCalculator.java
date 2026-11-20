@@ -1,5 +1,8 @@
 package kz.fin.formlib.calc.loan;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,25 +34,25 @@ public final class LoanPaymentScheduleCalculator {
   private static final BigDecimal ZERO=BigDecimal.ZERO;
   private static final BigDecimal ONE=BigDecimal.ONE;
 
-  public record CustomInstallment(LocalDate dueDate,BigDecimal principalDue) {}
+  public record CustomInstallment(LocalDate dueDate,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal principalDue) {}
 
-  public record Funding(BigDecimal drawdown,BigDecimal financedFees,
-      BigDecimal withheldFees,BigDecimal upfrontPaidFees,
-      BigDecimal netCashProceeds,BigDecimal openingLiability) {}
+  public record Funding(@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal drawdown,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal financedFees,
+      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal withheldFees,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal upfrontPaidFees,
+      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal netCashProceeds,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal openingLiability) {}
 
   public record ScheduleLine(int installmentNo,LocalDate accrualFrom,
-      LocalDate dueAt,BigDecimal yearFractionRaw,BigDecimal openingPrincipal,
-      BigDecimal contractualInterestRaw,BigDecimal contractualInterestDue,
-      BigDecimal principalDue,BigDecimal feesDue,BigDecimal closingPrincipal,
-      BigDecimal totalCashDue,Map<String,BigDecimal> feeBreakdown) {
+      LocalDate dueAt,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal yearFractionRaw,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal openingPrincipal,
+      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal contractualInterestRaw,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal contractualInterestDue,
+      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal principalDue,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal feesDue,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal closingPrincipal,
+      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal totalCashDue,@JsonSerialize(contentUsing=ToStringSerializer.class) Map<String,BigDecimal> feeBreakdown) {
     public ScheduleLine {feeBreakdown=Map.copyOf(feeBreakdown);}
   }
 
   public record Result(String repaymentMethod,String currency,
       String dayCountConvention,int roundingScale,String roundingMode,
-      Funding funding,List<ScheduleLine> lines,BigDecimal totalPrincipal,
-      BigDecimal totalContractualInterest,BigDecimal totalScheduledFees,
-      BigDecimal totalScheduledCash,BigDecimal finalBalance,
+      Funding funding,List<ScheduleLine> lines,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal totalPrincipal,
+      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal totalContractualInterest,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal totalScheduledFees,
+      @JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal totalScheduledCash,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal finalBalance,
       List<String> diagnostics) {
     public Result {
       lines=List.copyOf(lines);
