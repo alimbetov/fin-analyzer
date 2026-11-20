@@ -182,4 +182,31 @@ class MethodologySelectionPostgresqlTest {
       research.requireForm("D01"));
   }
 
+  @Test void calendarAndForgedSelectionDigestsFailClosed(){
+    UUID org=UUID.randomUUID(),project=UUID.randomUUID(),scenario=UUID.randomUUID();
+    var wrongDate=new HashMap<String,Object>(params());
+    wrongDate.put("valuationDate","2026-02-30");
+    assertThrows(DataAccessException.class,()->
+      selector.selectDcfUat(org,project,scenario,"FCFF_WACC",wrongDate,"researcher"));
+
+    UUID variant=selector.dcfVariants().stream()
+      .filter(x->x.code().equals("FCFF_WACC"))
+      .findFirst().orElseThrow().id();
+    String fakeParams=String.format("""
+       {"discountRate":0.12,
+        "cashflowRevisionId":"%s",
+        "rateSourceRevisionId":"%s",
+        "valuationDate":"2026-11-20",
+        "terminalMethod":"NONE"}
+      """,UUID.randomUUID(),UUID.randomUUID());
+    assertThrows(DataAccessException.class,()->sql.update("""
+      INSERT INTO fin_calc.methodology_selection_revision(
+        id,organization_id,project_id,scenario_id,family_code,
+        variant_revision_id,parameter_values_jsonb,params_sha256,
+        selection_sha256,selected_by)
+      VALUES(?,?,?,?,'DCF_VALUATION',?,?::jsonb,?,?,'researcher')
+      """,UUID.randomUUID(),org,project,scenario,variant,fakeParams,
+      "a".repeat(64),"b".repeat(64)));
+  }
+
 }
