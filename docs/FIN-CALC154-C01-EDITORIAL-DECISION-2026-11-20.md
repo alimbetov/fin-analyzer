@@ -1,7 +1,7 @@
 # FIN CALC-154 — C01 Receivables | Editorial decision ED-2026-11-20
 
 **Form:** C01 — Реестр дебиторской задолженности.
-**Status:** `DOMAIN_POLICY_PARTIALLY_CONFIRMED` (editorial only).
+**Status:** `DOMAIN_POLICY_PARTIALLY_CONFIRMED` (editorial only; extended by V2 below).
 **Financial approval:** `S2_NOT_APPROVED`; no qualified CalcPlan, production execution or production admission.
 **Authority:** requester's editorial decision, 2026-11-20. This document does not constitute independent financial review.
 
@@ -59,3 +59,7 @@ The source editor's `required` flag is distinct from this **methodology required
 ## Admission invariant
 
 `DOMAIN_POLICY_PARTIALLY_CONFIRMED` != `FINANCIAL_S2_APPROVED`. No positive editorial decision, unit test or synthetic smoke test grants independent financial S2 or enables qualified CalcPlan/production. All pre-existing blockers remain active.
+
+## Editorial V2 update — 2026-11-20
+
+See `FIN-CALC154-C01-C02-EDITORIAL-POLICIES-V2-2026-11-20.md` (superseding these open questions while preserving the original decision trail). The following principles are now confirmed **as domain policy**: gross is open pre-allowance balance at FactSet asOf after recognized settlements; receivable credit balances and advances are classified separately; excess allowance requires exceptional review, not automatic write-off; overdue is the gross subset based on valid contractual maturity, amendments and payments; accumulate full precision and round at reporting. The record still requires a durable debt-position business key, payment allocation/source provenance, full currency and numerical rounding profile, and independently verified financial evidence. `FINANCIAL_S2_NOT_APPROVED` and production HOLD.
