@@ -5,6 +5,8 @@ on:
     branches:
       - feat/fin-form-library-standalone
     paths:
+      - 'docs/FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv'
+      - 'docs/FIN-CALC154-WAVE02-20-FORM-FIELD-GAP-ANALYSIS.tsv'
       - 'docs/FIN-CALC154-FORM-STATUS.tsv'
       - 'docs/FIN-CALC154-WAVE02-METHODOLOGY-DECISION-REGISTRY.tsv'
       - 'docs/FIN-CALC154-WAVE02-ALL154-EVIDENCE-WORKLIST.tsv'
