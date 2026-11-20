@@ -28,7 +28,7 @@ import java.util.UUID;
  * No fallback to fin_intake drafts, no query by initiator instead of trusted IAM.
  */
 @Service
-public final class FinFactCalculationDataReader {
+public class FinFactCalculationDataReader {
   public static final String DATA_STATUS="TEST_QUALIFIED_NOT_FINANCIAL_S2";
   public record Query(UUID userId,UUID projectId,UUID exactFactSetId,
       int pageSize,String pageToken) {}
