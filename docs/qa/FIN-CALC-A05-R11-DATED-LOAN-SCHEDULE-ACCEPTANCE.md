@@ -6,9 +6,9 @@
 
 ## 1. Доказательства на точных коммитах
 
-- **Java 21 + PostgreSQL 16: 18/18 PASS** (8 математических Java и 10 интеграционных PG16, включая сумму больше IEEE-754 safe integer). Код `fe2181cf12dc6294d8b82d4c7ff2da23fd370dbc`. [Actions run 44698073307](https://github.com/alimbetov/fin-analyzer/actions/runs/44698073307). Без failures/errors/skips.
-- **React + настоящий Spring Boot + PostgreSQL 16 + Chromium: 3/3 PASS (до decimal-string hardening)**. Код `575000b0698105cb3142067cb37b4d58e2356be5`. [Actions run 44697109010](https://github.com/alimbetov/fin-analyzer/actions/runs/44697109010). Без mocks/failures/errors/skips.
-- Эти два результата получены на **разных commit SHA**, это не единый HEAD gate. После них добавлена сериализация всех A05 BigDecimal как JSON **decimal string**, чтобы не терять точность в JavaScript. Для данного изменения требуется отдельный последующий зелёный CI. Если он ещё не доступен, не приписывать старым проверкам квалификацию нового HEAD.
+- **Java 21 + PostgreSQL 16: 18/18 PASS** (8 математических Java и 10 интеграционных PG16, включая сумму больше IEEE-754 safe integer). Код `a606d35b277cb4f3b4570e89802299e3fdb6156f`. [Actions run 44698245223](https://github.com/alimbetov/fin-analyzer/actions/runs/44698245223). Без failures/errors/skips.
+- **React + настоящий Spring Boot + PostgreSQL 16 + Chromium: 3/3 PASS, включая decimal-string hardening**. Код `b53810642c4249e68d002e3cd41488f637dadc03`. [Actions run 44698253076](https://github.com/alimbetov/fin-analyzer/actions/runs/44698253076). Без mocks/failures/errors/skips.
+- Оба результата относятся к **одному набору Java/React финансового кода** и подтверждают decimal-string readback; SHA двух workflow-коммитов различается вследствие последовательного обновления CI-конфигурации. Из этого не следует единый production admission, финансовый S2 или квалификация полного репозитория.
 - В CI наблюдался HTTP 429 Maven Central при загрузке `maven-clean-plugin`/`maven-jar-plugin`. Для двух профильных A05-R1.1 jobs добавлен CI-only Google Cloud hosted Maven Central mirror, без изменения pom.xml; ошибки загрузки отличать от financial assertions.
 
 ## 2. Реализованные компоненты
@@ -21,7 +21,7 @@
 | Миграция `059` | `fin_calc.a05_schedule_revision`, `_line`, `_line_fee`, `_custom_installment`, `_command_receipt` с immutability triggers |
 | Миграция `060` | Исправление затенения встроенного `FOUND` в PostgreSQL проверке SHA/source pin (аддитивно, без переписывания `059`) |
 | `LoanSchedulePanel` | График внутри существующей C05, видимые суммы, датированные строки, исходные SHA, версии результатов, CUSTOM и финансовые diagnostics |
-| Тесты / CI | 8 math + 10 PG16 + 3 Chromium; отдельные workflows и Surefire/Playwright artifacts |
+| Тесты / CI | 8 math + 10 PG16 + 3 Chromium; проверенные проходы c GCS mirror; отдельные workflows и Surefire/Playwright artifacts |
 
 **Нет 167-й формы или отдельного writer кредитных исходных условий.** График является расчётной UAT-проекцией `CALC-A05` с immutable result внутри `fin_calc`; original loan/rate/calendar/fees лежат в `fin_intake` и связываются с конкретной C05-ревизией.
 
@@ -77,3 +77,5 @@ build evidence до отдельной поставки и pin.
 `MG-R0.3` source-availability + graph binding, затем `A05-R1.2` amendments,
 prepayments и variable rates; отдельный `A05-R1.3` IFRS EIR; `A05-R1.4`
 plan/fact with CALC-A01.
+
+**Матрица 38 критериев после приёмки:** `9 PASS_UAT / 11 PARTIAL / 18 NOT_IMPLEMENTED`. Дополнительно T033 (все три варианта на реальном Chromium) закрыт; T008 (ровно 1%/period), T012 (весь набор отрицательных финансовых случаев), T034–T036 (полный Explain, все сравнения и concurrency) остаются частичными.
