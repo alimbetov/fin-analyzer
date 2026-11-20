@@ -37,7 +37,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=CalcAsOfDebtKernelTest,CalcC01C02AsOfPostgresqlTest,Calc154BatchTechnicalClassificationPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require 10 actual tests without skipping
+      - name: Require 14 actual tests without skipping
         run: |
           python3 - <<'PY'
           import glob,sys,xml.etree.ElementTree as ET
@@ -50,6 +50,6 @@ jobs:
             x=ET.parse(f[0]).getroot()
             report.append({k:int(x.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')})
           print(report)
-          if sum(x['tests'] for x in report)!=10 or any(x[k] for x in report for k in ('errors','failures','skipped')):
+          if sum(x['tests'] for x in report)!=14 or any(x[k] for x in report for k in ('errors','failures','skipped')):
             sys.exit('CALC154_C01_C02_E2E_NOT_GREEN')
           PY
