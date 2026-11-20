@@ -99,3 +99,7 @@ databaseChangeLog:
       file: db/changelog/049-fin-autoqual1-receipt-postgresql.sql
   - include:
       file: db/changelog/050-fin-calc154-asof-c01-c02-uat-postgresql.sql
+  - include:
+      file: db/changelog/051-fin-calc154-dynamic-methodology-parameters-postgresql.sql
+  - include:
+      file: db/changelog/052-fin-calc154-user-methodology-research-postgresql.sql
