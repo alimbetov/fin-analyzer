@@ -43,8 +43,22 @@ export type PeriodType = {code:string;title:string};
 export type PeriodRange = {type:string;code:string;startInclusive:string;endExclusive:string};
 export type Row = {rowId:string;rowPosition:number;values:Record<string,string>};
 export type EvidenceAttachment = {id:string;fileName:string;mediaType:string;sizeBytes:number;sha256:string};
-export type Draft = {attachment?:EvidenceAttachment|null;instanceId:string;organizationId:string;revisionNo:number;formCode:string;formVersion:string;contentMode:string;values:Record<string,string>;rows:Row[];sha256:string;periodType:string;periodCode:string;currency:string;workflowStatus:string;economicEntityId:string;businessScopeId:string;projectId:string;coverage:string;reportingBasis:string;dataSpace:string};
+export type Draft = {attachment?:EvidenceAttachment|null;instanceId:string;revisionId?:string;organizationId:string;revisionNo:number;formCode:string;formVersion:string;contentMode:string;values:Record<string,string>;rows:Row[];sha256:string;periodType:string;periodCode:string;currency:string;workflowStatus:string;economicEntityId:string;businessScopeId:string;projectId:string;coverage:string;reportingBasis:string;dataSpace:string};
 export type Receipt = {instanceId:string;revisionNo:number;contentSha256:string;result:string};
+export type F02UatNode = {
+  state:'PRESENT'|'INVALID';unit:string;value:string|null;
+  errorCode:string|null;valueSha256:string
+};
+export type F02UatPreview = {
+  instanceId:string;sourceRevisionId:string;formVersionId:string;
+  sourceContentSha256:string;sourceRowOrderSha256:string;
+  pinnedSourceSha256:string;sourceSchemaSha256:string;
+  candidateFactsetSha256:string;mappingDescriptorSha256:string;
+  periodType:string;periodCode:string;currency:string;reportingBasis:string;
+  dataSpace:string;outputs:Record<string,F02UatNode>;
+  resultValuesSha256:string;previewSha256:string;
+  executionState:string;financiallyApproved:boolean;productionAdmitted:boolean
+};
 export type Profile = {id:string};
 export type PreviewTicket = {previewId:string;profileId:string;instanceId:string;organizationId:string;expectedRevision:number;uploadSha256:string;bindingSha256:string;expiresAt:string;inputCellCount:number;values:Record<string,string>};
 
