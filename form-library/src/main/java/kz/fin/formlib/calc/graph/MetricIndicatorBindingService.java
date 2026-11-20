@@ -126,6 +126,20 @@ public class MetricIndicatorBindingService {
             .equals(link.targetMetricCode()))
         throw new IllegalStateException("MG_R02_DIRECT_SOURCE_CONTRACT_DRIFT");
       state="DIRECT_SOURCE_CANDIDATE_NOT_CALCULATED";
+    }else if("DERIVED_CANDIDATE".equals(link.bindingKind())){
+      // R16 already marks F02.netProfit as FORM_DERIVED_CANDIDATE:
+      // its historical formula text is NOT a qualified executable method.
+      int candidates=db.queryForObject("""
+        SELECT count(*) FROM fin_lib.lib_metric_binding_exception e
+        WHERE e.metric_code=? AND e.semantic_role='FORM_DERIVED_CANDIDATE'
+          AND e.review_state='CANDIDATE_UNQUALIFIED'
+        """,Integer.class,link.targetMetricCode());
+      if(link.formulaRevisionId()!=null||candidates!=1
+          ||!"CATALOG_ONLY".equals(target.state())
+          ||!target.requiredPhysicalInputs().isEmpty()
+          ||!target.orderedNodes().isEmpty())
+        throw new IllegalStateException("MG_R02_DERIVED_CANDIDATE_DRIFT");
+      state="DERIVED_METHOD_NOT_AUTHORED";
     }else if("FORMULA_REVISION".equals(link.bindingKind())){
       if(link.formulaRevisionId()==null
           ||!link.formulaRevisionId().equals(target.selectedMethodRevisionId())
