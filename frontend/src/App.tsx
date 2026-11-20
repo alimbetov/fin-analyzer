@@ -12,6 +12,7 @@ import {formVisual,sectionTitle} from './formVisuals';
 import type {SavedReport} from './SavedReports';
 import FinancialGoalsNavigator from './FinancialGoalsNavigator';
 import UatCalculationPanel from './UatCalculationPanel';
+import MetricGraphExecutionPanel from './MetricGraphExecutionPanel';
 import LoanContractStudio from './LoanContractStudio';
 import type {DecisionContext} from './decisionTree';
 import './styles.css';
@@ -32,6 +33,7 @@ const newScope=():Scope=>({organizationId:crypto.randomUUID(),economicEntityId:c
 const storageKey='fin-local-scope';
 // Local UAT only. Production builds never show this control by default.
 const calculationUatEnabled=import.meta.env.VITE_FIN_INTAKE_UAT==='true';
+const metricGraphUatEnabled=calculationUatEnabled&&import.meta.env.VITE_FIN_MG_R04_UAT==='true';
 const loanUatEnabled=import.meta.env.VITE_FIN_A05_UAT==='true';
 function storedScope():Scope{
   try{
@@ -662,6 +664,14 @@ export default function App(){
                 <UatCalculationPanel
                   key={formCode}
                   formCode={formCode}
+                  draft={draft}
+                  dirty={dirty}
+                  busy={busy}
+                  saveUncertain={saveUncertain}
+                  commitUncertain={commitUncertain}/>}
+              {metricGraphUatEnabled&&formCode==='F02'&&
+                <MetricGraphExecutionPanel
+                  key={'mg-r04-'+(draft?.instanceId??'new')}
                   draft={draft}
                   dirty={dirty}
                   busy={busy}
