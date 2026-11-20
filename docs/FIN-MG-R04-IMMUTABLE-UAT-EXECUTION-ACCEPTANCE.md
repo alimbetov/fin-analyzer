@@ -3,7 +3,7 @@
 **Дата:** 2026-11-20  
 **Репозиторий:** `alimbetov/fin-analyzer`  
 **Ветка:** `feat/fin-form-library-standalone`  
-**Статус:** `EXECUTABLE_UAT_VERTICAL_IMPLEMENTED`, financial S2 **NO**, production admission **NO**.
+**Статус:** `EXECUTABLE_UAT_VERTICAL_TECHNICALLY_ACCEPTED`, financial S2 **NO**, production admission **NO**.
 
 ## Архитектурное решение
 
@@ -62,11 +62,11 @@
 | Direct SQL forged org/source/formula SHA and foreign/mismatched receipt | PostgreSQL 063 negative tests |
 | React real Chromium: source → explicit formula → plan + SHA replay → new revision | `mg-r04-immutable-metric-uat.spec.ts` |
 
-**Проверенный базовый ядровой gate:** [MG-R0.4 11/11 PostgreSQL16 PASS](https://github.com/alimbetov/fin-analyzer/actions/runs/44732665214) (SHA `723fbc38170a0b09b682fbcc324e74e7aa2532b2`). Дополнительная security-квалификация 13/13 и Chromium после UI/063 требуют отдельного зелёного run. **Не** приписывать первому 11/11 результатам проверку 063 или браузера до фактической приёмки.
+**Итоговая квалификация MG-R0.4:** [13/13 PostgreSQL 16 PASS](https://github.com/alimbetov/fin-analyzer/actions/runs/44733839642), 0 errors/failures/skips (SHA `14a0c6c4409da1cf0aa524a2ca265063f535bfff`), включая отрицательные проверки новой миграции 063. [1/1 real Chromium + Spring Boot + PostgreSQL 16 PASS](https://github.com/alimbetov/fin-analyzer/actions/runs/44734220635), 0 errors/failures/skips (SHA `f663426834955d4833ee8a90ca63d571c495b672`), пользователь выбрал метод F02 и проверил разные source revision SHA и immutable results. Базовый gate [11/11](https://github.com/alimbetov/fin-analyzer/actions/runs/44732665214) сохранён как историческая веха; не заменяет расширенный 13/13. Профильные проверки прошли на последовательных коммитах с одинаковым финансовым ядром; это не финансовый S2, не общепроектный release candidate и не универсальная реализация 154 методик.
 
 ## Незакрытые работы
 
-1. **PG 13 и browser 1 green** на актуальном коде, включая исправление зависимости Rollup Linux в CI, если имеет место.
+1. **Общий HEAD release gate** (PG13 + Chromium1 + остальные backend/React regressions на одном SHA), а также полноценные negative source-revocation/worker recovery tests; профильные PG/browser уже PASS.
 2. Independent build manifest/artifact SHA и manifest pin; сейчас есть только engine descriptor, не квалифицированный binary.
 3. Explicit goal/indicator binding → executable F02 outputs без догадок. `NET_PROFIT` остаётся blocked.
 4. C01/C02 настоящие version-pinned AS_OF calculation method contracts, затем общий plan adapter; C01 overdue включена в gross, не прибавляется как отдельный актив.
