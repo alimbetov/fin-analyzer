@@ -286,7 +286,7 @@ class LoanSchedulePostgresqlTest {
         .param("organizationId",saved.scope.org.toString())
         .param("projectId",saved.scope.project.toString()))
       .andExpect(status().isOk())
-      .andExpect(jsonPath("$.result.finalBalance").value(0));
+      .andExpect(jsonPath("$.result.finalBalance").value("0.00"));
     mvc.perform(get("/api/v1/uat/a05/schedules/"+id)
         .param("organizationId",UUID.randomUUID().toString())
         .param("projectId",saved.scope.project.toString()))
