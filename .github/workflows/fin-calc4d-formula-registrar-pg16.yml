@@ -33,7 +33,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=Calc4DFormulaRegistrarPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Verify six real PostgreSQL tests without skipping
+      - name: Verify seven real PostgreSQL tests without skipping
         if: always()
         run: |
           python3 - <<'PY'
@@ -43,6 +43,6 @@ jobs:
           root=ET.parse(files[0]).getroot()
           a={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
           print(a)
-          if a!={'tests':6,'errors':0,'failures':0,'skipped':0}:
-            sys.exit('CALC4D registrar six real PG16 tests required')
+          if a!={'tests':7,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('CALC4D registrar seven real PG16 tests required')
           PY
