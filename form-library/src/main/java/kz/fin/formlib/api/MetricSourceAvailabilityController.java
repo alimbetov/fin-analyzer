@@ -26,6 +26,14 @@ public class MetricSourceAvailabilityController {
     return service.resolve(request);
   }
 
+  @GetMapping("/a05/amendments/{exactAmendmentRevisionId}")
+  public MetricSourceAvailabilityService.A05AmendmentNode amendment(
+      @PathVariable UUID exactAmendmentRevisionId,
+      @RequestParam UUID organizationId,@RequestParam UUID projectId){
+    return service.a05AmendmentExact(organizationId,projectId,
+      exactAmendmentRevisionId);
+  }
+
   @GetMapping("/a05/{exactScheduleRevisionId}")
   public MetricSourceAvailabilityService.A05Node a05(
       @PathVariable UUID exactScheduleRevisionId,
