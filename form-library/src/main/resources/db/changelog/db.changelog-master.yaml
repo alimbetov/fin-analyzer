@@ -85,3 +85,5 @@ databaseChangeLog:
       file: db/changelog/042-fin-calc3c3-trusted-review-intake-postgresql.sql
   - include:
       file: db/changelog/043-fin-calc4d-uat-execution-sandbox-postgresql.sql
+  - include:
+      file: db/changelog/044-fin-calc4d-methodology-workqueue-postgresql.sql
