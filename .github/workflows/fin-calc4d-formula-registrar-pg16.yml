@@ -1,0 +1,48 @@
+name: FIN CALC-4D — Formula Registration PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/plan/Calc4DFormulaCandidateRegistrar.java'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/plan/Calc4DTypedDagCompiler.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/plan/Calc4DFormulaRegistrarPostgresqlTest.java'
+      - 'form-library/pom.xml'
+      - '.github/workflows/fin-calc4d-formula-registrar-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  all-form-registrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: PostgreSQL 16 exact typed methodology registration
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=Calc4DFormulaRegistrarPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Verify six real PostgreSQL tests without skipping
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          files=glob.glob('form-library/target/surefire-reports/TEST-*Calc4DFormulaRegistrarPostgresqlTest.xml')
+          if len(files)!=1:sys.exit('CALC4D registrar PG16 report missing')
+          root=ET.parse(files[0]).getroot()
+          a={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
+          print(a)
+          if a!={'tests':6,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('CALC4D registrar six real PG16 tests required')
+          PY
