@@ -11,6 +11,7 @@ on:
       - 'form-library/src/main/resources/db/changelog/045-fin-calc4d5-uat-fenced-queue-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/046-fin-calc154-synthetic-mathematical-controls-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/047-fin-calc154-methodology-completion-readiness-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/048-fin-calc4d5-result-fencing-lineage-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
       - 'form-library/src/main/resources/application.yml'
       - 'form-library/src/test/java/kz/fin/formlib/calc/plan/Calc4DTypedPlanPostgresqlTest.java'
@@ -39,7 +40,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=Calc4DTypedPlanPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require twenty-five actual PostgreSQL tests, zero skipped/failures/errors
+      - name: Require twenty-six actual PostgreSQL tests, zero skipped/failures/errors
         if: always()
         run: |
           python3 - <<'PY'
@@ -49,6 +50,6 @@ jobs:
           root=ET.parse(files[0]).getroot()
           a={k:int(root.attrib.get(k,0)) for k in ('tests','errors','failures','skipped')}
           print(a)
-          if a!={'tests':25,'errors':0,'failures':0,'skipped':0}:
+          if a!={'tests':26,'errors':0,'failures':0,'skipped':0}:
             sys.exit('CALC4D PG16 twenty-four tests mandatory')
           PY
