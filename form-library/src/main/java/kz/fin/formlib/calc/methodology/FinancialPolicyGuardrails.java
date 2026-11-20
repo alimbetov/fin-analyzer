@@ -66,6 +66,19 @@ public final class FinancialPolicyGuardrails {
    * the same nature and use. Cross-period policy changes still require
    * a separately reviewed revision and are not authorized here.
    */
+  /** IAS 2 eligibility check: specific identification for non-interchangeable items. */
+  public static void requireCostFormulaConsistentWithInterchangeability(
+      String formula,boolean ordinarilyInterchangeable) {
+    if(formula==null)
+      throw new IllegalArgumentException("INVENTORY_COST_FORMULA_REQUIRED");
+    if(ordinarilyInterchangeable) {
+      if(!formula.equals("FIFO") && !formula.equals("WEIGHTED_AVERAGE"))
+        throw new IllegalStateException("INVENTORY_INTERCHANGEABLE_FORMULA_INVALID");
+    } else if(!formula.equals("SPECIFIC_IDENTIFICATION")) {
+      throw new IllegalStateException("INVENTORY_SPECIFIC_IDENTIFICATION_REQUIRED");
+    }
+  }
+
   public static void requireUniformInventoryClassFormula(
       Map<String,String> formulaByInventoryClass,
       List<String> inventoryClassCodes) {
@@ -77,7 +90,7 @@ public final class FinancialPolicyGuardrails {
           !formulaByInventoryClass.containsKey(classCode))
         throw new IllegalStateException("INVENTORY_CLASS_COST_POLICY_MISSING");
       var method=formulaByInventoryClass.get(classCode);
-      if(!List.of("FIFO","WEIGHTED_AVERAGE","SPECIFIC_IDENTIFICATION")
+      if(method==null || !List.of("FIFO","WEIGHTED_AVERAGE","SPECIFIC_IDENTIFICATION")
           .contains(method))
         throw new IllegalStateException("INVENTORY_CLASS_COST_FORMULA_UNSUPPORTED");
     }
