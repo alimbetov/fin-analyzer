@@ -11,6 +11,8 @@ on:
       - 'docs/FIN-CALC154-METRIC-COVERAGE.tsv'
       - 'docs/FIN-CALC154-MODEL-OUTPUT-COVERAGE.tsv'
       - 'scripts/verify-fin-calc4d-154-methodology-backlog.py'
+      - 'docs/FIN-CALC154-METHODOLOGY-OPERATION-GAPS.tsv'
+      - 'scripts/generate-fin-calc154-methodology-operation-gaps.py'
       - '.github/workflows/fin-calc4d-methodology-backlog.yml'
   workflow_dispatch:
 
@@ -24,11 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify all 154 exact form-specific authoring packets and finance HOLD
-        run: python3 scripts/verify-fin-calc4d-154-methodology-backlog.py
+        run: |
+          python3 scripts/verify-fin-calc4d-154-methodology-backlog.py
+          python3 scripts/generate-fin-calc154-methodology-operation-gaps.py --check
       - name: Publish methodology authoring backlog as data artifact
         uses: actions/upload-artifact@v4
         with:
           name: fin-calc4d-154-methodology-authoring-backlog
-          path: docs/FIN-CALC4D-154-METHODOLOGY-AUTHORING-BACKLOG.tsv
+          path: |
+            docs/FIN-CALC4D-154-METHODOLOGY-AUTHORING-BACKLOG.tsv
+            docs/FIN-CALC154-METHODOLOGY-OPERATION-GAPS.tsv
           if-no-files-found: error
           retention-days: 30
