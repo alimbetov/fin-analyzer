@@ -54,5 +54,15 @@ class FinancialPolicyGuardrailsTest {
       FinancialPolicyGuardrails.requireUniformInventoryClassFormula(
         Map.of("INTERCHANGEABLE_A","FIFO"),
         List.of("INTERCHANGEABLE_A","UNCLASSIFIED")));
+    assertDoesNotThrow(()->FinancialPolicyGuardrails
+      .requireCostFormulaConsistentWithInterchangeability("FIFO",true));
+    assertDoesNotThrow(()->FinancialPolicyGuardrails
+      .requireCostFormulaConsistentWithInterchangeability(
+        "SPECIFIC_IDENTIFICATION",false));
+    assertThrows(IllegalStateException.class,()->FinancialPolicyGuardrails
+      .requireCostFormulaConsistentWithInterchangeability(
+        "SPECIFIC_IDENTIFICATION",true));
+    assertThrows(IllegalStateException.class,()->FinancialPolicyGuardrails
+      .requireCostFormulaConsistentWithInterchangeability("FIFO",false));
   }
 }
