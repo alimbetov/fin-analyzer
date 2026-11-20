@@ -221,7 +221,9 @@ class LoanSchedulePostgresqlTest {
     assertEquals(1,db.queryForObject("""
       SELECT count(*) FROM fin_calc.a05_schedule_revision WHERE source_revision_id=?
       """,Integer.class,saved.loanReceipt.sourceRevisionId()));
-    assertEquals(3,db.queryForObject("""
+    // Same-key replay MUST NOT create a receipt; a second distinct key
+    // legitimately gets one receipt pointing at the immutable same variant.
+    assertEquals(2,db.queryForObject("""
       SELECT count(*) FROM fin_calc.a05_schedule_command_receipt WHERE schedule_revision_id=?
       """,Integer.class,first.scheduleRevisionId()));
   }
