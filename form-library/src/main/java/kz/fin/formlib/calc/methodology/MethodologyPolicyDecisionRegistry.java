@@ -23,7 +23,7 @@ import java.util.Set;
  * Configurations are NOT linked to executable CalcPlans in this release.
  */
 @Service
-public final class MethodologyPolicyDecisionRegistry {
+public class MethodologyPolicyDecisionRegistry {
   public record Decision(String code,int revision,String scope,String ruleCode,
       String status,List<String> affectedFormCodes,String statement,String guardrail,
       List<String> requiredEvidence,String sourceSha256,String decisionSha256,
