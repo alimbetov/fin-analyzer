@@ -33,7 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** MG-R0.3 source availability is exact-source-only and NO S2. */
 @SpringBootTest(properties={
- "fin.uat.editor.enabled=false","fin.calc.a05-intake-uat.enabled=true"
+ "fin.uat.editor.enabled=false","fin.calc.a05-intake-uat.enabled=true",
+ "fin.calc.metric-source-uat.enabled=true"
 })
 @AutoConfigureMockMvc
 @Testcontainers
