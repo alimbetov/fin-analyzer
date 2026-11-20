@@ -37,7 +37,7 @@ jobs:
             -Dfin.postgres.uat.enabled=true \
             -Dtest=LoanAmendmentCalculatorTest,LoanAmendmentPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require all 13 R1.2 controls
+      - name: Require all 14 R1.2 controls
         run: |
           python3 - <<'PY'
           import glob,xml.etree.ElementTree as ET,sys
@@ -48,7 +48,7 @@ jobs:
             root=ET.parse(files[0]).getroot()
             for k in total:total[k]+=int(root.attrib.get(k,0))
           print(total)
-          if total!={'tests':13,'errors':0,'failures':0,'skipped':0}:
+          if total!={'tests':14,'errors':0,'failures':0,'skipped':0}:
             sys.exit('A05_R12_AMENDMENT_PG16_NOT_GREEN')
           PY
       - name: Preserve amendment evidence
