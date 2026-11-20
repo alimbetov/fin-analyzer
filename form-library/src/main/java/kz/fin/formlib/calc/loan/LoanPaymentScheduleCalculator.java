@@ -267,8 +267,12 @@ public final class LoanPaymentScheduleCalculator {
       BigDecimal lineFees=breakdown.values().stream()
         .reduce(ZERO,BigDecimal::add);
       BigDecimal cash=principal.add(interest).add(lineFees);
-      lines.add(new ScheduleLine(index+1,from,date,fraction,openingBalance,
-        interestRaw,interest,principal,lineFees,closing,cash,breakdown));
+      // Persisted decimal precision is explicit and stable across PG/JDBC reads.
+      // Calculations above retain DECIMAL128; only audit raw fields are rounded.
+      lines.add(new ScheduleLine(index+1,from,date,
+        fraction.setScale(24,RoundingMode.HALF_EVEN),openingBalance,
+        interestRaw.setScale(12,RoundingMode.HALF_EVEN),
+        interest,principal,lineFees,closing,cash,breakdown));
       totalPrincipal=totalPrincipal.add(principal);
       totalInterest=totalInterest.add(interest);
       totalFees=totalFees.add(lineFees);
