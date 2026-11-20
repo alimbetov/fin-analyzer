@@ -34,6 +34,7 @@ class MethodologySelectionPostgresqlTest {
     r.add("spring.datasource.driver-class-name",()->"org.postgresql.Driver");
   }
   @Autowired MethodologySelectionService selector;
+  @Autowired MethodologyResearchReadService research;
   @Autowired JdbcTemplate sql;
 
   private static Map<String,Object> params() {
@@ -151,4 +152,23 @@ class MethodologySelectionPostgresqlTest {
       WHERE candidate_code='P07_FCFF'
       """));
   }
+  @Test void researchReadinessIsVisibleForAll154ButNotExecutable(){
+    Integer forms=sql.queryForObject(
+      "SELECT count(*) FROM fin_calc.calc154_methodology_research_readiness_v1",
+      Integer.class);
+    assertEquals(154,forms);
+    var p07=research.requireForm("P07");
+    assertTrue(p07.researchCandidateCount()>=7);
+    assertEquals(p07.researchCandidateCount(),p07.candidates().size());
+    assertFalse(p07.executable());
+    assertFalse(p07.financiallyApproved());
+    assertTrue(p07.candidates().stream().anyMatch(
+      c->c.candidateCode().equals("P07_FCFF")));
+    var c01=research.requireForm("C01");
+    assertTrue(c01.candidates().stream().anyMatch(
+      v->v.candidateCode().equals("C01_PAST_DUE_DAYS")));
+    assertThrows(IllegalStateException.class,()->
+      research.requireForm("D01"));
+  }
+
 }
