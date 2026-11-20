@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
+import java.util.List;
 
 /** A05-R1.1: exact-source UAT cash schedule. Not EIR/GESV/covenant/F03. */
 @RestController
@@ -29,6 +30,13 @@ public class LoanScheduleUatController {
       @RequestHeader("Idempotency-Key") String key,
       @RequestBody LoanScheduleService.ScheduleCommand payload) {
     return schedules.calculateAndCommit(payload,key);
+  }
+
+  @GetMapping
+  public List<LoanScheduleService.SavedSchedule> list(
+      @RequestParam UUID organizationId,@RequestParam UUID projectId,
+      @RequestParam UUID exactSourceRevisionId) {
+    return schedules.listForSource(organizationId,projectId,exactSourceRevisionId);
   }
 
   @GetMapping("/{scheduleRevisionId}")
