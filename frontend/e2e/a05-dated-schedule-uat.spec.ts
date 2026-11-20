@@ -112,14 +112,14 @@ test('A05-R1.1 | dated 2x31 day annuity golden and exact saved SHA history',
   expect(read.status(),await read.text()).toBe(200);
   const verified=await read.json() as {
     exactSourceRevisionId:string;resultSha256:string;
-    result:{lines:unknown[];totalScheduledCash:number;finalBalance:number};
+    result:{lines:unknown[];totalScheduledCash:string;finalBalance:string};
     financiallyApproved:boolean;productionAdmitted:boolean
   };
   expect(verified.exactSourceRevisionId).toBe(sourceId);
   expect(verified.resultSha256).toBe(saved[0].resultSha256);
   expect(verified.result.lines).toHaveLength(2);
-  expect(verified.result.totalScheduledCash).toBe(1015.52);
-  expect(verified.result.finalBalance).toBe(0);
+  expect(verified.result.totalScheduledCash).toBe('1015.52');
+  expect(verified.result.finalBalance).toBe('0.00');
   expect(verified.financiallyApproved).toBe(false);
   expect(verified.productionAdmitted).toBe(false);
 });
@@ -198,15 +198,15 @@ test('A05-R1.1 | EQUAL_PRINCIPAL financed, withheld and dated recurring fees',
     variants[0].scheduleRevisionId+'?'+new URLSearchParams(scope));
   expect(response.status(),await response.text()).toBe(200);
   const saved=await response.json() as {
-    result:{funding:{openingLiability:number;netCashProceeds:number};
-      totalScheduledFees:number;totalScheduledCash:number;lines:{
-        feeBreakdown:Record<string,number>;principalDue:number
+    result:{funding:{openingLiability:string;netCashProceeds:string};
+      totalScheduledFees:string;totalScheduledCash:string;lines:{
+        feeBreakdown:Record<string,string>;principalDue:string
       }[]};
   };
-  expect(saved.result.funding.openingLiability).toBe(1050);
-  expect(saved.result.funding.netCashProceeds).toBe(980);
-  expect(saved.result.totalScheduledFees).toBe(40);
-  expect(saved.result.totalScheduledCash).toBe(1090);
-  expect(saved.result.lines[0].feeBreakdown).toEqual({RUN:5});
-  expect(saved.result.lines[1].feeBreakdown).toEqual({END:30,RUN:5});
+  expect(saved.result.funding.openingLiability).toBe('1050.00');
+  expect(saved.result.funding.netCashProceeds).toBe('980.00');
+  expect(saved.result.totalScheduledFees).toBe('40.00');
+  expect(saved.result.totalScheduledCash).toBe('1090.00');
+  expect(saved.result.lines[0].feeBreakdown).toEqual({RUN:'5.00'});
+  expect(saved.result.lines[1].feeBreakdown).toEqual({END:'30.00',RUN:'5.00'});
 });
