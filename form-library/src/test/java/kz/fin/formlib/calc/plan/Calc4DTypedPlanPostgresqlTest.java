@@ -32,7 +32,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * rehashed by INGEST-2, exact observations are compared with raw values.
  * No production S2, CalcPlan admission, jobs, or financial results.
  */
-@SpringBootTest(properties={"fin.uat.editor.enabled=false"})
+@SpringBootTest(properties={"fin.uat.editor.enabled=false",
+  "fin.calc4d.uat-execution-enabled=true"})
 @Testcontainers
 @EnabledIfSystemProperty(named="fin.postgres.uat.enabled",matches="true")
 class Calc4DTypedPlanPostgresqlTest {
@@ -54,6 +55,8 @@ class Calc4DTypedPlanPostgresqlTest {
   @Autowired Calc4DExactFactSetInputResolver resolver;
   @Autowired Calc4DImmutablePlanCompiler plans;
   @Autowired ObjectMapper mapper;
+  @Autowired Calc4DUatPlanStore planStore;
+  @Autowired Calc4DUatSqlJdbcBatchExecutor batch;
 
   private UUID formula(String metric){
     return jdbc.queryForObject("""
@@ -269,4 +272,127 @@ class Calc4DTypedPlanPostgresqlTest {
     assertThrows(IllegalStateException.class,()->
       plans.preview(fixture.organization(),f02(),List.of(UUID.randomUUID())));
   }
+  @Test void persistedUatCalcPlanExecutesThreeF02FormulaOutputsAndReplays() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var plan=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    assertEquals("UAT_ONLY_NOT_S2_APPROVED",jdbc.queryForObject("""
+      SELECT admission_state FROM fin_calc.calc4d_uat_plan WHERE id=?
+      """,String.class,plan.id()));
+    assertFalse(plan.admittedToProduction());
+    assertFalse(plan.replayed());
+    var again=planStore.stage(f.organization(),List.of(
+      f02().get(2),f02().get(1),f02().get(0)),List.of(f.factset()));
+    assertEquals(plan.id(),again.id());
+    assertTrue(again.replayed());
+    var executed=batch.executeExact(f.organization(),plan.id());
+    assertFalse(executed.financiallyApproved());
+    assertEquals("UAT_SYNTHETIC_ONLY",executed.status());
+    assertEquals(3,executed.outputRows());
+    var replay=batch.executeExact(f.organization(),plan.id());
+    assertEquals(executed.resultId(),replay.resultId());
+    assertEquals(executed.resultSha256(),replay.resultSha256());
+    assertTrue(replay.replayed());
+    String data=jdbc.queryForObject("""
+      SELECT output_jsonb::text FROM fin_calc.calc4d_uat_result WHERE id=?
+      """,String.class,executed.resultId());
+    var rows=mapper.readTree(data);
+    assertEquals(3,rows.size());
+    var byMetric=new java.util.HashMap<String,java.math.BigDecimal>();
+    for(var o:rows){
+      assertEquals("PRESENT",o.path("valueState").asText());
+      byMetric.put(o.path("outputMetricCode").asText(),
+        new java.math.BigDecimal(o.path("numericValue").asText()));
+    }
+    assertEquals(0,new java.math.BigDecimal("100").compareTo(byMetric.get("F02.grossProfit")));
+    assertEquals(0,new java.math.BigDecimal("0.5").compareTo(byMetric.get("F02.grossMargin")));
+    assertEquals(0,new java.math.BigDecimal("50").compareTo(byMetric.get("F02.operatingResult")));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_plan WHERE organization_id=?
+      """,Integer.class,f.organization()));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result WHERE organization_id=?
+      """,Integer.class,f.organization()));
+    noExecution();
+  }
+
+  @Test void sourceRevokedAfterStagingBlocksUatBatchExecution() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var plan=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    jdbc.update("""
+      UPDATE fin_fact.factset_control SET revoked=true,
+        qualification_epoch=qualification_epoch+1,row_version=row_version+1
+      WHERE active_factset_id=?
+      """,f.factset());
+    assertThrows(IllegalStateException.class,()->
+      batch.executeExact(f.organization(),plan.id()));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result WHERE plan_id=?
+      """,Integer.class,plan.id()));
+    noExecution();
+  }
+
+  @Test void uatPlanRejectsCrossOrganizationAndUnknownFactSet() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    assertThrows(IllegalStateException.class,()->
+      batch.executeExact(UUID.randomUUID(),staged.id()));
+    assertThrows(IllegalStateException.class,()->
+      planStore.stage(UUID.randomUUID(),f02(),List.of(f.factset())));
+    assertThrows(IllegalStateException.class,()->
+      planStore.stage(f.organization(),f02(),List.of(UUID.randomUUID())));
+    noExecution();
+  }
+
+  @Test void divideByZeroIsInvalidAndNeverInventsAScalarZero() throws Exception {
+    var f=source("0.00","0.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    var result=batch.executeExact(f.organization(),staged.id());
+    var contents=mapper.readTree(jdbc.queryForObject("""
+      SELECT output_jsonb::text FROM fin_calc.calc4d_uat_result WHERE id=?
+      """,String.class,result.resultId()));
+    int invalid=0;
+    for(var node:contents){
+      if("F02.grossMargin".equals(node.path("outputMetricCode").asText())){
+        assertEquals("INVALID_ZERO_DENOMINATOR",node.path("valueState").asText());
+        assertTrue(node.path("numericValue").isNull());
+        invalid++;
+      }
+    }
+    assertEquals(1,invalid);
+    assertFalse(result.financiallyApproved());
+    noExecution();
+  }
+
+  @Test void immutableUatRowsCannotBeModifiedOrPromotedToProduction() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var plan=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    var result=batch.executeExact(f.organization(),plan.id());
+    assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+      UPDATE fin_calc.calc4d_uat_plan
+      SET admission_state='FINANCIALLY_APPROVED' WHERE id=?
+      """,plan.id()));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+      DELETE FROM fin_calc.calc4d_uat_result WHERE id=?
+      """,result.resultId()));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+      UPDATE fin_calc.calc4d_uat_result
+      SET financially_approved=true WHERE id=?
+      """,result.resultId()));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc_result
+      """,Integer.class));
+    noExecution();
+  }
+
+  @Test void disabledUatFeatureRejectsStagingWithoutPersistingPlan() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var off=new Calc4DUatPlanStore(jdbc,plans,mapper,false);
+    assertEquals("CALC4D_UAT_EXECUTION_DISABLED",
+      assertThrows(IllegalStateException.class,()->
+        off.stage(f.organization(),f02(),List.of(f.factset()))).getMessage());
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_plan WHERE organization_id=?
+      """,Integer.class,f.organization()));
+  }
+
 }
