@@ -15,7 +15,7 @@ import java.util.Objects;
  * Does not invent a formula/IFRS clause; preparation output is UAT/editorial.
  */
 @Service
-public final class Calc154BatchTechnicalClassification {
+public class Calc154BatchTechnicalClassification {
   public enum Readiness {
     REFERENCE_ONLY_NEEDS_SCOPE_DECISION,
     NUMERIC_FORM_NEEDS_OUTPUT_CONTRACT,
