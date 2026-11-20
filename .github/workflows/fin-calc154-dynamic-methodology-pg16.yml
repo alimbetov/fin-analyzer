@@ -29,13 +29,13 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: form-library/pom.xml
-      - name: Compile and execute 12 UAT math and real PostgreSQL16 tests
+      - name: Compile and execute 13 UAT math and real PostgreSQL16 tests
         run: |
           mvn -B -ntp -f form-library/pom.xml test \
             -Dfin.postgres.uat.enabled=true \
             -Dtest=FinancialMethodologyMathTest,MethodologySelectionPostgresqlTest \
             -DfailIfNoTests=true
-      - name: Require 12 tests and no skipping
+      - name: Require 13 tests and no skipping
         run: |
           python3 - <<'PY'
           import glob,sys,xml.etree.ElementTree as ET
@@ -48,7 +48,7 @@ jobs:
             report.append({key:int(root.attrib.get(key,0))
                            for key in ('tests','failures','errors','skipped')})
           print(report)
-          if sum(x['tests'] for x in report)!=12 or any(
+          if sum(x['tests'] for x in report)!=13 or any(
             x[k] for x in report for k in ('failures','errors','skipped')
-          ):sys.exit('METHODOLOGY_12_TEST_GATE_NOT_GREEN')
+          ):sys.exit('METHODOLOGY_13_TEST_GATE_NOT_GREEN')
           PY
