@@ -1,0 +1,61 @@
+name: FIN CALC-A05-R1.1 — Dated Contract Cash PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/loan/**'
+      - 'form-library/src/main/java/kz/fin/formlib/api/LoanScheduleUatController.java'
+      - 'form-library/src/main/resources/db/changelog/059-fin-calc-a05-r11-schedules-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/loan/LoanPaymentScheduleCalculatorTest.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/loan/LoanSchedulePostgresqlTest.java'
+      - '.github/workflows/fin-a05-r11-dated-schedule-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dated-cash-golden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Real PostgreSQL 16 + Java BigDecimal independent golden controls
+        run: |
+          mvn -B -ntp -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=LoanPaymentScheduleCalculatorTest,LoanSchedulePostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require 17 non-skipped cash schedule checks
+        run: |
+          python3 - <<'PY'
+          import sys,glob,xml.etree.ElementTree as ET
+          names=('LoanPaymentScheduleCalculatorTest','LoanSchedulePostgresqlTest')
+          total={'tests':0,'errors':0,'failures':0,'skipped':0}
+          for name in names:
+            files=glob.glob('form-library/target/surefire-reports/TEST-*'+name+'.xml')
+            if len(files)!=1:sys.exit('A05_R11_REPORT_MISSING_'+name)
+            root=ET.parse(files[0]).getroot()
+            for key in total:total[key]+=int(root.attrib.get(key,0))
+          print(total)
+          if total!={'tests':17,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('A05_R11_DATED_FINANCIAL_GOLDEN_NOT_GREEN')
+          PY
+      - name: Preserve financial control evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-a05-r11-pg16
+          path: |
+            form-library/target/surefire-reports/TEST-*LoanPaymentScheduleCalculatorTest.xml
+            form-library/target/surefire-reports/TEST-*LoanSchedulePostgresqlTest.xml
+          if-no-files-found: warn
