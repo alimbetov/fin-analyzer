@@ -88,6 +88,12 @@ public class Calc4DFormulaCandidateRegistrar {
         requested.exactTargetFormVersionId());
     if(form.size()!=1)throw new IllegalStateException("CALC4D_FORM_VERSION_NOT_CURRENT");
     var f=form.getFirst();
+    Integer physicalCollision=jdbc.queryForObject("""
+      SELECT count(*) FROM fin_lib.lib_metric_definition
+      WHERE metric_code=? AND form_code=? AND metric_kind='SOURCE_FIELD'
+      """,Integer.class,requested.outputMetricCode(),f.code());
+    if(physicalCollision==null||physicalCollision!=0)
+      throw new IllegalArgumentException("CALC4D_OUTPUT_CANNOT_SHADOW_SOURCE_METRIC");
     var metricNames=new ArrayList<String>();
     var sources=new ArrayList<Resolved>();
 
