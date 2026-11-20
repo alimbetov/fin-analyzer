@@ -178,4 +178,53 @@ class Calc4DFormulaRegistrarPostgresqlTest {
       """,r.revisionId()));
     assertNotExecutable();
   }
+  @Test void bulkRegistrationIsAtomicAcrossFormsWithDeterministicSha() throws Exception {
+    UUID v08=version("C08"),v09=version("C09");
+    var c08=new Calc4DFormulaCandidateRegistrar.Definition(
+      "C08",v08,"C08.bulkSyntheticDifference","CALC4D_BULK_V1",
+      "SUBTRACT","INTERVAL_REQUIRED",List.of(
+        new Calc4DFormulaCandidateRegistrar.InputSource("C08.fixedCost",v08,null),
+        new Calc4DFormulaCandidateRegistrar.InputSource("C08.variableCost",v08,null)),
+      "CALC4D_BULK_SYNTHETIC_ONLY");
+    var c09=new Calc4DFormulaCandidateRegistrar.Definition(
+      "C09",v09,"C09.bulkSyntheticDifference","CALC4D_BULK_V1",
+      "SUBTRACT","INTERVAL_REQUIRED",List.of(
+        new Calc4DFormulaCandidateRegistrar.InputSource("C09.amount",v09,null),
+        new Calc4DFormulaCandidateRegistrar.InputSource("C08.fixedCost",v08,null)),
+      "CALC4D_BULK_SYNTHETIC_ONLY");
+    var batch=registrar.registerBatch(List.of(c09,c08));
+    assertEquals(2,batch.receipts().size());
+    assertEquals(64,batch.batchSha256().length());
+    assertFalse(batch.financiallyApproved());
+    var retry=registrar.registerBatch(List.of(c08,c09));
+    assertEquals(batch.batchSha256(),retry.batchSha256());
+    assertTrue(retry.receipts().stream().allMatch(
+      Calc4DFormulaCandidateRegistrar.Receipt::replayed));
+    assertEquals(2,compiler.compile(batch.receipts().stream()
+      .map(Calc4DFormulaCandidateRegistrar.Receipt::revisionId).toList())
+      .orderedNodes().size());
+
+    var staged=new Calc4DFormulaCandidateRegistrar.Definition(
+      "C08",v08,"C08.rolledBackSyntheticCandidate","CALC4D_BULK_ROLLBACK",
+      "SUBTRACT","INTERVAL_REQUIRED",c08.inputs(),"CALC4D_ROLLBACK_TEST");
+    var invalid=new Calc4DFormulaCandidateRegistrar.Definition(
+      "C09",v09,"C09.badBulkCandidate","CALC4D_BULK_ROLLBACK",
+      "SUBTRACT","INTERVAL_REQUIRED",List.of(
+        new Calc4DFormulaCandidateRegistrar.InputSource("C09.amount",v09,null),
+        new Calc4DFormulaCandidateRegistrar.InputSource(
+          "C09.missingPhysicalSource",v09,null)),
+      "CALC4D_ROLLBACK_TEST");
+    assertThrows(IllegalStateException.class,()->
+      registrar.registerBatch(List.of(staged,invalid)));
+    assertEquals(0,sql.queryForObject("""
+      SELECT count(*) FROM fin_calc.formula_contract_revision
+      WHERE output_metric_code='C08.rolledBackSyntheticCandidate'
+      """,Integer.class));
+    assertEquals(0,sql.queryForObject("""
+      SELECT count(*) FROM fin_calc.formula_contract_revision
+      WHERE output_metric_code='C09.badBulkCandidate'
+      """,Integer.class));
+    assertNotExecutable();
+  }
+
 }
