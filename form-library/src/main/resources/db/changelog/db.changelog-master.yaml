@@ -89,3 +89,5 @@ databaseChangeLog:
       file: db/changelog/044-fin-calc4d-methodology-workqueue-postgresql.sql
   - include:
       file: db/changelog/045-fin-calc4d5-uat-fenced-queue-postgresql.sql
+  - include:
+      file: db/changelog/046-fin-calc154-synthetic-mathematical-controls-postgresql.sql
