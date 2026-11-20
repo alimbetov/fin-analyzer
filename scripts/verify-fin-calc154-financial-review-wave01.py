@@ -71,7 +71,7 @@ def main()->None:
             fail(form+" unsupported proposal evidence")
         if not p["syntheticIllustrationNotApproved"]:
             fail(form+" no synthetic illustration or explicit unavailability")
-        if p["timeSemanticsProposal"] not in {
+        if p["periodSemanticsProposal"] not in {
             "AS_OF","INTERVAL","INTERVAL_AND_AS_OF_MIXED_REQUIRES_ALIGNMENT"
         }:
             fail(form+" period semantics unspecified")
