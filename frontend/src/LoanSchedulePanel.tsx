@@ -92,7 +92,7 @@ export default function LoanSchedulePanel({
       ||next.termsSha256!==termsSha256
       ||next.state!=='UAT_UNQUALIFIED'
       ||next.financiallyApproved||next.productionAdmitted
-      ||String(next.result.finalBalance)!=='0'
+      ||!/^0(?:\.0+)?$/.test(String(next.result.finalBalance))
       ||!next.resultSha256?.match(/^[0-9a-f]{64}$/))
       throw new Error('A05: несоответствие сохранённого графика, источника или SHA.');
     return next;
