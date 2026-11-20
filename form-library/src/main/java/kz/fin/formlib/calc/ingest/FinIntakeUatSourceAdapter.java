@@ -20,11 +20,15 @@ public class FinIntakeUatSourceAdapter {
 
   public record PinnedSource(
       FormFactCandidateExtractor.Projection projection,
+      java.util.List<UUID> sourceRowIds,
       String pinnedSourceSha256,
       String integrityState,
       String qualificationState) {
     public PinnedSource {
       Objects.requireNonNull(projection, "INTAKE_UAT_PROJECTION_REQUIRED");
+      sourceRowIds=java.util.List.copyOf(sourceRowIds);
+      if(new java.util.HashSet<>(sourceRowIds).size()!=sourceRowIds.size())
+        throw new IllegalArgumentException("INTAKE_UAT_ROW_CENSUS_DUPLICATE");
       FactDigest.requireSha(pinnedSourceSha256,"INTAKE_UAT_SOURCE_SHA_INVALID");
       if(!"SOURCE_SHA_REVERIFIED".equals(integrityState)
           ||!"UNQUALIFIED_SOURCE_PROJECTION".equals(qualificationState))
@@ -44,7 +48,9 @@ public class FinIntakeUatSourceAdapter {
 
     // This is the ONLY source loader: readExact -> INGEST-2 SHA rehash
     // -> typed extractor. No latest-revision fallback and no third writer.
-    var p=candidates.extractExact(revisionId,organizationId,projectId);
+    var exact=candidates.extractExactWithRowCensus(
+        revisionId,organizationId,projectId);
+    var p=exact.projection();
     if(!expectedFormCode.equals(p.formCode())
         || !revisionId.equals(p.revisionId())
         || p.scope()==null
@@ -68,7 +74,7 @@ public class FinIntakeUatSourceAdapter {
         p.sourceSchemaSha256(),p.sourceMappingSha256(),p.ingestionRegistrySha256(),
         p.scope().currencyCode(),p.scope().periodType(),p.scope().periodCode(),
         p.scope().reportingBasis(),p.scope().dataSpace());
-    return new PinnedSource(p,fingerprint,p.sourceIntegrityState(),
-        p.qualificationState());
+    return new PinnedSource(p,exact.sourceRowIds(),fingerprint,
+        p.sourceIntegrityState(),p.qualificationState());
   }
 }
