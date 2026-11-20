@@ -9,6 +9,8 @@ on:
       - 'form-library/src/main/resources/db/changelog/043-fin-calc4d-uat-execution-sandbox-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/044-fin-calc4d-methodology-workqueue-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/045-fin-calc4d5-uat-fenced-queue-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/046-fin-calc154-synthetic-mathematical-controls-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/047-fin-calc154-methodology-completion-readiness-postgresql.sql'
       - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
       - 'form-library/src/main/resources/application.yml'
       - 'form-library/src/test/java/kz/fin/formlib/calc/plan/Calc4DTypedPlanPostgresqlTest.java'
