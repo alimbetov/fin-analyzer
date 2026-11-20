@@ -113,3 +113,5 @@ databaseChangeLog:
       file: db/changelog/056-fin-calc-a05-r10-loan-intake-postgresql.sql
   - include:
       file: db/changelog/057-fin-mg-r02-explicit-indicator-bindings-postgresql.sql
+  - include:
+      file: db/changelog/058-fin-calc-a05-r10-agreement-key-postgresql.sql
