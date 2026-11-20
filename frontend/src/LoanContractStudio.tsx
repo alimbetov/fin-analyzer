@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {Draft,Field,Row} from './api';
 import {get,isDefiniteRejection,post} from './api';
 import {verifySavedDraft} from './editorPolicy';
+import LoanSchedulePanel from './LoanSchedulePanel';
 
 type Scope={
   organizationId:string;economicEntityId:string;businessScopeId:string;projectId:string
@@ -261,8 +262,8 @@ export default function LoanContractStudio({
       <button type="button" onClick={()=>{setFees(old=>[...old,newFee()]);onDirty()}}>
         Добавить комиссию
       </button>
-      <p className="period-caption">IFRS 9 EIR и ГЭСВ РК: UNREVIEWED. Результат договорного
-        графика пока не вычисляется. Комиссии сохраняются как исходные правила.</p>
+      <p className="period-caption">IFRS 9 EIR и ГЭСВ РК: UNREVIEWED. Договорный
+        денежный график R1.1 рассчитывается отдельно по сохранённой редакции C05.</p>
     </fieldset>
     {!sourceMatch&&rowEntries.length===1&&
       <p role="status">Проверьте исходную строку C05: agreementRef, creditor, currency,
@@ -275,5 +276,18 @@ export default function LoanContractStudio({
     <button type="button" className="primary-save" disabled={!ready} onClick={()=>void save()}>
       {working?'Сохранение…':'Сохранить договор и C05 атомарно'}
     </button>
+    {loaded&&draft?.revisionId===loaded.receipt.sourceRevisionId&&
+      <LoanSchedulePanel
+        key={loaded.receipt.sourceRevisionId}
+        organizationId={scope.organizationId}
+        projectId={scope.projectId}
+        exactSourceRevisionId={loaded.receipt.sourceRevisionId}
+        sourceContentSha256={loaded.receipt.sourceContentSha256}
+        termsSha256={loaded.receipt.termsSha256}
+        repaymentMethod={loaded.terms.repaymentMethod}
+        dirty={dirty}
+        busy={busy||working||loading}
+        saveUncertain={saveUncertain}
+        commitUncertain={commitUncertain}/>}
   </section>;
 }
