@@ -196,15 +196,31 @@ public class FormDraftService {
 
   @Transactional
   public DraftReceipt save(DraftRequest req,String idempotencyKey) {
-    return saveCommand(req,idempotencyKey,null);
+    return saveCommand(req,idempotencyKey,null,null);
   }
 
   @Transactional
   public DraftReceipt saveWithAttachment(DraftRequest req,String idempotencyKey,FormAttachmentStore.Upload upload) {
-    return saveCommand(req,idempotencyKey,Objects.requireNonNull(upload));
+    return saveCommand(req,idempotencyKey,Objects.requireNonNull(upload),null);
   }
 
-  private DraftReceipt saveCommand(DraftRequest req,String idempotencyKey,FormAttachmentStore.Upload upload) {
+  /**
+   * A05-R1.0: The C05 ROWSET may remain identical while typed financial
+   * terms/fees change. An exact typed digest becomes part of this SAME
+   * canonical command, followed by the atomic typed sidecar insert.
+   * Call only from the owning LoanContractIntakeService transaction.
+   */
+  @Transactional
+  public DraftReceipt saveWithA05Companion(DraftRequest req,String idempotencyKey,
+      String companionSha256) {
+    if(req==null||!"C05".equals(req.formCode())||companionSha256==null
+        ||!companionSha256.matches("[0-9a-f]{64}"))
+      throw bad("A05_TYPED_C05_COMPANION_INVALID");
+    return saveCommand(req,idempotencyKey,null,companionSha256);
+  }
+
+  private DraftReceipt saveCommand(DraftRequest req,String idempotencyKey,
+      FormAttachmentStore.Upload upload,String a05CompanionSha256) {
     if(req==null) throw bad("REQUEST_REQUIRED");
     required(req.organizationId(),"ORGANIZATION");required(req.economicEntityId(),"ENTITY");
     required(req.businessScopeId(),"SCOPE");required(req.projectId(),"PROJECT");
@@ -242,6 +258,8 @@ public class FormDraftService {
         .map(r->List.of(String.valueOf(r.rowId()),r.rowPosition(),
             json(r.values()==null?Map.of():new TreeMap<>(r.values())))).toList())));
     if(upload!=null)canonicalRequest=json(List.of(canonicalRequest,upload.fileName(),upload.mediaType(),upload.sha256()));
+    if(a05CompanionSha256!=null)
+      canonicalRequest=json(List.of(canonicalRequest,"A05_TYPED_COMPANION_V1",a05CompanionSha256));
     String requestSha=sha("FIN-LIB-COMMAND-V1|"+canonicalRequest);
     var previous=receipts.findByOrganizationIdAndIdempotencyKey(req.organizationId(),idempotencyKey);
     if(previous.isPresent()) {
@@ -360,7 +378,7 @@ public class FormDraftService {
     if(inst.getCurrentRevisionId()!=null){
       var current=revisions.findById(inst.getCurrentRevisionId()).orElseThrow();
       if(contentHash.equals(current.getCanonicalContentSha256())&&
-         orderHash.equals(current.getRowOrderSha256()))
+         orderHash.equals(current.getRowOrderSha256())&&a05CompanionSha256==null)
         throw bad("NO_FINANCIAL_CHANGES");
     }
     FormRevision revision=new FormRevision();revision.setId(UUID.randomUUID());
