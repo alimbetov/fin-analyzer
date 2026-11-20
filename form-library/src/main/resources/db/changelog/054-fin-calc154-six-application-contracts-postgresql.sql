@@ -18,9 +18,9 @@ CREATE TABLE fin_calc.calc_application_contract_revision (
  source_form_codes_jsonb jsonb NOT NULL CHECK(
    jsonb_typeof(source_form_codes_jsonb)='array'
    AND jsonb_array_length(source_form_codes_jsonb)>0),
- required_inputs_jsonb jsonb NOT NULL CHECK(
-   jsonb_typeof(required_inputs_jsonb)='array'
-   AND jsonb_array_length(required_inputs_jsonb)>0),
+ candidate_input_fields_jsonb jsonb NOT NULL CHECK(
+   jsonb_typeof(candidate_input_fields_jsonb)='array'
+   AND jsonb_array_length(candidate_input_fields_jsonb)>0),
  proposed_outputs_jsonb jsonb NOT NULL CHECK(
    jsonb_typeof(proposed_outputs_jsonb)='array'
    AND jsonb_array_length(proposed_outputs_jsonb)>0),
@@ -37,7 +37,7 @@ CREATE TABLE fin_calc.calc_application_contract_revision (
  UNIQUE(app_code,revision_number),
  UNIQUE(app_code,contract_sha256),
  CONSTRAINT ck_app_inputs_array_strings CHECK(
-    NOT jsonb_path_exists(required_inputs_jsonb,'$[*] ? (@.type() != "string")')),
+    NOT jsonb_path_exists(candidate_input_fields_jsonb,'$[*] ? (@.type() != "string")')),
  CONSTRAINT ck_app_sources_array_strings CHECK(
     NOT jsonb_path_exists(source_form_codes_jsonb,'$[*] ? (@.type() != "string")')),
  CONSTRAINT ck_app_outputs_array_strings CHECK(
@@ -54,7 +54,7 @@ DECLARE
  expected text;
 BEGIN
  IF EXISTS (
-  SELECT 1 FROM jsonb_array_elements_text(NEW.required_inputs_jsonb) AS x(value)
+  SELECT 1 FROM jsonb_array_elements_text(NEW.candidate_input_fields_jsonb) AS x(value)
   WHERE x.value !~ '^[A-Za-z][A-Za-z0-9_]*:(TEXT|UUID|DATE|MONEY|DECIMAL|INTEGER|ENUM|CURRENCY)$'
  ) THEN
   RAISE EXCEPTION 'CALC_APPLICATION_FIELD_TYPE_INVALID' USING ERRCODE='23514';
@@ -62,9 +62,9 @@ BEGIN
  IF (SELECT count(*) FROM jsonb_array_elements_text(NEW.source_form_codes_jsonb)) <>
     (SELECT count(DISTINCT x.value)
      FROM jsonb_array_elements_text(NEW.source_form_codes_jsonb) x(value))
- OR (SELECT count(*) FROM jsonb_array_elements_text(NEW.required_inputs_jsonb)) <>
+ OR (SELECT count(*) FROM jsonb_array_elements_text(NEW.candidate_input_fields_jsonb)) <>
     (SELECT count(DISTINCT split_part(x.value,':',1))
-     FROM jsonb_array_elements_text(NEW.required_inputs_jsonb) x(value))
+     FROM jsonb_array_elements_text(NEW.candidate_input_fields_jsonb) x(value))
  THEN
   RAISE EXCEPTION 'CALC_APPLICATION_DUPLICATE_SOURCE_OR_INPUT' USING ERRCODE='23514';
  END IF;
@@ -72,7 +72,7 @@ BEGIN
     'FIN-CALC-APPLICATION-CONTRACT-V1|'||NEW.app_code||'|'||
     NEW.revision_number::text||'|'||
     NEW.source_form_codes_jsonb::text||'|'||
-    NEW.required_inputs_jsonb::text||'|'||
+    NEW.candidate_input_fields_jsonb::text||'|'||
     NEW.proposed_outputs_jsonb::text||'|'||
     NEW.proposed_variants_jsonb::text||'|'||
     NEW.blocker_description,'UTF8')),'hex');
@@ -112,10 +112,10 @@ VALUES
  ('CALC-A06','Денежные потоки инвестиционного сценария','INVESTMENT_DCF');
 
 --changeset fin-calc:054e dbms:postgresql splitStatements:true
--- Schema templates will be reviewed with finance. Existing fin_lib forms are
+-- Field inputs form a variant-dependent CANDIDATE UNION, not globally mandatory.\n-- Requiredness is resolved after choosing a variant and financial policy.\n-- Schema templates will be reviewed with finance. Existing fin_lib forms are
 -- created by Java bootstrap *after* Liquibase, hence source references are
 -- resolved and tested on read, never prematurely FK-pinned during migration.
-WITH seed(app_code,revision_number,source_form_codes_jsonb,required_inputs_jsonb,
+WITH seed(app_code,revision_number,source_form_codes_jsonb,candidate_input_fields_jsonb,
           proposed_outputs_jsonb,proposed_variants_jsonb,blocker_description) AS (
  VALUES
  ('CALC-A01',1,'["C01","C02","C11","DF-CSH-02","DF-CSH-04","DF-CSH-05","DF-CSH-06"]'::jsonb,'["obligationBusinessKey:TEXT","installmentKey:TEXT","contractVersionId:UUID","effectiveDueDate:DATE","recognizedAmount:MONEY","allocatedPaymentAmount:MONEY","paymentEffectiveAt:DATE","allocationPolicyRevisionId:UUID"]'::jsonb,'["openBalance","overdueAmount","daysPastDue","agingBucket"]'::jsonb,'["CONTRACTUAL_ORDER","FIFO_DUE_DATE","EXPLICIT_LEDGER_ALLOCATION"]'::jsonb,'Event-level settlements, allocation precedence, amendments and duplicate identities are not proven by current forms'),
@@ -126,17 +126,17 @@ WITH seed(app_code,revision_number,source_form_codes_jsonb,required_inputs_jsonb
  ('CALC-A06',1,'["P01","P02","P03","P04","P05","P06","P07","P08","P09","DF-PRJ-03","DF-PRJ-05"]'::jsonb,'["scenarioRevisionId:UUID","cashflowRevisionId:UUID","cashflowDate:DATE","flowValue:MONEY","flowBasis:ENUM","discountRateRevisionId:UUID","discountRate:DECIMAL","terminalMethod:ENUM","terminalAssumptionsRevisionId:UUID","currencyCode:CURRENCY"]'::jsonb,'["npv","irrCandidates","enterpriseValue","equityValue","scenarioDelta"]'::jsonb,'["FCFF_WACC","FCFE_KE"]'::jsonb,'Dated original cashflow stream, WACC/Ke source, terminal assumptions and matched P-forms not qualified')
 )
 INSERT INTO fin_calc.calc_application_contract_revision(
- id,app_code,revision_number,source_form_codes_jsonb,required_inputs_jsonb,
+ id,app_code,revision_number,source_form_codes_jsonb,candidate_input_fields_jsonb,
  proposed_outputs_jsonb,proposed_variants_jsonb,blocker_description,contract_sha256)
 SELECT
  md5(random()::text||clock_timestamp()::text)::uuid,
- s.app_code,s.revision_number,s.source_form_codes_jsonb,s.required_inputs_jsonb,
+ s.app_code,s.revision_number,s.source_form_codes_jsonb,s.candidate_input_fields_jsonb,
  s.proposed_outputs_jsonb,s.proposed_variants_jsonb,s.blocker_description,
  encode(sha256(convert_to(
   'FIN-CALC-APPLICATION-CONTRACT-V1|'||s.app_code||'|'||
   s.revision_number::text||'|'||
   s.source_form_codes_jsonb::text||'|'||
-  s.required_inputs_jsonb::text||'|'||
+  s.candidate_input_fields_jsonb::text||'|'||
   s.proposed_outputs_jsonb::text||'|'||
   s.proposed_variants_jsonb::text||'|'||
   s.blocker_description,'UTF8')),'hex')
