@@ -73,10 +73,7 @@ LEFT JOIN LATERAL (
   SELECT
     count(e.id)::integer AS mathematical_control_cases,
     count(DISTINCT c.id) FILTER(
-      WHERE NOT EXISTS(
-        SELECT 1 FROM fin_calc.calc154_synthetic_control_case x
-        WHERE x.formula_revision_id=c.id
-      ))::integer AS formulas_without_mathematical_control,
+      WHERE e.id IS NULL)::integer AS formulas_without_mathematical_control,
     count(e.id) FILTER(
       WHERE e.expected_state='INVALID_ZERO_DENOMINATOR')::integer
       AS zero_division_negative_cases,
