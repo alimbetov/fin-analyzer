@@ -101,7 +101,7 @@ jobs:
           failed=sum(int(x.attrib.get('failures',0)) for x in suites)
           skipped=sum(int(x.attrib.get('skipped',0)) for x in suites)
           print({'tests':n,'errors':errors,'failures':failed,'skipped':skipped})
-          if n!=2 or errors or failed or skipped:raise SystemExit('FIN_A05_R11_BROWSER_E2E_NOT_GREEN')
+          if n!=3 or errors or failed or skipped:raise SystemExit('FIN_A05_R11_BROWSER_E2E_NOT_GREEN')
           PY
 
       - name: Preserve browser evidence
