@@ -356,6 +356,84 @@ class MetricGraphUatExecutionPostgresqlTest {
       .andExpect(status().isNotFound());
   }
 
+  @Test void directSqlCannotForgeSourceTenantOrUnpinnedFormulaSha(){
+    var s=Scope.fresh();
+    var f=f02(s,null,0,"200","100","50");
+    var saved=mg.execute(f02Request(s,f.revisionId(),"F02.grossProfit"),
+      "mg-r04-owner-guard-"+UUID.randomUUID());
+    // Even a JDBC writer bypassing the Java service cannot pin the exact
+    // source revision into a different organization.
+    assertThrows(DataAccessException.class,()->db.update("""
+      INSERT INTO fin_calc.mg_r04_uat_plan(
+        id,organization_id,project_id,target_metric_code,execution_family,
+        source_form_code,exact_source_revision_id,formula_revision_id,
+        schedule_revision_id,amendment_revision_id,application_contract_revision_id,
+        source_content_sha256,source_schema_sha256,source_projection_sha256,
+        method_binding_sha256,graph_sha256,engine_sha256,plan_sha256,
+        period_type,period_code,currency_code,reporting_basis,data_space,
+        source_lineage_sha256)
+      SELECT ?,?,project_id,target_metric_code,execution_family,source_form_code,
+        exact_source_revision_id,formula_revision_id,schedule_revision_id,
+        amendment_revision_id,application_contract_revision_id,
+        source_content_sha256,source_schema_sha256,source_projection_sha256,
+        method_binding_sha256,graph_sha256,engine_sha256,?,
+        period_type,period_code,currency_code,reporting_basis,data_space,
+        source_lineage_sha256
+      FROM fin_calc.mg_r04_uat_plan WHERE id=?
+      """,UUID.randomUUID(),UUID.randomUUID(),
+      MetricGraphUatExecutionService.sha("MG-FOREIGN-ORG-"+UUID.randomUUID()),
+      saved.planId()));
+    assertThrows(DataAccessException.class,()->db.update("""
+      INSERT INTO fin_calc.mg_r04_uat_plan(
+        id,organization_id,project_id,target_metric_code,execution_family,
+        source_form_code,exact_source_revision_id,formula_revision_id,
+        schedule_revision_id,amendment_revision_id,application_contract_revision_id,
+        source_content_sha256,source_schema_sha256,source_projection_sha256,
+        method_binding_sha256,graph_sha256,engine_sha256,plan_sha256,
+        period_type,period_code,currency_code,reporting_basis,data_space,
+        source_lineage_sha256)
+      SELECT ?,organization_id,project_id,target_metric_code,execution_family,
+        source_form_code,exact_source_revision_id,formula_revision_id,
+        schedule_revision_id,amendment_revision_id,application_contract_revision_id,
+        source_content_sha256,source_schema_sha256,source_projection_sha256,
+        ?,graph_sha256,engine_sha256,?,
+        period_type,period_code,currency_code,reporting_basis,data_space,
+        source_lineage_sha256
+      FROM fin_calc.mg_r04_uat_plan WHERE id=?
+      """,UUID.randomUUID(),"a".repeat(64),
+      MetricGraphUatExecutionService.sha("MG-FORGED-METHOD-"+UUID.randomUUID()),
+      saved.planId()));
+    assertEquals(1,db.queryForObject("""
+      SELECT count(*) FROM fin_calc.mg_r04_uat_plan WHERE organization_id=?
+      """,Integer.class,s.org()));
+    assertEquals("100.00",mg.readExact(s.org(),s.project(),saved.planId()).valueText());
+  }
+
+  @Test void directSqlCannotCreateForeignOrMismatchedResultReceipt(){
+    var s=Scope.fresh();
+    var f=f02(s,null,0,"200","100","50");
+    var first=mg.execute(f02Request(s,f.revisionId(),"F02.grossProfit"),
+      "mg-r04-valid-receipt-"+UUID.randomUUID());
+    var margin=mg.execute(f02Request(s,f.revisionId(),"F02.grossMargin"),
+      "mg-r04-other-result-"+UUID.randomUUID());
+    assertThrows(DataAccessException.class,()->db.update("""
+      INSERT INTO fin_calc.mg_r04_uat_command_receipt
+       (id,organization_id,idempotency_key,command_sha256,plan_id,result_id)
+      VALUES(?,?,?,?,?,?)
+      """,UUID.randomUUID(),UUID.randomUUID(),"mg-r04-forged-org",
+      "b".repeat(64),first.planId(),first.resultId()));
+    assertThrows(DataAccessException.class,()->db.update("""
+      INSERT INTO fin_calc.mg_r04_uat_command_receipt
+       (id,organization_id,idempotency_key,command_sha256,plan_id,result_id)
+      VALUES(?,?,?,?,?,?)
+      """,UUID.randomUUID(),s.org(),"mg-r04-forged-result",
+      "c".repeat(64),first.planId(),margin.resultId()));
+    assertEquals(1,db.queryForObject("""
+      SELECT count(*) FROM fin_calc.mg_r04_uat_command_receipt WHERE plan_id=?
+      """,Integer.class,first.planId()));
+    noProductionWrites();
+  }
+
   @Test void concurrentSameCommandKeyCommitsOnePlanAndOneReceipt() throws Exception{
     var s=Scope.fresh();var f=f02(s,null,0,"200","100","50");
     var request=f02Request(s,f.revisionId(),"F02.grossProfit");
