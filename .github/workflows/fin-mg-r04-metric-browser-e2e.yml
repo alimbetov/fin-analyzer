@@ -88,7 +88,7 @@ jobs:
             -e CI=true -e HOME=/tmp -e VITE_FIN_INTAKE_UAT=true -e VITE_FIN_MG_R04_UAT=true \
             -v "$GITHUB_WORKSPACE/frontend:/work" -w /work \
             mcr.microsoft.com/playwright:v1.56.1-noble \
-            bash -lc 'npm install --no-audit --no-fund && npm run test:e2e -- e2e/mg-r04-immutable-metric-uat.spec.ts'
+            bash -lc 'npm install --include=optional --no-audit --no-fund && npm install --no-save --no-package-lock --no-audit --no-fund @rollup/rollup-linux-x64-gnu@$(node -p "require(\"./node_modules/rollup/package.json\").version") && npm run test:e2e -- e2e/mg-r04-immutable-metric-uat.spec.ts'
 
       - name: Require browser E2E without failure or skip
         run: |
