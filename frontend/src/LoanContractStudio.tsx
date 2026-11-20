@@ -82,7 +82,13 @@ export default function LoanContractStudio({
           result.receipt.sourceContentSha256!==draft.sha256||
           result.sourceIntegrityState!=='SOURCE_SHA_REVERIFIED')
           throw new Error('Сохранённый A05 не соответствует исходной ревизии C05.');
-        setLoaded(result);setTerms(result.terms);setFees(result.fees);
+        // Java BigDecimal is serialized as JSON number; controlled inputs
+        // must normalize the wire representation to string on every reopen.
+        setLoaded(result);
+        setTerms({...result.terms,
+          principal:String(result.terms.principal),
+          nominalAnnualRatePct:String(result.terms.nominalAnnualRatePct)});
+        setFees(result.fees.map(f=>({...f,amountOrRate:String(f.amountOrRate)})));
       })
       .catch(err=>{
         if(!active)return;
