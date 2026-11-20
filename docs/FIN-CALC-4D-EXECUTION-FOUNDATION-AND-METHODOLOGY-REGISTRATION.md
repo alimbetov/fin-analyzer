@@ -80,3 +80,48 @@ Do **not** add financial operations until a needed output and its ground-truth f
 - `fin-calc4d-formula-registrar-pg16.yml`: real PostgreSQL tests for arbitrary-form formula registration, SHA replay, multi-version lineage, cross-form binding and transactional batch rollback.
 
 No security moderation, signed production S2 or release bypass is introduced by this stage.
+
+## CALC-4D.3/4D.4 — 2026-11-20 implementation addendum
+
+### Strictly isolated synthetic UAT execution
+
+The additive Liquibase migrations are `043-fin-calc4d-uat-execution-sandbox-postgresql.sql` and `044-fin-calc4d-methodology-workqueue-postgresql.sql`. All historical migrations remain unmodified.
+
+- `fin_calc.calc4d_uat_plan`: append-only plan snapshot, exact formula revision IDs, exact FactSet references and qualification epochs, SHA of the DAG, source manifest, and execution fingerprint. Explicit state `UAT_ONLY_NOT_S2_APPROVED`.
+- `fin_calc.calc4d_uat_result`: append-only synthetic result and SHA, unique per UAT plan, explicit `financially_approved=false`. Never promoted to `fin_calc.calc_result`.
+- `Calc4DUatPlanStore.stage`: gated by `FIN_CALC4D_UAT_EXECUTION_ENABLED=false` by default; locks every active `fin_fact.factset_control` source `FOR SHARE`, then re-hashes its exact `fin_intake` revision and checks the full immutable plan. Idempotent `(organization,execution_fingerprint)`.
+- `Calc4DUatSqlJdbcBatchExecutor.executeExact`: re-locks/re-verifies current sources before doing one set-based PostgreSQL aggregation over all exact FactSet observations, then evaluates the typed DAG in deterministic order using Java `BigDecimal`. Stores results only in `calc4d_uat_result` with deterministic SHA and idempotency guard.
+- Scalar operations `SUBTRACT`, `RATIO`, `RECONCILE`, `ROLL_FORWARD` require one source observation per metric and identical grain, dimensions and unit; no implicit scalar `SUM`.
+- `GROUP_BY` and `RATIO_OF_SUMS` group on exact dimension digest; a ratio requires the same complete dimension set and compatible units, otherwise the batch fails. Zero denominator is `INVALID_ZERO_DENOMINATOR`, never silently `0`.
+- Fixed **UAT candidate** ratio precision is 12 decimal places with `HALF_EVEN`. This is **not** a financial rounding policy and is not approved for production. No automatic FX conversion, lookback, YTD conversion or cross-period blending.
+- Repeated metric values across different input FactSets are refused without a formally authored merge policy, to avoid double counting.
+- The `calc4d_uat_*` tables are separate from `fin_calc.calc_plan`, `calc_job`, `calc_result`, and `calc_current_result`; the HYB-2B triggers remain unchanged. There is no public HTTP executor.
+
+### Methodology inventory and registration across 154 forms
+
+`fin_calc.calc4d_methodology_workqueue_v1` is a dynamic SQL view of **all 154 forms**, their verified numeric source fields, actual formula revisions, latest output-review draft, and explicit method/policy/S2 blockers. Query directly:
+
+```sql
+SELECT form_code, form_version_id, content_mode, direct_numeric_field_count,
+       jsonb_array_length(typed_numeric_sources_jsonb) AS typed_fields,
+       formula_candidate_count, mandatory_output_work_state,
+       calculation_policy_state, financial_approval_state, executable
+FROM fin_calc.calc4d_methodology_workqueue_v1
+ORDER BY form_code;
+```
+
+This is the authoritative AUTHORING QUEUE, **not** proof of 154 completed calculations. Currently there are ten existing catalog candidate formulas across five forms. Candidate registration via `Calc4DFormulaCandidateRegistrar.registerBatch` is append-only, transactional, SHA-versioned and limited to 154 explicitly supplied definitions. This bulk API does not generate unrequested `SUM` methods from source field presence and does not claim a completed mandatory output set.
+
+### PostgreSQL acceptance scope
+
+- `Calc4DTypedPlanPostgresqlTest`: exact source revision SHA, DAG graph, deterministic UAT plan, immutability, repeated execution, source revocation, cross-organization rejection, zero denominator, 154 methodology workqueue, and real **C07 ROWSET** `GROUP_BY` / `RATIO_OF_SUMS` UAT execution.
+- `Calc4DFormulaRegistrarPostgresqlTest`: standalone and batch formula registration, multi-version exact binding, cross-form synthetic methodology, rollback.
+
+The UAT executor has **no** lease/fencing or distributed worker claiming yet. It does not verify an independent financial S2 signature; it does not approve full output requiredness, currency policy, rounding or dimensions. The result is strictly synthetic and remains non-financial.
+
+### Next P0 for CALC-4D.5 and 154 financial contracts
+
+1. Integrate a qualified, version-pinned admission contract with a persistent worker and lease/fencing; do not weaken the blocked HYB-2B trigger. Include concurrency, crash recovery and revoked FactSet between job claim and result commit.
+2. Establish an independently accepted formula bundle and required outputs for each of the 154 forms. Determine which forms have **no derived calculations** rather than fabricating formulas. Approve cross-form dependencies, stock-vs-flow periods, policy variants and canonical dimensions.
+3. Add independent numerical control examples (including zeros, missing observations, period boundaries, FX/multi-currency and dimensional grain) for each accepted formula; adapt SQL/JDBC operator set only where an approved method requires it.
+4. Financial S2 approval/revocation and immutable production result lineage before release. Current production remains **HOLD**.
