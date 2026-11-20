@@ -761,4 +761,34 @@ class Calc4DTypedPlanPostgresqlTest {
     noExecution();
   }
 
+  @Test void successfulLeaseRenewalPreservesFenceAndPreventsPrematureReclaim()
+      throws Exception {
+    var fixture=source("230.00","230.00",null,false);
+    var staged=planStore.stage(fixture.organization(),f02(),
+      List.of(fixture.factset()));
+    queue.enqueue(fixture.organization(),staged.id());
+    var claimed=queue.claimNext(fixture.organization(),"calc4d-renew-owner",15)
+      .orElseThrow();
+    var before=jdbc.queryForObject("""
+      SELECT lease_until FROM fin_calc.calc4d_uat_job WHERE id=?
+      """,java.time.OffsetDateTime.class,claimed.jobId());
+    queue.renew(claimed,120);
+    var after=jdbc.queryForObject("""
+      SELECT lease_until FROM fin_calc.calc4d_uat_job WHERE id=?
+      """,java.time.OffsetDateTime.class,claimed.jobId());
+    assertTrue(after.isAfter(before.plusSeconds(60)));
+    assertTrue(queue.claimNext(fixture.organization(),"calc4d-other-owner",10).isEmpty());
+    assertEquals(claimed.fencingToken(),
+      queue.requireJob(fixture.organization(),staged.id()).fence());
+    var result=leasedWorker.execute(claimed);
+    assertFalse(result.financiallyApproved());
+    assertEquals("SUCCEEDED",
+      queue.requireJob(fixture.organization(),staged.id()).state());
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_job_receipt
+      WHERE job_id=? AND fencing_token=? AND event_code='RENEWED'
+      """,Integer.class,claimed.jobId(),claimed.fencingToken()));
+    noExecution();
+  }
+
 }
