@@ -60,7 +60,7 @@ public class Calc4DUatSqlJdbcBatchExecutor {
     this.resolver=Objects.requireNonNull(resolver);
   }
 
-  @Transactional(isolation=Isolation.REPEATABLE_READ)
+  @Transactional(isolation=Isolation.REPEATABLE_READ,rollbackFor=Exception.class)
   public Result executeExact(UUID organizationId,UUID exactUatPlanId)throws Exception{
     // Obtains FOR SHARE locks on active sources, re-hashes every source
     // revision and observation, then validates the persisted fingerprint.
