@@ -53,7 +53,13 @@ test('FIN DC-R2.3 | real F02 save → SHA-reverified calculate → edit → comp
   await expect(panel.getByText('0.66666667 (доля)')).toBeVisible();
   await expect(panel.getByText('150.00 KZT')).toBeVisible();
 
-  const old=await request.post('/api/v1/uat/calculations/f02/preview',{data:{
+  // R2.5: historic replay uses the same generic React panel and endpoint.
+  await panel.getByRole('button',{name:'Рассчитать выбранную редакцию'}).click();
+  await expect(panel.getByRole('table')).toContainText('100.00 KZT');
+  await expect(panel.getByRole('table')).toContainText('200.00 KZT');
+
+  const old=await request.post('/api/v1/uat/calculations/preview',{data:{
+    formCode:'F02',
     organizationId:scope.organizationId,
     projectId:scope.projectId,
     exactRevisionId:first.revisionId
