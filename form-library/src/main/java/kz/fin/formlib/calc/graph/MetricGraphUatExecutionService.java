@@ -136,7 +136,8 @@ public class MetricGraphUatExecutionService {
       FROM fin_calc.calc_application_contract_revision
       WHERE id=?
       """,(r,i)->List.of(r.getString(1).trim(),r.getString(2),
-        r.getString(3),r.getString(4),r.getString(5),r.getString(6)),app);
+        Integer.toString(r.getInt(3)),r.getString(4),
+        Boolean.toString(r.getBoolean(5)),Boolean.toString(r.getBoolean(6))),app);
     check(rows.size()==1,"MG_R04_A05_APPLICATION_CONTRACT_MISSING");
     var v=rows.getFirst();
     check("CALC-A05".equals(v.get(1))
