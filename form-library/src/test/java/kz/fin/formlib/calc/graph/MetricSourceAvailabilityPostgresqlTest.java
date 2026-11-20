@@ -3,6 +3,8 @@ package kz.fin.formlib.calc.graph;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kz.fin.formlib.calc.loan.LoanContractIntakeService;
 import kz.fin.formlib.calc.loan.LoanScheduleService;
+import kz.fin.formlib.calc.loan.LoanAmendmentService;
+import kz.fin.formlib.calc.loan.LoanAmendmentCalculator;
 import kz.fin.formlib.service.FormDraftService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -50,6 +52,7 @@ class MetricSourceAvailabilityPostgresqlTest {
   @Autowired MetricIndicatorBindingService bindings;
   @Autowired LoanContractIntakeService loan;
   @Autowired LoanScheduleService schedules;
+  @Autowired LoanAmendmentService amendments;
   @Autowired JdbcTemplate jdbc;
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
@@ -138,6 +141,28 @@ class MetricSourceAvailabilityPostgresqlTest {
       .andExpect(jsonPath("$.financiallyQualified").value(false));
     assertThrows(ResponseStatusException.class,()->resolver.a05Exact(
       organization,org(),schedule.scheduleRevisionId()));
+    var amendment=amendments.calculateAndCommit(new LoanAmendmentService.Command(
+      organization,project,schedule.scheduleRevisionId(),
+      new LoanAmendmentCalculator.Event("PREPAYMENT",
+        LocalDate.parse("2027-02-01"),new BigDecimal("400"),"REDUCE_TERM",
+        null,null,null)), "mg-r03-amendment-"+UUID.randomUUID());
+    var child=resolver.a05AmendmentExact(organization,project,
+      amendment.amendmentRevisionId());
+    assertEquals("CALC-A05.AMENDED_CONTRACT_CASH",child.metricCode());
+    assertEquals(schedule.scheduleRevisionId(),child.parentScheduleRevisionId());
+    assertEquals(schedule.resultSha256(),child.parentResultSha256());
+    assertEquals(amendment.resultSha256(),child.resultSha256());
+    assertEquals(3,child.dependencies().size());
+    assertFalse(child.financiallyQualified());
+    mvc.perform(get("/api/v1/metric-graph/source-availability/a05/amendments/"+
+        amendment.amendmentRevisionId())
+        .param("organizationId",organization.toString())
+        .param("projectId",project.toString()))
+      .andExpect(status().isOk())
+      .andExpect(jsonPath("$.parentResultSha256").value(schedule.resultSha256()))
+      .andExpect(jsonPath("$.financiallyQualified").value(false));
+    assertThrows(ResponseStatusException.class,()->resolver.a05AmendmentExact(
+      org(),project,amendment.amendmentRevisionId()));
     noFinanceWrites();
   }
   @Test void readOnlyHttpPreviewNeverClaimsS2() throws Exception {
