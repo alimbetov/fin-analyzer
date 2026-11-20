@@ -35,7 +35,7 @@ public class Calc4DUatLeasedWorker {
     this.enabled=enabled;
   }
 
-  @Transactional(isolation=Isolation.REPEATABLE_READ)
+  @Transactional(isolation=Isolation.REPEATABLE_READ,rollbackFor=Exception.class)
   public Calc4DUatSqlJdbcBatchExecutor.Result execute(
       Calc4DUatLeaseQueue.Claim claim) throws Exception{
     if(!enabled)throw new IllegalStateException("CALC4D_UAT_EXECUTION_DISABLED");
