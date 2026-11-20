@@ -95,7 +95,10 @@ test('A05-R1.0 | C05 row + rate/calendar + two fees -> atomic revision -> fee-on
   expect(typed1.receipt.financiallyApproved).toBe(false);
   expect(typed1.receipt.productionAdmitted).toBe(false);
 
-  await panel.getByLabel('Комиссия 1 · величина').fill('1100');
+  // Reloaded fees are sorted by stable feeCode, not their insertion index.
+  // Verify identity first: editing by display row number would alter SERVICE.
+  await expect(panel.getByLabel('Комиссия 2 · код')).toHaveValue('SETUP');
+  await panel.getByLabel('Комиссия 2 · величина').fill('1100');
   await expect(save).toBeEnabled();
   await save.click();
   await expect(page.locator('.editor-head')).toContainText('Редакция 2');
