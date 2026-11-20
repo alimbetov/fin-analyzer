@@ -14,6 +14,10 @@ import java.util.UUID;
  * CALC-C01/C02: deterministic UAT stock calculation. Does not certify an
  * accounting-policy choice; C02 overdue-subset rule is an explicit UAT assumption.
  * Each row is one source-row UUID, not a claimed durable invoice identifier.
+ * Editorial policy V2: anomalous allowances, credit balances and overdue amounts
+ * are review blockers in this positive-stock UAT profile, NOT blanket IFRS bans.
+ * Partial payments and amendments must already be reflected in source balances;
+ * this kernel does not reconstruct payment allocation, ECL or write-offs.
  */
 public final class CalcAsOfDebtKernel {
   private CalcAsOfDebtKernel() {}
@@ -60,7 +64,7 @@ public final class CalcAsOfDebtKernel {
       if (value == null || value.scale() > MAX_SCALE || value.precision() > MAX_PRECISION)
         throw new IllegalArgumentException("ASOF_MONEY_VALUE_INVALID");
       if (value.signum() < 0)
-        throw new IllegalStateException("ASOF_SIGNED_BALANCE_REQUIRES_APPROVED_POLICY");
+        throw new IllegalStateException("ASOF_CREDIT_BALANCE_CLASSIFICATION_REVIEW_REQUIRED");
       byRow.computeIfAbsent(cell.rowKey(), ignored -> new HashMap<>())
           .put(cell.field(), value);
     }
@@ -75,9 +79,9 @@ public final class CalcAsOfDebtKernel {
         throw new IllegalStateException("ASOF_REQUIRED_INPUT_MISSING");
       BigDecimal gross = row.get(principal);
       if (deduction != null && row.get(deduction).compareTo(gross) > 0)
-        throw new IllegalStateException("ASOF_ALLOWANCE_EXCEEDS_GROSS_POLICY_REQUIRED");
+        throw new IllegalStateException("ASOF_ALLOWANCE_EXCEEDS_GROSS_REVIEW_REQUIRED");
       if (row.containsKey("overdue") && row.get("overdue").compareTo(gross) > 0)
-        throw new IllegalStateException("ASOF_OVERDUE_EXCEEDS_OUTSTANDING_POLICY_REQUIRED");
+        throw new IllegalStateException("ASOF_OVERDUE_EXCEEDS_OPEN_BALANCE_REVIEW_REQUIRED");
       if (!row.containsKey("overdue")) overdueComplete = false;
       for (var entry : row.entrySet()) {
         totals.merge(entry.getKey(), entry.getValue(), BigDecimal::add);
@@ -93,6 +97,7 @@ public final class CalcAsOfDebtKernel {
     if (!overdueComplete) state = "MISSING_OPTIONAL_INPUT";
     else if (principalTotal.signum() == 0) state = "UNDEFINED_ZERO_DENOMINATOR";
     else {
+      // UAT technical decimal policy; not asserted as an IFRS rounding rule.
       share = overdue.divide(principalTotal, MAX_SCALE, RoundingMode.HALF_UP);
       state = "PRESENT";
     }
