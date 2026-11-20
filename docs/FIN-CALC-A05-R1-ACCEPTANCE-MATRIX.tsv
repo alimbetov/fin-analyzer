@@ -1,10 +1,10 @@
 test_id	milestone	owner	acceptance	runner	state	evidence_run_url	financial_s2
-A05-T001	R1.0	C05	Existing C05 ROWSET business key linked to exact LoanContractRevision; no duplicate top-level form	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T002	R1.0	fin_intake	Atomic C05+loan terms save, same revision/receipt, restart readback and source SHA	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T003	R1.0	fin_intake	Two fees: one upfront and one recurring; independent typed rule IDs/amount/bases	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T004	R1.0	fin_intake	Missing rate/fee basis and duplicate agreementRef fail closed	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T005	R1.0	fin_intake	Wrong organization/project cannot read or preview contract	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T006	R1.0	policy	Repayment mode, rate basis, day-count and rounding rule have separate revision pins	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T001	R1.0	C05	Existing C05 ROWSET business key linked to exact LoanContractRevision; no duplicate top-level form	PG16	PASS_UAT	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013	NOT_QUALIFIED
+A05-T002	R1.0	fin_intake	Atomic C05+loan terms save, same revision/receipt, restart readback and source SHA	PG16	PARTIAL	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013;https://github.com/alimbetov/fin-analyzer/actions/runs/44687393695	NOT_QUALIFIED
+A05-T003	R1.0	fin_intake	Two fees: one upfront and one recurring; independent typed rule IDs/amount/bases	PG16	PASS_UAT	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013	NOT_QUALIFIED
+A05-T004	R1.0	fin_intake	Missing rate/fee basis and duplicate agreementRef fail closed	PG16	PARTIAL	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013	NOT_QUALIFIED
+A05-T005	R1.0	fin_intake	Wrong organization/project cannot read or preview contract	PG16	PASS_UAT	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013	NOT_QUALIFIED
+A05-T006	R1.0	policy	Repayment mode, rate basis, day-count and rounding rule have separate revision pins	JUnit+PG16	PARTIAL	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013	NOT_QUALIFIED
 A05-T007	R1.1	A05	Zero-rate 1000.00 three principal payments 333.33 333.33 333.34 closing 0	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
 A05-T008	R1.1	A05	Annuity two equal periods at 1 percent per period; independently verified cashflow/roll-forward	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
 A05-T009	R1.1	A05	Equal principal schedule uses dated accrual convention, not false nominal/12 fallback	JUnit+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
@@ -30,10 +30,10 @@ A05-T028	R1.4	F03/P03	Planned 100 is not posted as actual F03 cash before confir
 A05-T029	R1.4	F01/F02	IFRS liability carrying value and expense source not substituted with nominal cash	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
 A05-T030	R1.4	C01/C02	No double counting trade debt and loan obligation; source role validated	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
 A05-T031	R1.4	A05	All nine A05-REC checks produce PASS/DIFFERENCE/MISSING_SOURCE/NOT_COMPARABLE statuses	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T032	R1.5	React	C05 terms and fees save/reopen with exact revisions; unsaved calc disabled	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T032	R1.5	React	C05 terms and fees save/reopen with exact revisions; unsaved calc disabled	Playwright+PG16	PARTIAL	https://github.com/alimbetov/fin-analyzer/actions/runs/44687393695	NOT_QUALIFIED
 A05-T033	R1.5	React	Annuity/equal principal/custom variants return separate backend results	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
 A05-T034	R1.5	React	Schedule, fee breakdown, and SHA Explain panel rendered from backend only	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
 A05-T035	R1.5	React	Old and amended schedules comparable without rewriting old revision	Playwright+PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
 A05-T036	R1.5	fin_calc	UAT immutable result idempotency, race and replay gates on PG16	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T037	R1.5	UAT	No financiallyApproved or productionAdmitted without independent S2	PG16	NOT_IMPLEMENTED		NOT_QUALIFIED
-A05-T038	R1.5	CI	Exact HEAD, Java21, PG16, Chromium green; mandatory tests none skipped	GitHub Actions	NOT_IMPLEMENTED		NOT_QUALIFIED
+A05-T037	R1.5	UAT	No financiallyApproved or productionAdmitted without independent S2	PG16	PARTIAL	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013;https://github.com/alimbetov/fin-analyzer/actions/runs/44687393695	NOT_QUALIFIED
+A05-T038	R1.5	CI	Exact HEAD, Java21, PG16, Chromium green; mandatory tests none skipped	GitHub Actions	PARTIAL	https://github.com/alimbetov/fin-analyzer/actions/runs/44687823013;https://github.com/alimbetov/fin-analyzer/actions/runs/44687393695	NOT_QUALIFIED
