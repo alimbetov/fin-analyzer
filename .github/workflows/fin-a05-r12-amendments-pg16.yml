@@ -1,0 +1,60 @@
+name: FIN CALC-A05-R1.2 — Immutable Amendment PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/loan/**'
+      - 'form-library/src/main/java/kz/fin/formlib/api/LoanAmendmentUatController.java'
+      - 'form-library/src/main/resources/db/changelog/061-fin-calc-a05-r12-amendments-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/loan/LoanAmendmentCalculatorTest.java'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/loan/LoanAmendmentPostgresqlTest.java'
+      - '.github/maven-central-gcs-uat-settings.xml'
+      - '.github/workflows/fin-a05-r12-amendments-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  loan-amendment-pg16:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: A05 amended contractual cash independent math and real PG16
+        run: |
+          mvn -s .github/maven-central-gcs-uat-settings.xml -B -ntp \
+            -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=LoanAmendmentCalculatorTest,LoanAmendmentPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require all 13 R1.2 controls
+        run: |
+          python3 - <<'PY'
+          import glob,xml.etree.ElementTree as ET,sys
+          total={x:0 for x in ('tests','errors','failures','skipped')}
+          for name in ('LoanAmendmentCalculatorTest','LoanAmendmentPostgresqlTest'):
+            files=glob.glob('form-library/target/surefire-reports/TEST-*'+name+'.xml')
+            if len(files)!=1:sys.exit('A05_R12_TEST_REPORT_MISSING_'+name)
+            root=ET.parse(files[0]).getroot()
+            for k in total:total[k]+=int(root.attrib.get(k,0))
+          print(total)
+          if total!={'tests':13,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('A05_R12_AMENDMENT_PG16_NOT_GREEN')
+          PY
+      - name: Preserve amendment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-a05-r12-pg16
+          path: form-library/target/surefire-reports/TEST-*LoanAmendment*Test.xml
+          if-no-files-found: warn
