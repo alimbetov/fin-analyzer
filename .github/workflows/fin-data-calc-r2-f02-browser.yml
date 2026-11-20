@@ -7,6 +7,7 @@ on:
     paths:
       - 'frontend/src/App.tsx'
       - 'frontend/src/api.ts'
+      - 'frontend/src/vite-env.d.ts'
       - 'frontend/src/styles.css'
       - 'frontend/e2e/f02-calculation-uat.spec.ts'
       - 'form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java'
