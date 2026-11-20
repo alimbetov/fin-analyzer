@@ -1,7 +1,7 @@
 # FIN CALC-154 — C02 Payables | Methodology review v1
 
 **Form:** C02 — Реестр кредиторской задолженности.
-**Status:** `AWAITING_EXPLICIT_DOMAIN_REVIEW`; **NO FINANCIAL S2**; **NO qualified CalcPlan**.
+**Historical status (v1):** `AWAITING_EXPLICIT_DOMAIN_REVIEW`. **Updated editorial status:** `DOMAIN_POLICY_PARTIALLY_CONFIRMED` per C01/C02 Editorial Policies V2 (2026-11-20). **NO FINANCIAL S2**; **NO qualified CalcPlan**.
 **Sources:** `FIN-CALC-R0-FIELD-COVERAGE-794-BASELINE.tsv`, `FIN-CALC154-FINANCIAL-REVIEW-WAVE-01-C01-C10.tsv`, `FIN-CALC154-METRIC-COVERAGE.tsv`.
 This is a candidate editorial packet, not an assertion of the underlying accounting policy.
 
@@ -72,3 +72,7 @@ overdueOutstandingShare = SUM_AS_OF(C02.overdue) / SUM_AS_OF(C02.outstanding)
 5. What sign, missing, FX, precision and rounding policies apply?
 
 **Approval boundary:** editorial confirmation (if obtained) changes domain-review state only, never financial `S2_APPROVED`. Independent S2, qualified plan admission and production remain on HOLD.
+
+## Editorial V2 update — 2026-11-20
+
+See `FIN-CALC154-C01-C02-EDITORIAL-POLICIES-V2-2026-11-20.md` (supersedes earlier unconfirmed scope statements). `outstanding` is the unpaid *recognized* contractual obligation at exact FactSet asOf; `overdue` is a positive subset, not an add-on; contractual amendments and payments must be reflected by the source; supplier advances remain separately classified without an independently justified offset; VAT/interest/penalties must not be double-counted. The exact inclusion policy for each component, payment-allocation order, durable obligation identity, FX, rounding and cut-off remain configurable unresolved evidence gaps. `FINANCIAL_S2_NOT_APPROVED`; production HOLD.
