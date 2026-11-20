@@ -5,6 +5,7 @@ on:
     branches:
       - feat/fin-form-library-standalone
     paths:
+      - 'form-library/src/main/java/kz/fin/formlib/service/FormDraftService.java'
       - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/FinIntakeUatSourceAdapter.java'
       - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/F02IntakeUatPreviewService.java'
       - 'form-library/src/main/java/kz/fin/formlib/api/F02IntakeUatPreviewController.java'
