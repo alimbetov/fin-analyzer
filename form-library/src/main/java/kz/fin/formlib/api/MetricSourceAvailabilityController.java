@@ -1,6 +1,7 @@
 package kz.fin.formlib.api;
 
 import kz.fin.formlib.calc.graph.MetricSourceAvailabilityService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +15,7 @@ import java.util.UUID;
 /** Read-only MG-R0.3: POST is a preview/query, never persists or runs finance. */
 @RestController
 @RequestMapping("/api/v1/metric-graph/source-availability")
+@ConditionalOnProperty(name="fin.calc.metric-source-uat.enabled",havingValue="true")
 public class MetricSourceAvailabilityController {
   private final MetricSourceAvailabilityService service;
   public MetricSourceAvailabilityController(MetricSourceAvailabilityService service){
