@@ -53,7 +53,7 @@ public final class CalcApplicationContractRegistry {
     var raw=jdbc.query("""
       SELECT a.app_code,a.title_ru,a.financial_domain,
         c.revision_number,c.source_form_codes_jsonb::text,
-        c.required_inputs_jsonb::text,c.proposed_outputs_jsonb::text,
+        c.candidate_input_fields_jsonb::text,c.proposed_outputs_jsonb::text,
         c.proposed_variants_jsonb::text,c.blocker_description,
         c.contract_sha256,c.financial_s2_approved,c.production_admitted
       FROM fin_calc.calc_application_definition a
