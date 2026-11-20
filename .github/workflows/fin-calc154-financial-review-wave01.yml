@@ -1,0 +1,33 @@
+name: FIN CALC-154 — Financial Review Wave 01 (C01-C10)
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'docs/FIN-CALC154-FINANCIAL-REVIEW-WAVE-01-C01-C10.tsv'
+      - 'scripts/verify-fin-calc154-financial-review-wave01.py'
+      - 'form-library/src/main/resources/catalog/form-field-presentation-review-r6.tsv'
+      - 'form-library/src/main/resources/catalog/editorial-titles-finance-r15.tsv'
+      - 'form-library/src/main/resources/catalog/calc154-formula-contracts-v1.tsv'
+      - '.github/workflows/fin-calc154-financial-review-wave01.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review-ten-ledgers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no invented metrics, no implicit financial approvals
+        run: python3 scripts/verify-fin-calc154-financial-review-wave01.py
+      - name: Publish the exact 10-form draft for domain sign-off
+        uses: actions/upload-artifact@v4
+        with:
+          name: calc154-financial-review-wave01-c01-c10-unapproved
+          path: docs/FIN-CALC154-FINANCIAL-REVIEW-WAVE-01-C01-C10.tsv
+          if-no-files-found: error
+          retention-days: 30
