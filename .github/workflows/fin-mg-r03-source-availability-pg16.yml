@@ -1,0 +1,58 @@
+name: FIN MG-R0.3 — Exact Input and A05 Graph PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/graph/**'
+      - 'form-library/src/main/java/kz/fin/formlib/api/MetricSourceAvailabilityController.java'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/loan/**'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/graph/MetricSourceAvailabilityPostgresqlTest.java'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - '.github/maven-central-gcs-uat-settings.xml'
+      - '.github/workflows/fin-mg-r03-source-availability-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-graph-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Confirm exact source revision and CALC-A05 node PG16
+        run: |
+          mvn -s .github/maven-central-gcs-uat-settings.xml -B -ntp \
+            -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=MetricSourceAvailabilityPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require five non-skipped MG-R0.3 gates
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET,glob,sys
+          paths=glob.glob('form-library/target/surefire-reports/TEST-*MetricSourceAvailabilityPostgresqlTest.xml')
+          if len(paths)!=1:sys.exit('MG_R03_REPORT_MISSING')
+          root=ET.parse(paths[0]).getroot()
+          metrics={k:int(root.attrib.get(k,0)) for k in
+                   ('tests','errors','failures','skipped')}
+          print(metrics)
+          if metrics!={'tests':5,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('MG_R03_SOURCE_AVAILABILITY_NOT_GREEN')
+          PY
+      - name: Preserve exact source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-mg-r03-pg16
+          path: form-library/target/surefire-reports/TEST-*MetricSourceAvailabilityPostgresqlTest.xml
+          if-no-files-found: warn
