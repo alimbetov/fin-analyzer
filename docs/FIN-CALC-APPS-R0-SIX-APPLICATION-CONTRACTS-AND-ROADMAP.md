@@ -60,6 +60,7 @@ App registry is **configuration metadata**; not a substitute for exact business 
 
 - **CALC-APPS-R1 / A01:** one obligation end-to-end with two settlements, due-date amendment, no double payment and identity-based deduplication. Cash/current receivables and payables must reconcile.
 - **CALC-APPS-R2 / A05:** one exact loan, separate contractual cash schedule and accounting effective-interest schedule, versioned day count, early payoff and P04/P09 parity.
+  - Detailed design/acceptance contract: [FIN CALC-A05-R1 — Loan Contract & Payment Schedule Studio TZ](./FIN-CALC-A05-R1-LOAN-CONTRACT-PAYMENT-SCHEDULE-STUDIO-TZ.md) (`SPEC_PROPOSED_FOR_APPROVAL`). Run after DC-R2.4/2.5 accepted; A01 allocation is a strict dependency for real overdue/plan-fact. Treat IFRS9 EIR, contractual schedule and applicability-scoped KZ_GESV as distinct policies. Do not alter existing migration 054.
 - **CALC-APPS-R3 / A06:** one dated scenario, referenced source FactSet, FCFF/WACC vs FCFE/Ke; reconcile scenario to P01–P09. Qualified IRR needs root and date convention.
 - **CALC-APPS-R4 / A02+A03+A04:** batch ECL controls, item-level inventory lot and NRV E2E, component depreciation/impairment with independently reviewed evidence.
 
