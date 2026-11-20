@@ -6,6 +6,8 @@
 **Основание:** [FIN DATA-CALC-R1](./FIN-DATA-CALC-R1-CALCULATION-FIRST-UAT-TZ.md) (327 строк требований), [архитектурный аудит R2](./audits/FIN-DATA-CALC-R2-CROSS-FORM-ARCHITECTURE-AUDIT-2026-11-20.md), [6 приложений](./FIN-CALC-APPS-R0-SIX-APPLICATION-CONTRACTS-AND-ROADMAP.md), [10 финансовых решений](./FIN-CALC154-P0-P1-EDITORIAL-POLICIES-AND-IMPLEMENTATION-V1.md).  
 **Ключевой принцип:** first executable user-entered value, then reconciliation, then qualified method variants, then scale to 154; **не** methodology catalog first.
 
+**CALC-A05 dependency / implementation specification:** [FIN CALC-A05-R1 — Loan Contract & Payment Schedule Studio TZ](./FIN-CALC-A05-R1-LOAN-CONTRACT-PAYMENT-SCHEDULE-STUDIO-TZ.md). This is a `SPEC_PROPOSED_FOR_APPROVAL`, not an implemented loan engine. The detailed tasks A05-R1.0…R1.5 are subordinate to DC-R2.8 (loan schedules) and DC-R2.9 (cash bridges/covenants); A05-R1.4 requires A01 actual-payment allocation. Begin only after `DC-R2.4 + DC-R2.5` real PG16 and Chromium E2E gates. IFRS9 EIR, contractual cash and KZ_GESV are independent calculation types. Never add a 167th top-level form, a new financial engine or a third independent source writer.
+
 ## 1. Product outcome and non-negotiable limits
 
 Пользователь вводит/импортирует данные в **существующую форму**, сохраняет immutable ревизию, выбирает параметризованную методику, запускает UAT, получает расчёт с кодом метрики, периодом, валютой, единицей, статусом, точными исходными ревизиями, формулой, параметрами и межформенным контролем, затем изменяет данные и сравнивает 2 неизменяемых результата.
