@@ -91,6 +91,15 @@ class LoanAmendmentCalculatorTest {
     assertEquals(0,result.lines().get(1).cashInterestDue().compareTo(n("13.81")));
     assertEquals(0,result.finalPrincipal().compareTo(BigDecimal.ZERO));
   }
+  @Test void acceleratedMaturityMustNotSilentlyWaiveMaturityFee(){
+    var t=terms("EQUAL_PRINCIPAL","0");
+    var fee=new LoanContractIntakeService.Fee("END","FIXED","AT_MATURITY",
+      "FIXED_AMOUNT",n("20.00"),"ONCE","MATURITY_DATE",
+      "UNREVIEWED","UNREVIEWED");
+    var original=base.calculate(t,List.of(fee),List.of());
+    assertThrows(ResponseStatusException.class,()->
+      amendment.calculate(t,List.of(fee),original,prepay("400","REDUCE_TERM")));
+  }
   @Test void invalidOrUnsourcedFloatingIndexMustFailClosed(){
     assertThrows(ResponseStatusException.class,()->run("ANNUITY","12",
       new Event("FLOATING_INDEX",d("2027-01-15"),null,null,null,null,n("12"))));
