@@ -57,6 +57,8 @@ class Calc4DTypedPlanPostgresqlTest {
   @Autowired ObjectMapper mapper;
   @Autowired Calc4DUatPlanStore planStore;
   @Autowired Calc4DUatSqlJdbcBatchExecutor batch;
+  @Autowired Calc4DUatLeaseQueue queue;
+  @Autowired Calc4DUatLeasedWorker leasedWorker;
 
   private UUID formula(String metric){
     return jdbc.queryForObject("""
@@ -570,6 +572,192 @@ class Calc4DTypedPlanPostgresqlTest {
     assertEquals(0,new BigDecimal("0.133333333333").compareTo(
       ratios.get("B")));
     assertFalse(executed.financiallyApproved());
+    noExecution();
+  }
+
+  @Test void fencedWorkerExecutesUatPlanAtomicallyWithOneImmutableResult() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    var enrolled=queue.enqueue(f.organization(),staged.id());
+    assertFalse(enrolled.replayed());
+    assertEquals("READY",enrolled.job().state());
+    var reenqueue=queue.enqueue(f.organization(),staged.id());
+    assertTrue(reenqueue.replayed());
+    assertEquals(enrolled.job().id(),reenqueue.job().id());
+    var claimed=queue.claimNext(f.organization(),"calc4d-worker-1",120).orElseThrow();
+    assertEquals(1,claimed.attempt());
+    assertEquals(1L,claimed.fencingToken());
+    var result=leasedWorker.execute(claimed);
+    assertEquals(3,result.outputRows());
+    assertFalse(result.financiallyApproved());
+    assertEquals("SUCCEEDED",queue.requireJob(f.organization(),staged.id()).state());
+    assertTrue(queue.claimNext(f.organization(),"calc4d-worker-2",120).isEmpty());
+    assertEquals(3,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_job_receipt
+      WHERE job_id=?
+      """,Integer.class,claimed.jobId()));
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result WHERE plan_id=?
+      """,Integer.class,staged.id()));
+    noExecution();
+  }
+
+  @Test void twoContendingWorkersCanClaimAtMostOneJob() throws Exception {
+    var f=source("220.00","220.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    queue.enqueue(f.organization(),staged.id());
+    var pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+    try{
+      var gate=new java.util.concurrent.CountDownLatch(1);
+      var a=pool.submit(()->{
+        gate.await();
+        return queue.claimNext(f.organization(),"calc4d-concurrent-a",120);
+      });
+      var b=pool.submit(()->{
+        gate.await();
+        return queue.claimNext(f.organization(),"calc4d-concurrent-b",120);
+      });
+      gate.countDown();
+      var first=a.get(30,java.util.concurrent.TimeUnit.SECONDS);
+      var second=b.get(30,java.util.concurrent.TimeUnit.SECONDS);
+      assertEquals(1,(first.isPresent()?1:0)+(second.isPresent()?1:0));
+      var claim=first.orElseGet(()->second.orElseThrow());
+      var executed=leasedWorker.execute(claim);
+      assertEquals(3,executed.outputRows());
+      assertEquals("SUCCEEDED",queue.requireJob(f.organization(),staged.id()).state());
+    }finally{pool.shutdownNow();}
+    noExecution();
+  }
+
+  @Test void expiredOwnerCannotInsertResultAndNewFenceCanRecover() throws Exception {
+    var f=source("250.00","250.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    queue.enqueue(f.organization(),staged.id());
+    var old=queue.claimNext(f.organization(),"calc4d-old",120).orElseThrow();
+    jdbc.update("""
+      UPDATE fin_calc.calc4d_uat_job
+      SET lease_until=clock_timestamp()-interval '1 second'
+      WHERE id=?
+      """,old.jobId());
+    var newest=queue.claimNext(f.organization(),"calc4d-new",120).orElseThrow();
+    assertEquals(old.jobId(),newest.jobId());
+    assertTrue(newest.fencingToken()>old.fencingToken());
+    assertEquals(2,newest.attempt());
+    assertThrows(IllegalStateException.class,()->leasedWorker.execute(old));
+    assertThrows(IllegalStateException.class,()->queue.renew(old,120));
+    assertThrows(IllegalStateException.class,()->queue.failOrRetry(old,
+      "STAGING_FAILURE",0));
+
+    assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+      INSERT INTO fin_calc.calc4d_uat_result(
+        id,plan_id,organization_id,execution_fingerprint,
+        input_observations_sha256,output_values_sha256,result_sha256,output_jsonb)
+      VALUES(?,?,?,?,?,?,?,'[]'::jsonb)
+      """,UUID.randomUUID(),staged.id(),f.organization(),staged.fingerprint(),
+      "a".repeat(64),"b".repeat(64),"c".repeat(64)));
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result WHERE plan_id=?
+      """,Integer.class,staged.id()));
+    var result=leasedWorker.execute(newest);
+    assertEquals(3,result.outputRows());
+    assertEquals("SUCCEEDED",queue.requireJob(f.organization(),staged.id()).state());
+    noExecution();
+  }
+
+  @Test void explicitFailureTransitionsRetryAndNextFenceSucceeds() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    queue.enqueue(f.organization(),staged.id());
+    var old=queue.claimNext(f.organization(),"calc4d-first",120).orElseThrow();
+    var changed=queue.failOrRetry(old,"TEMPORARY_DB_UNAVAILABLE",0);
+    assertEquals("RETRY",changed.state());
+    assertThrows(IllegalStateException.class,()->leasedWorker.execute(old));
+    var second=queue.claimNext(f.organization(),"calc4d-second",120).orElseThrow();
+    assertEquals(old.fencingToken()+1,second.fencingToken());
+    assertEquals(2,second.attempt());
+    var computed=leasedWorker.execute(second);
+    assertNotNull(computed.resultId());
+    assertEquals("SUCCEEDED",queue.requireJob(f.organization(),staged.id()).state());
+    noExecution();
+  }
+
+  @Test void exhaustedAttemptsBecomeTerminalFailureNotEternalRunning() throws Exception {
+    var f=source("200.00","200.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    var enqueued=queue.enqueue(f.organization(),staged.id());
+    jdbc.update("UPDATE fin_calc.calc4d_uat_job SET max_attempts=2 WHERE id=?",
+      enqueued.job().id());
+    var first=queue.claimNext(f.organization(),"calc4d-retry",120).orElseThrow();
+    assertEquals("RETRY",queue.failOrRetry(first,"TRANSIENT_ERROR",0).state());
+    var second=queue.claimNext(f.organization(),"calc4d-retry",120).orElseThrow();
+    assertEquals(2,second.attempt());
+    assertEquals("FAILED",queue.failOrRetry(second,"TRANSIENT_ERROR",0).state());
+    assertTrue(queue.claimNext(f.organization(),"calc4d-no-third",120).isEmpty());
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result WHERE plan_id=?
+      """,Integer.class,staged.id()));
+    noExecution();
+  }
+
+  @Test void exhaustedExpiredRunningLeaseAutomaticallyFinalizesFailed() throws Exception{
+    var f=source("200.00","200.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    var queued=queue.enqueue(f.organization(),staged.id());
+    jdbc.update("UPDATE fin_calc.calc4d_uat_job SET max_attempts=1 WHERE id=?",
+      queued.job().id());
+    var first=queue.claimNext(f.organization(),"calc4d-expired",120).orElseThrow();
+    jdbc.update("""
+      UPDATE fin_calc.calc4d_uat_job
+      SET lease_until=clock_timestamp()-interval '1 second'
+      WHERE id=?
+      """,first.jobId());
+    assertTrue(queue.claimNext(f.organization(),"calc4d-other",120).isEmpty());
+    assertEquals("FAILED",queue.requireJob(f.organization(),staged.id()).state());
+    assertEquals(1,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_job_receipt
+      WHERE job_id=? AND event_code='EXHAUSTED'
+      """,Integer.class,first.jobId()));
+    assertThrows(IllegalStateException.class,()->leasedWorker.execute(first));
+    noExecution();
+  }
+
+  @Test void sourceRevocationAfterClaimRollsBackResultAndSuccess() throws Exception{
+    var f=source("200.00","200.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    queue.enqueue(f.organization(),staged.id());
+    var claim=queue.claimNext(f.organization(),"calc4d-revoked",120).orElseThrow();
+    jdbc.update("""
+      UPDATE fin_fact.factset_control
+      SET revoked=true,qualification_epoch=qualification_epoch+1,
+        row_version=row_version+1
+      WHERE active_factset_id=?
+      """,f.factset());
+    assertThrows(IllegalStateException.class,()->leasedWorker.execute(claim));
+    assertEquals("RUNNING",queue.requireJob(f.organization(),staged.id()).state());
+    assertEquals(0,jdbc.queryForObject("""
+      SELECT count(*) FROM fin_calc.calc4d_uat_result WHERE plan_id=?
+      """,Integer.class,staged.id()));
+    assertEquals("RETRY",queue.failOrRetry(claim,"FACTSET_REVOKED",0).state());
+    noExecution();
+  }
+
+  @Test void queueReceiptsAreImmutableAndDisabledModeCannotEnqueue() throws Exception{
+    var f=source("200.00","200.00",null,false);
+    var staged=planStore.stage(f.organization(),f02(),List.of(f.factset()));
+    var enqueued=queue.enqueue(f.organization(),staged.id());
+    assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+      UPDATE fin_calc.calc4d_uat_job_receipt SET event_code='SUCCEEDED'
+      WHERE job_id=?
+      """,enqueued.job().id()));
+    assertThrows(org.springframework.dao.DataAccessException.class,()->jdbc.update("""
+      DELETE FROM fin_calc.calc4d_uat_job_receipt WHERE job_id=?
+      """,enqueued.job().id()));
+    var off=new Calc4DUatLeaseQueue(jdbc,false);
+    assertEquals("CALC4D_UAT_EXECUTION_DISABLED",
+      assertThrows(IllegalStateException.class,()->
+        off.enqueue(f.organization(),staged.id())).getMessage());
+    assertThrows(IllegalArgumentException.class,()->
+      queue.claimNext(f.organization(),"bad|worker",120));
     noExecution();
   }
 
