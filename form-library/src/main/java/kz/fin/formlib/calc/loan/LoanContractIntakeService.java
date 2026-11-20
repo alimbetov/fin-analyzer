@@ -1,5 +1,6 @@
 package kz.fin.formlib.calc.loan;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import kz.fin.formlib.calc.ingest.FinIntakeUatSourceAdapter;
 import kz.fin.formlib.service.FormDraftService;
 import org.springframework.http.HttpStatus;
@@ -32,14 +33,14 @@ import java.util.UUID;
 public class LoanContractIntakeService {
   public record Terms(String loanBusinessKey,String agreementRef,String creditorRef,
       LocalDate contractDate,LocalDate disbursementDate,LocalDate accrualStartDate,
-      LocalDate maturityDate,BigDecimal principal,String jurisdiction,
+      LocalDate maturityDate,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal principal,String jurisdiction,
       String perspective,String repaymentMethod,String paymentFrequency,
       int dueDay,String interestCompounding,String dayCountConvention,
       String businessDayAdjustment,int roundingScale,String roundingMode,
-      String finalResidualRule,String rateKind,BigDecimal nominalAnnualRatePct) {}
+      String finalResidualRule,String rateKind,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal nominalAnnualRatePct) {}
 
   public record Fee(String feeCode,String feeRuleType,String feeSettlement,
-      String calculationBasis,BigDecimal amountOrRate,String frequency,
+      String calculationBasis,@JsonFormat(shape=JsonFormat.Shape.STRING) BigDecimal amountOrRate,String frequency,
       String eventDateRule,String ifrsEirClassification,
       String kzGesvClassification) {}
 
