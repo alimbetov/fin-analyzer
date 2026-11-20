@@ -68,13 +68,13 @@ public final class LoanPaymentScheduleCalculator {
     if(!condition)throw reject(reason);
   }
 
-  private static BigDecimal money(BigDecimal value,int scale,RoundingMode rounding){
+  static BigDecimal money(BigDecimal value,int scale,RoundingMode rounding){
     BigDecimal rounded=value.setScale(scale,rounding);
     check(rounded.precision()<=38,"A05_R11_MONEY_OVERFLOW");
     return rounded;
   }
 
-  private static RoundingMode rounding(String mode) {
+  static RoundingMode rounding(String mode) {
     return switch(mode){
       case "HALF_EVEN" -> RoundingMode.HALF_EVEN;
       case "HALF_UP" -> RoundingMode.HALF_UP;
@@ -97,7 +97,7 @@ public final class LoanPaymentScheduleCalculator {
       BigDecimal.valueOf("ACT_365_FIXED".equals(rule)?365L:360L),MC);
   }
 
-  private static List<LocalDate> dueDates(LoanContractIntakeService.Terms t,
+  static List<LocalDate> dueDates(LoanContractIntakeService.Terms t,
       List<CustomInstallment> custom){
     if("CUSTOM".equals(t.repaymentMethod())){
       check(custom!=null&&!custom.isEmpty()&&custom.size()<=600,
@@ -129,7 +129,7 @@ public final class LoanPaymentScheduleCalculator {
     return List.copyOf(dates);
   }
 
-  private static BigDecimal feeAmount(LoanContractIntakeService.Fee rule,
+  static BigDecimal feeAmount(LoanContractIntakeService.Fee rule,
       BigDecimal drawdown,BigDecimal outstanding,int scale,RoundingMode rounding){
     BigDecimal basis=switch(rule.calculationBasis()){
       case "FIXED_AMOUNT" -> ONE;
@@ -143,7 +143,7 @@ public final class LoanPaymentScheduleCalculator {
     return money(value,scale,rounding);
   }
 
-  private static void feePolicy(LoanContractIntakeService.Fee fee){
+  static void feePolicy(LoanContractIntakeService.Fee fee){
     boolean upfront=Set.of("WITHHELD","UPFRONT_PAID","FINANCED")
       .contains(fee.feeSettlement());
     boolean recurring="RECURRING".equals(fee.feeSettlement());
