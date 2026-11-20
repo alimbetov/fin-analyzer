@@ -16,7 +16,7 @@ import java.util.UUID;
  * Does NOT accept caller-supplied approval state, and is NOT an HTTP endpoint.
  */
 @Service
-public final class MethodQualificationReceiptStore {
+public class MethodQualificationReceiptStore {
   public record Receipt(UUID id, String requestSha256, String status,
       boolean replayed, boolean financialS2Approved, boolean productionAdmitted) {}
   private final JdbcTemplate jdbc;
