@@ -46,6 +46,10 @@ public class LoanScheduleService {
       String variantSha256,String resultSha256,String state,
       Result result,String commandResult,boolean financiallyApproved,
       boolean productionAdmitted) {}
+  public record SavedSchedule(UUID scheduleRevisionId,String repaymentMethod,
+      String variantSha256,String resultSha256,String createdAt,
+      String state) {}
+
 
   private record AppContract(UUID id,String sha) {}
   private record Header(UUID id,UUID sourceId,UUID contractId,UUID appContractId,
@@ -258,6 +262,25 @@ public class LoanScheduleService {
         r.getBigDecimal(20),r.getBigDecimal(21),r.getBigDecimal(22)),
       r.getBigDecimal(23),r.getBigDecimal(24),r.getBigDecimal(25),
       r.getBigDecimal(26),r.getBigDecimal(27),r.getInt(28),r.getString(29));
+  }
+
+  /** History selection is explicit: never silently recalculate or choose latest. */
+  @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+  public List<SavedSchedule> listForSource(UUID organizationId,UUID projectId,
+      UUID exactSourceRevisionId) {
+    if(organizationId==null||projectId==null||exactSourceRevisionId==null)
+      throw invalid("A05_R11_EXACT_SOURCE_REQUIRED");
+    // Checks the same SHA-reverified C05 read as all execution routes.
+    loan.readExact(organizationId,projectId,exactSourceRevisionId);
+    return db.query("""
+      SELECT id,repayment_method,variant_sha256,result_sha256,created_at,state
+      FROM fin_calc.a05_schedule_revision
+      WHERE organization_id=? AND project_id=? AND source_revision_id=?
+      ORDER BY created_at,id
+      """,(r,i)->new SavedSchedule(r.getObject(1,UUID.class),
+        r.getString(2),r.getString(3).trim(),r.getString(4).trim(),
+        r.getTimestamp(5).toInstant().toString(),r.getString(6)),
+      organizationId,projectId,exactSourceRevisionId);
   }
 
   @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
