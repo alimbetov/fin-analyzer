@@ -1,0 +1,60 @@
+name: FIN MG-R0.4 — Exact Metric Execution PG16
+
+on:
+  push:
+    branches:
+      - feat/fin-form-library-standalone
+    paths:
+      - 'form-library/src/main/java/kz/fin/formlib/calc/graph/**'
+      - 'form-library/src/main/java/kz/fin/formlib/api/MetricGraphUatExecutionController.java'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/ingest/UatCalculationPreviewService.java'
+      - 'form-library/src/main/java/kz/fin/formlib/calc/loan/**'
+      - 'form-library/src/main/resources/db/changelog/062-fin-mg-r04-immutable-uat-plans-postgresql.sql'
+      - 'form-library/src/main/resources/db/changelog/db.changelog-master.yaml'
+      - 'form-library/src/test/java/kz/fin/formlib/calc/graph/MetricGraphUatExecutionPostgresqlTest.java'
+      - '.github/maven-central-gcs-uat-settings.xml'
+      - '.github/workflows/fin-mg-r04-immutable-execution-pg16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  metric-execution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: form-library/pom.xml
+      - name: Real PostgreSQL 16 exact saved input → DAG → existing kernels → immutable plan/result
+        run: |
+          mvn -s .github/maven-central-gcs-uat-settings.xml -B -ntp \
+            -f form-library/pom.xml test \
+            -Dfin.postgres.uat.enabled=true \
+            -Dtest=MetricGraphUatExecutionPostgresqlTest \
+            -DfailIfNoTests=true
+      - name: Require 11 non-skipped MG-R0.4 acceptance scenarios
+        run: |
+          python3 - <<'PY'
+          import glob,sys,xml.etree.ElementTree as ET
+          paths=glob.glob('form-library/target/surefire-reports/TEST-*MetricGraphUatExecutionPostgresqlTest.xml')
+          if len(paths)!=1:sys.exit('MG_R04_PG16_TEST_REPORT_MISSING')
+          root=ET.parse(paths[0]).getroot()
+          values={k:int(root.attrib.get(k,0)) for k in
+                  ('tests','errors','failures','skipped')}
+          print(values)
+          if values!={'tests':11,'errors':0,'failures':0,'skipped':0}:
+            sys.exit('MG_R04_PG16_EXECUTION_GATE_NOT_GREEN')
+          PY
+      - name: Preserve exact-source and financial math test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fin-mg-r04-pg16
+          path: form-library/target/surefire-reports/TEST-*MetricGraphUatExecutionPostgresqlTest.xml
+          if-no-files-found: warn
