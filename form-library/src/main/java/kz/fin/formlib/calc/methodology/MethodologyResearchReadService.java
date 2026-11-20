@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
  * No formula strings are executed; they are only displayed as editorial text.
  */
 @Service
-public final class MethodologyResearchReadService {
+public class MethodologyResearchReadService {
   private static final Pattern FORM=Pattern.compile("[A-Z0-9-]{2,40}");
   public record Candidate(String candidateCode,String operationFamily,
       String expression,String reviewStatus,String blockers,String sourceSha256) {}
